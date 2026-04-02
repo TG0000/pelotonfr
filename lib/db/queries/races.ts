@@ -3,6 +3,17 @@ import type { Race, PaginatedRaces, RaceFilters } from "@/types";
 
 const PAGE_SIZE = 24;
 
+function toDateStr(val: unknown): string {
+  if (!val) return "";
+  if (val instanceof Date) return val.toISOString().split("T")[0];
+  const s = String(val);
+  // Already ISO date YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // Could be a full ISO timestamp
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : d.toISOString().split("T")[0];
+}
+
 function buildRaceFromRow(row: Record<string, unknown>): Race {
   return {
     id: row.id as string,
@@ -12,8 +23,8 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     name: row.name as string,
     slug: row.slug as string | null,
     sourceUrl: row.source_url as string | null,
-    raceDate: row.race_date as string,
-    raceDateEnd: row.race_date_end as string | null,
+    raceDate: toDateStr(row.race_date),
+    raceDateEnd: row.race_date_end ? toDateStr(row.race_date_end) : null,
     city: row.city as string,
     departmentCode: row.department_code as string | null,
     departmentName: row.department_name as string | null,
@@ -33,9 +44,9 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     contactEmail: row.contact_email as string | null,
     contactPhone: row.contact_phone as string | null,
     notes: row.notes as string | null,
-    scrapedAt: row.scraped_at as string,
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
+    scrapedAt: row.scraped_at ? toDateStr(row.scraped_at) : "",
+    createdAt: row.created_at ? toDateStr(row.created_at) : "",
+    updatedAt: row.updated_at ? toDateStr(row.updated_at) : "",
     distanceFromUserKm:
       row.distance_from_user_km != null
         ? Number(row.distance_from_user_km)
