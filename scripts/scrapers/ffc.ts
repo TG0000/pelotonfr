@@ -87,72 +87,94 @@ async function fetchCalendarMonth(
   }
 }
 
+// Map French department names to codes (most common)
+const DEPT_NAME_TO_CODE: Record<string, string> = {
+  "ain": "01", "aisne": "02", "allier": "03", "alpes-de-haute-provence": "04",
+  "hautes-alpes": "05", "alpes-maritimes": "06", "ardèche": "07", "ardennes": "08",
+  "ariège": "09", "aube": "10", "aude": "11", "aveyron": "12",
+  "bouches-du-rhône": "13", "calvados": "14", "cantal": "15", "charente": "16",
+  "charente-maritime": "17", "cher": "18", "corrèze": "19", "corse-du-sud": "2a",
+  "haute-corse": "2b", "côte-d'or": "21", "côtes-d'armor": "22", "creuse": "23",
+  "dordogne": "24", "doubs": "25", "drôme": "26", "eure": "27", "eure-et-loir": "28",
+  "finistère": "29", "gard": "30", "haute-garonne": "31", "gers": "32", "gironde": "33",
+  "hérault": "34", "ille-et-vilaine": "35", "indre": "36", "indre-et-loire": "37",
+  "isère": "38", "jura": "39", "landes": "40", "loir-et-cher": "41", "loire": "42",
+  "haute-loire": "43", "loire-atlantique": "44", "loiret": "45", "lot": "46",
+  "lot-et-garonne": "47", "lozère": "48", "maine-et-loire": "49", "manche": "50",
+  "marne": "51", "haute-marne": "52", "mayenne": "53", "meurthe-et-moselle": "54",
+  "meuse": "55", "morbihan": "56", "moselle": "57", "nièvre": "58", "nord": "59",
+  "oise": "60", "orne": "61", "pas-de-calais": "62", "puy-de-dôme": "63",
+  "pyrénées-atlantiques": "64", "hautes-pyrénées": "65", "pyrénées-orientales": "66",
+  "bas-rhin": "67", "haut-rhin": "68", "rhône": "69", "haute-saône": "70",
+  "saône-et-loire": "71", "sarthe": "72", "savoie": "73", "haute-savoie": "74",
+  "paris": "75", "seine-maritime": "76", "seine-et-marne": "77", "yvelines": "78",
+  "deux-sèvres": "79", "somme": "80", "tarn": "81", "tarn-et-garonne": "82",
+  "var": "83", "vaucluse": "84", "vendée": "85", "vienne": "86", "haute-vienne": "87",
+  "vosges": "88", "yonne": "89", "territoire de belfort": "90", "essonne": "91",
+  "hauts-de-seine": "92", "seine-saint-denis": "93", "val-de-marne": "94", "val-d'oise": "95",
+};
+
+function deptNameToCode(name: string): string | undefined {
+  return DEPT_NAME_TO_CODE[name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\u0300-\u036f]/g, "")];
+}
+
 async function fetchRaceDetail(url: string): Promise<ScrapedRace | null> {
   try {
     const { data } = await httpClient.get<string>(url);
     const $ = cheerio.load(data);
 
-    // Extract external ID from URL
-    const urlMatch = url.match(/\/calendrier\/competition\/\d+\/(\d+)\//);
+    // External ID from URL: /calendrier/competition/{year}/{id}/
+    const urlMatch = url.match(/\/calendrier\/competition\/\d+\/([^\/]+)/);
     const externalId = urlMatch ? urlMatch[1] : url;
 
-    // Title — try various selectors
-    const name =
-      $("h1").first().text().trim() ||
-      $(".competition-title").first().text().trim() ||
-      $("title").text().replace(" - FFC", "").trim();
-
+    // Race name from <title>
+    const rawTitle = $("title").text().trim();
+    const name = rawTitle.replace(/\s*-\s*Compétitions FFC\s*$/i, "").trim();
     if (!name) return null;
 
-    // Extract fields from detail blocks
+    // Meta description: "Compétition FFC dans la discipline {disc} sur la saison {yr}
+    //   se déroulant {weekday} {day} {month} {year}. Lieu : {location}. Inscrite au calendrier {level}."
+    const desc = $('meta[name="description"]').attr("content") ?? "";
+
+    // Discipline
+    const discMatch = desc.match(/dans la discipline ([^\s]+(?:\s[^\s]+)?)\s+sur/i);
+    const discipline = discMatch ? normalizeDiscipline(discMatch[1]) : "route";
+
+    // Date — handle single day and multi-day ("du X au Y mois année")
     let raceDate: Date | null = null;
     let raceDateEnd: Date | null = null;
-    let city = "";
-    let departmentCode: string | undefined;
-    let discipline: ScrapedRace["discipline"] = "route";
-    let level: ScrapedRace["level"] | undefined;
-    const categories: string[] = [];
-    let organizer: string | undefined;
+    const multiDayMatch = desc.match(/du (\d{1,2}) au (\d{1,2}) (\w+) (\d{4})/i);
+    const singleDayMatch = desc.match(/se déroulant (?:\w+ )?(\d{1,2} \w+ \d{4})/i);
+    if (multiDayMatch) {
+      raceDate = parseFrenchDate(`${multiDayMatch[1]} ${multiDayMatch[3]} ${multiDayMatch[4]}`);
+      raceDateEnd = parseFrenchDate(`${multiDayMatch[2]} ${multiDayMatch[3]} ${multiDayMatch[4]}`);
+    } else if (singleDayMatch) {
+      raceDate = parseFrenchDate(singleDayMatch[1]);
+    }
 
-    // Try to find structured data in definition lists or labeled spans
-    $(".detail-item, .info-item, dl dt, .competition-info").each((_, el) => {
-      const label = $(el).text().toLowerCase();
-      const value = $(el).next().text().trim() || $(el).siblings(".value").text().trim();
-
-      if (label.includes("date")) {
-        const parsed = parseFrenchDate(value);
-        if (parsed && !raceDate) raceDate = parsed;
-      } else if (label.includes("lieu") || label.includes("ville")) {
-        city = value;
-      } else if (label.includes("discipline")) {
-        discipline = normalizeDiscipline(value);
-      } else if (label.includes("niveau") || label.includes("niveau de course")) {
-        level = normalizeLevel(value);
-      } else if (label.includes("catégorie")) {
-        categories.push(...value.split(/[,;/]/).map((c) => c.trim()).filter(Boolean));
-      } else if (label.includes("organis")) {
-        organizer = value;
-      } else if (label.includes("département") || label.includes("dept")) {
-        departmentCode = value.match(/\d{2,3}/)?.[0];
-      }
-    });
-
-    // Fallback: try to extract date from text content
+    // Fallback: look for date in body text
     if (!raceDate) {
       const bodyText = $("body").text();
-      const dateMatch = bodyText.match(/(\d{1,2}\/\d{2}\/\d{4})/);
-      if (dateMatch) {
-        raceDate = parseFrenchDate(dateMatch[1]);
-      }
+      const dm = bodyText.match(/(\d{1,2}\/\d{2}\/\d{4})/);
+      if (dm) raceDate = parseFrenchDate(dm[1]);
     }
-
     if (!raceDate) return null;
-    if (!city) {
-      // Try to extract city from page content
-      const cityEl = $("[class*='city'], [class*='lieu'], [class*='ville']").first();
-      city = cityEl.text().trim() || "";
-    }
+
+    // Location — "Lieu : Ille-et-Vilaine."
+    const locationMatch = desc.match(/Lieu\s*:\s*([^.]+)\./i);
+    const city = locationMatch ? locationMatch[1].trim() : "";
     if (!city) return null;
+
+    // Department code from name
+    const departmentCode = deptNameToCode(city);
+
+    // Level — "Inscrite au calendrier International"
+    const levelMatch = desc.match(/Inscrite au calendrier (\w+)/i);
+    const level = levelMatch ? normalizeLevel(levelMatch[1]) : undefined;
+
+    // Cancelled status — body text contains "annul"
+    const isCancelled = $("body").text().toLowerCase().includes("annul") &&
+      $("body").text().toLowerCase().includes("épreuve");
 
     return {
       externalId,
@@ -161,13 +183,13 @@ async function fetchRaceDetail(url: string): Promise<ScrapedRace | null> {
       raceDateEnd: raceDateEnd ?? undefined,
       city,
       departmentCode,
+      departmentName: city,
       discipline,
       level,
-      categories,
+      categories: [],
       gender: "mixed",
       sourceUrl: url,
-      organizer,
-      isCancelled: false,
+      isCancelled,
     };
   } catch (err) {
     console.error(`FFC: failed to fetch detail ${url}:`, err);
@@ -198,16 +220,25 @@ export async function scrapeFFC(): Promise<ScraperResult> {
     await politeDelay(600);
   }
 
-  console.log(`FFC: found ${allLinks.size} race links, fetching details...`);
+  const linkArray = Array.from(allLinks);
+  console.log(`FFC: found ${linkArray.length} race links, fetching details (8 concurrent)...`);
 
-  for (const url of allLinks) {
-    const race = await fetchRaceDetail(url);
-    if (race) {
-      races.push(race);
-    } else {
-      errors.push({ url, message: "Failed to parse race detail" });
+  const CONCURRENCY = 8;
+  for (let i = 0; i < linkArray.length; i += CONCURRENCY) {
+    const chunk = linkArray.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(chunk.map((url) => fetchRaceDetail(url)));
+    for (let j = 0; j < results.length; j++) {
+      const res = results[j];
+      if (res.status === "fulfilled" && res.value) {
+        races.push(res.value);
+      } else {
+        errors.push({ url: chunk[j], message: "Failed to parse race detail" });
+      }
     }
-    await politeDelay(800);
+    if (i % 80 === 0 && i > 0) {
+      console.log(`FFC: ${i}/${linkArray.length} processed, ${races.length} valid races so far...`);
+    }
+    await politeDelay(300);
   }
 
   return {

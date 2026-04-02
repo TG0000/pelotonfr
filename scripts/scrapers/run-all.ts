@@ -12,15 +12,15 @@ import { scrapeUFOLEP } from "./ufolep";
 import { upsertRaces, geocodePendingRaces } from "./utils/upsert-races";
 import type { ScraperResult } from "../../lib/scraper-types";
 
-type SqlFn = (query: string, params?: unknown[]) => Promise<Record<string, unknown>[]>;
-
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
   console.error("❌ DATABASE_URL is not set");
   process.exit(1);
 }
 
-const sql = neon(DATABASE_URL) as unknown as SqlFn;
+const _neon = neon(DATABASE_URL);
+const sql = (query: string, params?: unknown[]) =>
+  _neon.query(query, params ?? []) as Promise<Record<string, unknown>[]>;
 
 async function createLog(federationId: number | null): Promise<number> {
   const rows = await sql(

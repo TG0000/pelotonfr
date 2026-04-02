@@ -3,8 +3,6 @@ import { neon } from "@neondatabase/serverless";
 import type { ScrapedRace, UpsertStats } from "../../../lib/scraper-types";
 import { toISODate } from "./parse-date";
 
-type SqlFn = (query: string, params?: unknown[]) => Promise<Record<string, unknown>[]>;
-
 function computeHash(race: ScrapedRace, federationId: number): string {
   const content = [
     federationId,
@@ -28,8 +26,10 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function makeSql(dbUrl: string): SqlFn {
-  return neon(dbUrl) as unknown as SqlFn;
+function makeSql(dbUrl: string) {
+  const _neon = neon(dbUrl);
+  return (query: string, params?: unknown[]) =>
+    _neon.query(query, params ?? []) as Promise<Record<string, unknown>[]>;
 }
 
 export async function upsertRaces(
