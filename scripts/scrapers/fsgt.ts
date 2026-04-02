@@ -91,8 +91,10 @@ async function fetchYear(year: number): Promise<ScrapedRace[]> {
         const tds = $(row).find("td");
         if (tds.length === 0) return; // header row with th
 
-        let deptTd: cheerio.Cheerio<cheerio.Element>;
-        let nameTd: cheerio.Cheerio<cheerio.Element>;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let deptTd: any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let nameTd: any;
 
         if (tds.length >= 4) {
           // First row of a date group: date | dept | name | categories
