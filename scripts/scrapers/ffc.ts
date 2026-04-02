@@ -172,9 +172,11 @@ async function fetchRaceDetail(url: string): Promise<ScrapedRace | null> {
     const levelMatch = desc.match(/Inscrite au calendrier (\w+)/i);
     const level = levelMatch ? normalizeLevel(levelMatch[1]) : undefined;
 
-    // Cancelled status — body text contains "annul"
-    const isCancelled = $("body").text().toLowerCase().includes("annul") &&
-      $("body").text().toLowerCase().includes("épreuve");
+    // Cancelled status — look for explicit cancellation phrases
+    // Avoid matching "annuel" (annual) which appears on every FFC calendar page
+    const bodyText = $("body").text().toLowerCase();
+    const isCancelled = /\bannul[eé]e?\b/.test(bodyText) &&
+      (bodyText.includes("épreuve annul") || bodyText.includes("course annul") || bodyText.includes("compétition annul"));
 
     return {
       externalId,
