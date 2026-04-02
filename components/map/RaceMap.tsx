@@ -15,7 +15,7 @@ interface RaceMapProps {
   userLocation?: { lat: number; lng: number } | null;
 }
 
-const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
+const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
 const FED_COLORS: Record<string, string> = {
   ffc: "#3b82f6",
@@ -238,7 +238,7 @@ export function RaceMap({ initialRaces, filters, userLocation }: RaceMapProps) {
 
   return (
     <div className="relative w-full h-full">
-      <div ref={mapContainer} className="absolute inset-0" />
+      <div ref={mapContainer} style={{ position: "absolute", inset: 0 }} />
 
       {/* Legend */}
       <div className="absolute bottom-8 right-4 bg-background/90 backdrop-blur-sm border rounded-lg p-3 text-xs flex flex-col gap-1.5 shadow-sm">

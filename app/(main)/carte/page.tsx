@@ -46,7 +46,7 @@ export default async function CartePage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="flex-1 flex flex-col" style={{ height: "calc(100vh - 3.5rem)" }}>
+    <div style={{ position: "fixed", top: "3.5rem", left: 0, right: 0, bottom: 0 }}>
       <Suspense fallback={
         <div className="w-full h-full flex items-center justify-center bg-muted/20">
           <span className="text-muted-foreground">Chargement...</span>
