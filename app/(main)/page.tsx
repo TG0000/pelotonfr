@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Map, List, Calendar, TrendingUp, Bike } from "lucide-react";
 import { buttonVariants } from "@/lib/button-variants";
 import { RaceCard } from "@/components/races/RaceCard";
+import { HomeSearch } from "@/components/races/HomeSearch";
 import { getUpcomingRaces, getRaceStats } from "@/lib/db/queries/races";
 import { FEDERATIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -42,10 +43,15 @@ export default async function HomePage() {
               <span className="text-primary">cyclistes</span>{" "}
               en un seul endroit
             </h1>
-            <p className="text-lg text-muted-foreground mb-8">
-              Retrouvez les calendriers FFC, FSGT et UFOLEP sur une carte interactive.
+            <p className="text-lg text-muted-foreground mb-6">
+              FFC, FSGT, UFOLEP — retrouvez toutes les compétitions sur une carte interactive.
               Filtrez par discipline, catégorie et distance depuis chez vous.
             </p>
+
+            {/* Location search */}
+            <div className="mb-6">
+              <HomeSearch />
+            </div>
 
             <div className="flex flex-wrap gap-3">
               <Link
@@ -68,9 +74,13 @@ export default async function HomePage() {
           {/* Federation badges */}
           <div className="flex flex-wrap gap-6 mt-10">
             {FEDERATIONS.map((fed) => (
-              <div key={fed.slug} className="flex items-center gap-2">
+              <Link
+                key={fed.slug}
+                href={`/courses?fed=${fed.slug}`}
+                className="flex items-center gap-2 group"
+              >
                 <div className={`size-2.5 rounded-full ${FED_COLORS[fed.slug] ?? "bg-primary"}`} />
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
                   <span className="font-semibold text-foreground">{fed.name}</span>
                   {stats?.byFederation[fed.slug] != null && (
                     <span className="ml-1.5 text-xs bg-muted rounded-full px-1.5 py-0.5">
@@ -78,7 +88,7 @@ export default async function HomePage() {
                     </span>
                   )}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -118,30 +128,34 @@ export default async function HomePage() {
               title: "Carte interactive",
               description:
                 "Visualisez toutes les courses sur une carte de France. Trouvez rapidement les épreuves près de chez vous avec le filtre par rayon.",
+              href: "/carte",
             },
             {
               icon: List,
               title: "Filtres avancés",
               description:
-                "Filtrez par fédération, discipline, catégorie et date. Exactement les courses qui vous correspondent.",
+                "Filtrez par fédération, discipline, catégorie, date et localisation. Exactement les courses qui vous correspondent.",
+              href: "/courses",
             },
             {
               icon: Calendar,
-              title: "Mis à jour chaque jour",
+              title: "Vue calendrier",
               description:
-                "FFC, FSGT, UFOLEP : toutes les fédérations agrégées automatiquement. Le calendrier est toujours à jour.",
+                "FFC, FSGT, UFOLEP : toutes les fédérations agrégées automatiquement et organisées semaine par semaine.",
+              href: "/calendrier",
             },
-          ].map(({ icon: Icon, title, description }) => (
-            <div
+          ].map(({ icon: Icon, title, description, href }) => (
+            <Link
               key={title}
-              className="flex flex-col gap-3 p-6 rounded-xl border bg-card hover:shadow-sm transition-shadow"
+              href={href}
+              className="flex flex-col gap-3 p-6 rounded-xl border bg-card hover:shadow-md hover:border-primary/40 transition-all group"
             >
-              <div className="flex items-center justify-center size-10 rounded-lg bg-primary/10 text-primary">
+              <div className="flex items-center justify-center size-10 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                 <Icon className="size-5" />
               </div>
-              <h3 className="font-semibold">{title}</h3>
+              <h3 className="font-semibold group-hover:text-primary transition-colors">{title}</h3>
               <p className="text-sm text-muted-foreground">{description}</p>
-            </div>
+            </Link>
           ))}
         </div>
 

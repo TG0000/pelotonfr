@@ -2,16 +2,22 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback } from "react";
-import { Search, X, SlidersHorizontal } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { FEDERATIONS, DISCIPLINES, CATEGORIES, RACE_LEVELS } from "@/lib/constants";
+import { Slider } from "@/components/ui/slider";
+import { LocationSearch } from "@/components/common/LocationSearch";
+import { FEDERATIONS, DISCIPLINES, CATEGORIES, DEFAULT_RADIUS_KM } from "@/lib/constants";
+import type { GeocodingResult } from "@/types";
 
 type MultiKey = "fed" | "disc" | "cat";
 
-export function RaceFilters() {
+interface RaceFiltersProps {
+  showLocation?: boolean;
+}
+
+export function RaceFilters({ showLocation = false }: RaceFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -71,6 +77,25 @@ export function RaceFilters() {
     router.push(pathname, { scroll: false });
   }, [router, pathname]);
 
+  function handleLocationSelect(result: GeocodingResult | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("page");
+    if (result) {
+      params.set("lat", String(result.lat));
+      params.set("lng", String(result.lng));
+      if (!params.has("radius")) params.set("radius", String(DEFAULT_RADIUS_KM));
+    } else {
+      params.delete("lat");
+      params.delete("lng");
+    }
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function handleRadiusChange(val: number | readonly number[]) {
+    const v = Array.isArray(val) ? (val as number[])[0] : (val as number);
+    setParam("radius", String(v));
+  }
+
   const hasFilters =
     searchParams.toString().length > 0 &&
     searchParams.toString() !== "page=1";
@@ -81,6 +106,9 @@ export function RaceFilters() {
   const q = searchParams.get("q") ?? "";
   const dateFrom = searchParams.get("dateFrom") ?? "";
   const dateTo = searchParams.get("dateTo") ?? "";
+  const lat = searchParams.get("lat");
+  const lng = searchParams.get("lng");
+  const radius = Number(searchParams.get("radius") ?? DEFAULT_RADIUS_KM);
 
   function FilterGroup({
     title,
@@ -132,6 +160,35 @@ export function RaceFilters() {
           onChange={(e) => setParam("q", e.target.value)}
         />
       </div>
+
+      {/* Location (optional) */}
+      {showLocation && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Près de moi
+          </h3>
+          <LocationSearch
+            onSelect={handleLocationSelect}
+            placeholder="Ville ou code postal..."
+          />
+          {lat && lng && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Rayon</span>
+                <span className="font-medium">{radius} km</span>
+              </div>
+              <Slider
+                min={10}
+                max={300}
+                step={10}
+                value={[radius]}
+                onValueChange={handleRadiusChange}
+                className="w-full"
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Date range */}
       <div className="flex flex-col gap-2">
@@ -228,5 +285,18 @@ export function RaceFilters() {
         </>
       )}
     </aside>
+  );
+}
+
+/** Returns the count of active filters (for badge display) */
+export function useActiveFilterCount(): number {
+  const searchParams = useSearchParams();
+  return (
+    searchParams.getAll("fed").length +
+    searchParams.getAll("disc").length +
+    searchParams.getAll("cat").length +
+    (searchParams.get("q") ? 1 : 0) +
+    (searchParams.get("dateFrom") || searchParams.get("dateTo") ? 1 : 0) +
+    (searchParams.get("lat") && searchParams.get("lng") ? 1 : 0)
   );
 }
