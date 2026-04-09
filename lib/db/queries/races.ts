@@ -372,3 +372,72 @@ export async function getRaceStats(): Promise<RaceStats> {
     byFederation,
   };
 }
+
+export interface CalendarDay {
+  date: string;
+  races: Race[];
+}
+
+export async function getRacesForCalendar(
+  filters: Partial<RaceFilters> = {}
+): Promise<CalendarDay[]> {
+  const { fed = [], disc = [], cat = [], dateFrom, dateTo } = filters;
+  const today = new Date().toISOString().split("T")[0];
+  const threeMonths = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0];
+
+  const conditions = ["r.is_active = true", "r.is_cancelled = false"];
+  const params: unknown[] = [];
+  let mi = 1;
+
+  // Parameterized date bounds
+  conditions.push(`r.race_date >= $${mi}`);
+  params.push(dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom) ? dateFrom : today);
+  mi++;
+
+  conditions.push(`r.race_date <= $${mi}`);
+  params.push(dateTo && /^\d{4}-\d{2}-\d{2}$/.test(dateTo) ? dateTo : threeMonths);
+  mi++;
+
+  if (fed.length) {
+    conditions.push(`f.slug = ANY($${mi})`);
+    params.push(fed);
+    mi++;
+  }
+  if (disc.length) {
+    conditions.push(`r.discipline = ANY($${mi})`);
+    params.push(disc);
+    mi++;
+  }
+  if (cat.length) {
+    conditions.push(`r.categories && $${mi}`);
+    params.push(cat);
+    mi++;
+  }
+
+  const rows = await sql(
+    `SELECT r.id, r.name, r.race_date, r.city, r.department_code,
+            r.discipline, r.categories, r.level, r.is_cancelled,
+            r.federation_id, f.slug AS federation_slug,
+            ST_X(r.location::geometry) AS lng,
+            ST_Y(r.location::geometry) AS lat
+     FROM races r
+     JOIN federations f ON f.id = r.federation_id
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY r.race_date ASC, r.name ASC
+     LIMIT 3000`,
+    params
+  );
+
+  // Group by date
+  const byDate = new Map<string, Race[]>();
+  for (const row of rows) {
+    const race = buildRaceFromRow(row as Record<string, unknown>);
+    const dateKey = race.raceDate;
+    if (!byDate.has(dateKey)) byDate.set(dateKey, []);
+    byDate.get(dateKey)!.push(race);
+  }
+
+  return Array.from(byDate.entries()).map(([date, races]) => ({ date, races }));
+}

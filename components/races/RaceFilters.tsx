@@ -54,6 +54,19 @@ export function RaceFilters() {
     [router, pathname, searchParams]
   );
 
+  const setParams = useCallback(
+    (entries: Record<string, string>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("page");
+      for (const [key, value] of Object.entries(entries)) {
+        if (value) params.set(key, value);
+        else params.delete(key);
+      }
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname, searchParams]
+  );
+
   const clearAll = useCallback(() => {
     router.push(pathname, { scroll: false });
   }, [router, pathname]);
@@ -125,6 +138,41 @@ export function RaceFilters() {
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Période
         </h3>
+        {/* Quick presets */}
+        <div className="flex flex-wrap gap-1">
+          {[
+            { label: "Week-end", days: [6, 7] },
+            { label: "7j", days: [0, 7] },
+            { label: "30j", days: [0, 30] },
+          ].map(({ label, days }) => {
+            const from = new Date();
+            from.setDate(from.getDate() + days[0]);
+            const to = new Date();
+            to.setDate(to.getDate() + days[1]);
+            // Adjust weekend to next Saturday
+            if (label === "Week-end") {
+              const day = from.getDay();
+              from.setDate(from.getDate() + ((6 - day + 7) % 7 || 7));
+              to.setDate(from.getDate() + 1);
+            }
+            const fromStr = from.toISOString().split("T")[0];
+            const toStr = to.toISOString().split("T")[0];
+            const isActive = dateFrom === fromStr && dateTo === toStr;
+            return (
+              <button
+                key={label}
+                onClick={() => setParams({ dateFrom: fromStr, dateTo: toStr })}
+                className={`text-xs px-2 py-0.5 rounded border transition-all ${
+                  isActive
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border hover:border-primary/50"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
         <div className="flex gap-2 items-center">
           <Input
             type="date"
