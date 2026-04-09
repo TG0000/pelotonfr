@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Calendar, MapPin, Trophy, ExternalLink, Phone, Mail, Building2 } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Trophy, ExternalLink, Phone, Mail, Building2, Map } from "lucide-react";
 import { buttonVariants } from "@/lib/button-variants";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -51,14 +51,25 @@ export default async function RaceDetailPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 w-full">
-      {/* Back */}
-      <Link
-        href="/courses"
-        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "mb-6 -ml-2 gap-1.5")}
-      >
-        <ArrowLeft className="size-4" />
-        Retour aux courses
-      </Link>
+      {/* Navigation */}
+      <div className="flex items-center justify-between mb-6">
+        <Link
+          href="/courses"
+          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "-ml-2 gap-1.5")}
+        >
+          <ArrowLeft className="size-4" />
+          Retour aux courses
+        </Link>
+        {race.lat && race.lng && (
+          <Link
+            href={`/carte?lat=${race.lat}&lng=${race.lng}&radius=30`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+          >
+            <Map className="size-3.5" />
+            Voir sur la carte
+          </Link>
+        )}
+      </div>
 
       {/* Header */}
       <div className="mb-8">

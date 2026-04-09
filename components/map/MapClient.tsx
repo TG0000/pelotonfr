@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { MapSidebar } from "./MapSidebar";
@@ -35,6 +35,11 @@ export function MapClient({ initialRaces }: MapClientProps) {
     }
   );
   const [races, setRaces] = useState<Race[]>(initialRaces);
+
+  // Sync races when server re-renders with new filter params
+  useEffect(() => {
+    setRaces(initialRaces);
+  }, [initialRaces]);
 
   const handleLocationChange = useCallback(
     async (result: GeocodingResult | null) => {

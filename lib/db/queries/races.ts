@@ -327,3 +327,48 @@ export async function getRacesForMap(
 
   return rows.map((r) => buildRaceFromRow(r as Record<string, unknown>));
 }
+
+export interface RaceStats {
+  total: number;
+  thisWeek: number;
+  nextMonth: number;
+  byFederation: Record<string, number>;
+}
+
+export async function getRaceStats(): Promise<RaceStats> {
+  const today = new Date().toISOString().split("T")[0];
+  const weekEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const monthEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  const rows = await sql(
+    `SELECT f.slug AS federation_slug,
+       COUNT(*) FILTER (WHERE r.race_date >= $1 AND r.is_cancelled = false AND r.is_active = true) AS fed_count
+     FROM races r
+     JOIN federations f ON f.id = r.federation_id
+     GROUP BY f.slug`,
+    [today]
+  );
+
+  const [totRow] = await sql(
+    `SELECT
+       COUNT(*) FILTER (WHERE r.race_date >= $1 AND r.is_cancelled = false AND r.is_active = true) AS total,
+       COUNT(*) FILTER (WHERE r.race_date >= $1 AND r.race_date <= $2 AND r.is_cancelled = false AND r.is_active = true) AS this_week,
+       COUNT(*) FILTER (WHERE r.race_date >= $1 AND r.race_date <= $3 AND r.is_cancelled = false AND r.is_active = true) AS next_month
+     FROM races r`,
+    [today, weekEnd, monthEnd]
+  );
+
+  const byFederation: Record<string, number> = {};
+  for (const row of rows) {
+    const r = row as Record<string, unknown>;
+    byFederation[r.federation_slug as string] = Number(r.fed_count);
+  }
+  const t = totRow as Record<string, unknown>;
+
+  return {
+    total: Number(t.total),
+    thisWeek: Number(t.this_week),
+    nextMonth: Number(t.next_month),
+    byFederation,
+  };
+}

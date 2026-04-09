@@ -17,14 +17,19 @@ export function RaceCard({ race, showDistance }: RaceCardProps) {
     ? new Date(race.raceDateEnd + "T12:00:00Z")
     : null;
 
-  const formattedDate = format(date, "d MMM yyyy", { locale: fr });
+  const formattedDate = format(date, "EEE d MMM", { locale: fr });
   const formattedDateEnd = dateEnd
-    ? format(dateEnd, "d MMM yyyy", { locale: fr })
+    ? format(dateEnd, "d MMM", { locale: fr })
     : null;
+  const formattedYear = format(date, "yyyy");
 
   const dateDisplay = formattedDateEnd
     ? `${formattedDate} → ${formattedDateEnd}`
     : formattedDate;
+
+  // Highlight races within the next 7 days
+  const isThisWeek =
+    date.getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000 && date.getTime() >= Date.now();
 
   return (
     <Link href={`/course/${race.id}`} className="block group">
@@ -55,16 +60,26 @@ export function RaceCard({ race, showDistance }: RaceCardProps) {
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <Calendar className="size-3.5 shrink-0" />
-              <span className="capitalize">{dateDisplay}</span>
+              <span className={`capitalize font-medium ${isThisWeek ? "text-primary" : ""}`}>
+                {dateDisplay}
+              </span>
+              {!formattedDateEnd && (
+                <span className="text-muted-foreground/70">{formattedYear}</span>
+              )}
+              {isThisWeek && (
+                <span className="ml-auto text-xs font-semibold text-primary bg-primary/10 rounded px-1.5 py-0.5">
+                  Cette semaine
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1.5">
               <MapPin className="size-3.5 shrink-0" />
-              <span>
+              <span className="truncate">
                 {race.city}
                 {race.departmentCode && ` (${race.departmentCode})`}
               </span>
               {showDistance && race.distanceFromUserKm != null && (
-                <span className="ml-auto font-medium text-primary">
+                <span className="ml-auto font-medium text-primary shrink-0">
                   {Math.round(race.distanceFromUserKm)} km
                 </span>
               )}

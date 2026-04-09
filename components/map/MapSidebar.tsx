@@ -71,6 +71,12 @@ export function MapSidebar({
     onLocationChange(null);
   }
 
+  const activeFilterCount =
+    getValues("fed").length +
+    getValues("disc").length +
+    getValues("cat").length +
+    (lat && lng ? 1 : 0);
+
   const hasFilters = searchParams.toString().length > 0;
 
   function FilterPills({
@@ -113,8 +119,13 @@ export function MapSidebar({
         <div className="flex items-center gap-2 text-sm font-semibold">
           <SlidersHorizontal className="size-4 text-primary" />
           Filtres
+          {activeFilterCount > 0 && (
+            <span className="bg-primary text-primary-foreground text-xs rounded-full px-1.5 py-0.5 leading-none font-medium">
+              {activeFilterCount}
+            </span>
+          )}
           <span className="text-xs text-muted-foreground font-normal">
-            ({raceCount} courses)
+            {raceCount} course{raceCount !== 1 ? "s" : ""}
           </span>
         </div>
         {expanded ? (
