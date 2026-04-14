@@ -42,11 +42,10 @@ export default async function CoursesPage({ searchParams }: PageProps) {
   };
 
   let result: PaginatedRaces = { races: [], total: 0, page: 1, pageSize: 24, totalPages: 0 };
-  let dbError: string | null = null;
   try {
     result = await getRaces(filters);
-  } catch (err) {
-    dbError = String(err);
+  } catch {
+    // DB not configured
   }
 
   const { races, total, page, totalPages } = result;
@@ -107,12 +106,6 @@ export default async function CoursesPage({ searchParams }: PageProps) {
               </Suspense>
             </div>
           </div>
-
-          {dbError && (
-            <div className="text-center py-10 text-destructive bg-destructive/10 rounded-lg p-4 mb-4 text-xs font-mono break-all">
-              DB Error: {dbError}
-            </div>
-          )}
 
           {races.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground">

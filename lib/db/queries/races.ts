@@ -101,7 +101,7 @@ export async function getRaces(
     paramIdx++;
   }
 
-  const from = dateFrom ?? today;
+  const from = dateFrom || today;
   conditions.push(`r.race_date >= $${paramIdx}::date`);
   params.push(from);
   paramIdx++;
@@ -175,7 +175,7 @@ export async function getRaces(
     mi++;
   }
   mainConditions.push(`r.race_date >= $${mi}::date`);
-  mainParams.push(from);
+  mainParams.push(dateFrom || today);
   mi++;
   if (dateTo) {
     mainConditions.push(`r.race_date <= $${mi}::date`);
@@ -294,7 +294,7 @@ export async function getRacesForMap(
   }
 
   conditions.push(`r.race_date >= $${mi}::date`);
-  params.push(dateFrom ?? today);
+  params.push(dateFrom || today);
   mi++;
 
   if (dateTo) {
