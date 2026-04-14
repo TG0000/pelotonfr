@@ -3,6 +3,8 @@ import { SlidersHorizontal } from "lucide-react";
 import { RaceCard } from "@/components/races/RaceCard";
 import { RaceFilters } from "@/components/races/RaceFilters";
 import { MobileFilters } from "@/components/races/MobileFilters";
+import { ActiveFilters } from "@/components/races/ActiveFilters";
+import { SortSelect } from "@/components/races/SortSelect";
 import { Pagination } from "@/components/common/Pagination";
 import { getRaces } from "@/lib/db/queries/races";
 import type { RaceFilters as Filters, PaginatedRaces } from "@/types";
@@ -36,6 +38,7 @@ export default async function CoursesPage({ searchParams }: PageProps) {
     lat: params.lat ? Number(params.lat) : null,
     lng: params.lng ? Number(params.lng) : null,
     radius: Number(getString(params.radius)) || 50,
+    sortBy: (getString(params.sortBy) as Filters["sortBy"]) || "date_asc",
   };
 
   let result: PaginatedRaces = { races: [], total: 0, page: 1, pageSize: 24, totalPages: 0 };
@@ -49,7 +52,7 @@ export default async function CoursesPage({ searchParams }: PageProps) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 w-full">
-      <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="flex items-start justify-between gap-4 mb-2">
         <div>
           <h1 className="text-2xl font-bold mb-1">Courses cyclistes</h1>
           <p className="text-muted-foreground text-sm">
@@ -58,12 +61,22 @@ export default async function CoursesPage({ searchParams }: PageProps) {
               : "Toutes les compétitions FFC, FSGT et UFOLEP"}
           </p>
         </div>
-        {/* Mobile filter button */}
-        <div className="lg:hidden shrink-0">
+        {/* Mobile: sort + filter button */}
+        <div className="lg:hidden flex items-center gap-2 shrink-0">
+          <Suspense fallback={null}>
+            <SortSelect />
+          </Suspense>
           <Suspense fallback={null}>
             <MobileFilters showLocation />
           </Suspense>
         </div>
+      </div>
+
+      {/* Active filter chips */}
+      <div className="mb-6 lg:hidden">
+        <Suspense fallback={null}>
+          <ActiveFilters />
+        </Suspense>
       </div>
 
       <div className="flex gap-8">
@@ -82,6 +95,18 @@ export default async function CoursesPage({ searchParams }: PageProps) {
 
         {/* Race grid */}
         <div className="flex-1 min-w-0">
+          {/* Active filter chips + sort — desktop */}
+          <div className="hidden lg:flex items-center justify-between gap-4 mb-4">
+            <Suspense fallback={null}>
+              <ActiveFilters />
+            </Suspense>
+            <div className="shrink-0 ml-auto">
+              <Suspense fallback={null}>
+                <SortSelect />
+              </Suspense>
+            </div>
+          </div>
+
           {races.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground">
               <p className="text-lg font-medium mb-2">Aucune course trouvée</p>

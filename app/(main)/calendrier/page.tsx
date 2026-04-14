@@ -5,6 +5,7 @@ import { CalendarDays, ChevronRight } from "lucide-react";
 import { getRacesForCalendar } from "@/lib/db/queries/races";
 import type { CalendarDay } from "@/lib/db/queries/races";
 import { RaceFilters } from "@/components/races/RaceFilters";
+import { MobileFilters } from "@/components/races/MobileFilters";
 import { RaceBadge, FederationDot } from "@/components/races/RaceBadge";
 import type { FederationSlug, Discipline } from "@/lib/constants";
 import { format, startOfWeek, isSameWeek } from "date-fns";
@@ -94,16 +95,23 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 w-full">
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-1">
-          <CalendarDays className="size-5 text-primary" />
-          <h1 className="text-2xl font-bold">Calendrier</h1>
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <CalendarDays className="size-5 text-primary" />
+            <h1 className="text-2xl font-bold">Calendrier</h1>
+          </div>
+          <p className="text-muted-foreground text-sm">
+            {totalRaces > 0
+              ? `${totalRaces} course${totalRaces > 1 ? "s" : ""} sur ${calendarDays.length} jour${calendarDays.length > 1 ? "s" : ""}`
+              : "Aucune course trouvée"}
+          </p>
         </div>
-        <p className="text-muted-foreground text-sm">
-          {totalRaces > 0
-            ? `${totalRaces} course${totalRaces > 1 ? "s" : ""} sur ${calendarDays.length} jour${calendarDays.length > 1 ? "s" : ""}`
-            : "Aucune course trouvée"}
-        </p>
+        <div className="lg:hidden shrink-0">
+          <Suspense fallback={null}>
+            <MobileFilters />
+          </Suspense>
+        </div>
       </div>
 
       <div className="flex gap-8">

@@ -68,6 +68,7 @@ export async function getRaces(
     radius = 50,
     q = "",
     page = 1,
+    sortBy = "date_asc",
   } = filters;
 
   const offset = (page - 1) * PAGE_SIZE;
@@ -133,6 +134,8 @@ export async function getRaces(
     paramIdx += 2;
     distanceOrder = "distance_from_user_km,";
   }
+
+  const dateOrder = sortBy === "date_desc" ? "DESC" : "ASC";
 
   const whereClause = conditions.join(" AND ");
 
@@ -213,7 +216,7 @@ export async function getRaces(
      FROM races r
      JOIN federations f ON f.id = r.federation_id
      WHERE ${mainConditions.join(" AND ")}
-     ORDER BY ${distanceOrder} r.race_date ASC
+     ORDER BY ${distanceOrder} r.race_date ${dateOrder}
      LIMIT $${limitParam} OFFSET $${offsetParam}`,
     mainParams
   );
