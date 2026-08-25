@@ -321,7 +321,13 @@ export async function backfillRacesFromVenues(sql: SqlFn): Promise<number> {
        FROM venues v
       WHERE r.venue_id = v.id
         AND v.city IS NOT NULL
-        AND (r.city IS DISTINCT FROM v.city OR r.location IS NULL)
+        AND (r.city IS DISTINCT FROM v.city
+          OR r.location IS NULL
+          -- The department and postcode come from the venue too, and a race
+          -- whose city already matched would otherwise never receive them.
+          OR (r.department_code IS NULL AND v.department_code IS NOT NULL)
+          OR (r.postcode IS NULL AND v.postcode IS NOT NULL)
+          OR (r.region IS NULL AND v.region IS NOT NULL))
       RETURNING r.id`
   );
   return rows.length;
