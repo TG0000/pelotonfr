@@ -13,7 +13,8 @@
     "geocode": "tsx scripts/scrapers/geocode-only.ts",
     "db:relink-events": "tsx scripts/db/relink-events.ts",
     "db:migrate": "tsx scripts/db/migrate.ts",
-    "db:migrate:dry": "tsx scripts/db/migrate.ts --dry-run"
+    "db:migrate:dry": "tsx scripts/db/migrate.ts --dry-run",
+    "scrape:rankings": "tsx scripts/scrapers/ffc-rankings.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

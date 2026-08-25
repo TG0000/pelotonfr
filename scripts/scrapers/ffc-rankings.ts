@@ -34,7 +34,15 @@ const FFC_FEDERATION_ID = 1;
 /** Ranking identifiers used by the federation's own pages. */
 const DEFAULT_TYPES = ["HNATRT", "FNATRT"] as const;
 
-/** The ranking season runs 1 November to 31 October. */
+/**
+ * The ranking season runs 1 November to 31 October and is named after the year
+ * it ends in, so November 2026 already belongs to season 2027.
+ */
+export function currentSeason(now = new Date()): number {
+  const year = now.getUTCFullYear();
+  return now.getUTCMonth() >= 10 ? year + 1 : year;
+}
+
 const DEFAULT_SEASONS = [2026, 2025, 2024, 2023, 2022, 2021];
 
 /** Safety stop: the men's road ranking ends around page 210. */
@@ -340,9 +348,11 @@ async function main() {
   const types = typesArg
     ? typesArg.split("=")[1].split(",").map((s) => s.trim().toUpperCase())
     : [...DEFAULT_TYPES];
-  const seasons = seasonsArg
-    ? seasonsArg.split("=")[1].split(",").map((s) => Number(s.trim()))
-    : DEFAULT_SEASONS;
+  const seasons = process.argv.includes("--current")
+    ? [currentSeason()]
+    : seasonsArg
+      ? seasonsArg.split("=")[1].split(",").map((s) => Number(s.trim()))
+      : DEFAULT_SEASONS;
 
   const clubCache = new Map<string, string>();
   const riderCache = new Map<string, string>();
