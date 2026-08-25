@@ -30,6 +30,17 @@ const FFC_FEDERATION_ID = 1;
 /** Races older than this are assumed never to get results published. */
 const MAX_AGE_DAYS = 400;
 
+/**
+ * How long a race known only from the calendar is still worth polling.
+ *
+ * A race appears in the results index precisely because it has a classification,
+ * so `ffc-history` discovering it is the reliable signal. One that is still
+ * absent from the index well after the usual two-to-four week publication delay
+ * almost certainly never will be — and polling all of them every few days for a
+ * year is tens of thousands of pointless requests.
+ */
+const CALENDAR_ONLY_GRACE_DAYS = 75;
+
 /** Wait this long before re-checking a race whose results were not up yet. */
 const RETRY_AFTER_DAYS = 3;
 
@@ -356,11 +367,14 @@ async function main() {
         AND COALESCE(race_date_end, race_date) > CURRENT_DATE - ($3::int * INTERVAL '1 day')
         AND ($4::boolean OR has_results = false)
         AND ($4::boolean
+             OR source_url LIKE '%/resultats/%'
+             OR COALESCE(race_date_end, race_date) > CURRENT_DATE - ($6::int * INTERVAL '1 day'))
+        AND ($4::boolean
              OR results_fetched_at IS NULL
              OR results_fetched_at < now() - ($5::int * INTERVAL '1 day'))
       ORDER BY race_date DESC
       LIMIT $2::int`,
-    [FFC_FEDERATION_ID, limit, MAX_AGE_DAYS, force, RETRY_AFTER_DAYS]
+    [FFC_FEDERATION_ID, limit, MAX_AGE_DAYS, force, RETRY_AFTER_DAYS, CALENDAR_ONLY_GRACE_DAYS]
   )) as unknown as RaceRow[];
 
   if (races.length === 0) {
