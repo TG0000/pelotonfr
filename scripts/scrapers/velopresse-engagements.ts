@@ -128,6 +128,8 @@ interface ColumnRoles {
   firstName?: number;
   club?: number;
   category?: number;
+  /** The source sometimes splits "Access 2" into two columns. */
+  categoryLevel?: number;
 }
 
 const CATEGORY_RE =
@@ -152,18 +154,37 @@ function inferColumns(rows: string[][]): ColumnRoles {
   const roles: ColumnRoles = {};
   const taken = new Set<number>();
 
+  // A bib column is numeric AND mostly distinct. Without the distinctness test,
+  // the digit half of a category split across two columns ("Access" | "2") looks
+  // exactly like a bib — and every entrant ends up wearing number 3.
   columns.forEach((col, i) => {
-    if (share(col, (v) => /^\d{1,3}$/.test(v)) > 0.8) {
+    if (roles.bib !== undefined) return;
+    const numeric = share(col, (v) => /^\d{1,3}$/.test(v));
+    if (numeric <= 0.8) return;
+    const filled = col.filter((v) => v.length > 0);
+    const distinct = new Set(filled).size / Math.max(1, filled.length);
+    if (distinct > 0.5) {
       roles.bib = i;
       taken.add(i);
     }
   });
 
   columns.forEach((col, i) => {
-    if (taken.has(i)) return;
+    if (taken.has(i) || roles.category !== undefined) return;
     if (share(col, (v) => CATEGORY_RE.test(v)) > 0.6) {
       roles.category = i;
       taken.add(i);
+      // The level is often split off into the next column ("Access" | "2");
+      // recombining them keeps "Access 2" readable rather than storing "Access".
+      const next = i + 1;
+      if (
+        next < columns.length &&
+        !taken.has(next) &&
+        share(columns[next], (v) => /^\d{1,2}$/.test(v)) > 0.6
+      ) {
+        roles.categoryLevel = next;
+        taken.add(next);
+      }
     }
   });
 
@@ -271,11 +292,16 @@ export function parseEntrants(html: string): Entrant[] {
       if (!last || !/[A-Za-zÀ-ÿ]/.test(last)) continue;
       if (/^(nom|coureur|dossard)$/i.test(last)) continue;
 
+      const categoryParts = [at(roles.category), at(roles.categoryLevel)]
+        .filter((v): v is string => Boolean(v && v.trim()))
+        .join(" ")
+        .trim();
+
       entrants.push({
         lastName: last,
         firstName: first,
         club: at(roles.club),
-        category: at(roles.category) ?? currentCategory,
+        category: categoryParts || currentCategory,
         bib: at(roles.bib),
       });
     }
