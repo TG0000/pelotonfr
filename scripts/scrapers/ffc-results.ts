@@ -212,7 +212,7 @@ async function getOrCreateRider(
 interface RaceRow {
   id: string;
   competition_code: string;
-  year: number;
+  season: number;
 }
 
 async function ingestRace(
@@ -220,7 +220,10 @@ async function ingestRace(
   clubCache: Map<string, string>,
   riderCache: Map<string, string>
 ): Promise<{ stored: number; skipped: number; found: boolean }> {
-  const url = `${BASE_URL}/resultats/resultat/${race.year}/${race.competition_code}/`;
+  // The season, not the calendar year: the FFC serves a different edition per
+  // season under the same competition code, so the wrong year returns the wrong
+  // classification rather than a 404.
+  const url = `${BASE_URL}/resultats/resultat/${race.season}/${race.competition_code}/`;
 
   let html: string;
   try {
@@ -344,7 +347,7 @@ async function main() {
   const force = process.argv.includes("--force");
 
   const races = (await sql(
-    `SELECT id, competition_code, EXTRACT(YEAR FROM race_date)::int AS year
+    `SELECT id, competition_code, COALESCE(season, EXTRACT(YEAR FROM race_date)::int) AS season
        FROM races
       WHERE federation_id = $1::smallint
         AND competition_code IS NOT NULL

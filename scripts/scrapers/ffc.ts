@@ -327,8 +327,12 @@ async function scrapeWindow(
     const marker = markers.get(ref.key);
 
     races.push({
-      externalId: ref.code,
+      // The season is part of the identity: the FFC reuses a competition code
+      // from one season to the next, and keying on the code alone merged the
+      // editions into a single row.
+      externalId: `${ref.year}-${ref.code}`,
       competitionCode: ref.code,
+      season: Number(ref.year),
       name: title,
       raceDate: parsedDate.start,
       raceDateEnd: parsedDate.end,

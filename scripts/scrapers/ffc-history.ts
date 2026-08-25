@@ -143,6 +143,13 @@ async function fetchIndexPage(
     const href = $a.attr("href") ?? "";
     if (!code) return;
 
+    // The index publishes the season alongside the code, and both are needed:
+    // the same code serves a different edition each season.
+    const season =
+      Number($a.attr("saison")) ||
+      Number(/\/resultats\/resultat\/(\d{4})\//.exec(href)?.[1]);
+    if (!Number.isFinite(season)) return;
+
     const name = $a.find(".resultat-contenu-nom").text().trim();
     const dateRaw = $a.find(".resultat-contenu-date").text().trim();
     const raceDate = parseFrenchDate(dateRaw);
@@ -155,8 +162,9 @@ async function fetchIndexPage(
     const departmentName = $a.find(".resultat-contenu-localisation").text().trim();
 
     races.push({
-      externalId: code.toUpperCase(),
+      externalId: `${season}-${code.toUpperCase()}`,
       competitionCode: code.toUpperCase(),
+      season,
       name,
       raceDate,
       departmentName: departmentName || undefined,

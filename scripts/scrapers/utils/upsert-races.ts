@@ -179,7 +179,7 @@ export async function upsertRaces(
            external_id, federation_id, name, slug, source_url,
            race_date, race_date_end,
            city, department_code, department_name, postcode,
-           venue_id, event_id, competition_code,
+           venue_id, event_id, competition_code, season,
            discipline, race_type, level, categories, gender, distance_km,
            is_cancelled, organizer, contact_email, contact_phone, notes,
            content_hash, location, geocoding_status
@@ -188,7 +188,7 @@ export async function upsertRaces(
            $1::varchar, $2::smallint, $3::varchar, $4::varchar, $5::text,
            $6::date, $7::date,
            $8::varchar, $9::varchar, $10::varchar, $11::varchar,
-           $12::uuid, $13::uuid, $14::varchar,
+           $12::uuid, $13::uuid, $14::varchar, $27::smallint,
            $15::varchar, $16::varchar, $17::varchar, $18::text[], $19::varchar, $20::numeric,
            $21::boolean, $22::varchar, $23::text, $24::varchar, $25::text,
            $26::varchar,
@@ -211,6 +211,7 @@ export async function upsertRaces(
            venue_id         = EXCLUDED.venue_id,
            event_id         = EXCLUDED.event_id,
            competition_code = EXCLUDED.competition_code,
+           season           = EXCLUDED.season,
            discipline       = EXCLUDED.discipline,
            race_type        = EXCLUDED.race_type,
            level            = EXCLUDED.level,
@@ -259,6 +260,7 @@ export async function upsertRaces(
           race.contactPhone ?? null,
           race.notes ?? null,
           hash,
+          race.season ?? null,
         ]
       );
 

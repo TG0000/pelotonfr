@@ -31,6 +31,14 @@ export interface ScrapedRace {
   /** Shared identifier between the FFC calendar and its results pages. */
   competitionCode?: string;
 
+  /**
+   * Federation season the edition belongs to.
+   *
+   * Required alongside competitionCode to identify a race: the FFC reuses a code
+   * from one season to the next, so the code alone would merge editions.
+   */
+  season?: number;
+
   sourceUrl?: string;
   organizer?: string;
   contactEmail?: string;
