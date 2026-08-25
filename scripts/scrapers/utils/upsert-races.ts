@@ -37,6 +37,8 @@ function computeHash(race: ScrapedRace, federationId: number): string {
         race.raceDateEnd ? toISODate(race.raceDateEnd) : "",
         race.name,
         race.city ?? "",
+        race.departmentCode ?? "",
+        race.departmentName ?? "",
         race.lat ?? "",
         race.lng ?? "",
         race.isCancelled ? "1" : "0",

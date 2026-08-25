@@ -22,6 +22,7 @@ import * as cheerio from "cheerio";
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { fetchHtml, politeDelay } from "./utils/http";
 import { createSql } from "./utils/db";
+import { departmentCodeFromName } from "./utils/departments";
 import { upsertRaces } from "./utils/upsert-races";
 import type { ScrapedRace } from "../../lib/scraper-types";
 import type { Discipline, RaceLevel } from "../../lib/constants";
@@ -168,6 +169,9 @@ async function fetchIndexPage(
       name,
       raceDate,
       departmentName: departmentName || undefined,
+      // The index gives a name only; without the code these races drop out of
+      // every geographic filter.
+      departmentCode: departmentCodeFromName(departmentName),
       discipline: mapDiscipline(disciplineLabel),
       raceType: disciplineLabel || undefined,
       level: LEVEL_MAP[levelLabel.toLowerCase().trim()],
