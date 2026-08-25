@@ -110,74 +110,102 @@ async function fetchPage(
   return { rows, more: Boolean(json.data?.suite) };
 }
 
-async function getOrCreateClub(
-  name: string,
+/**
+ * Resolves a whole page's clubs in one statement.
+ *
+ * Doing this per rider meant three round trips each; at ~4000 riders per season
+ * and twelve season/ranking combinations that is hours of pure latency. Batching
+ * per page cuts it by a factor of twenty.
+ */
+async function resolveClubs(
+  names: string[],
   cache: Map<string, string>
-): Promise<string | null> {
-  const cleaned = name.replace(/\s+/g, " ").trim();
-  if (!cleaned) return null;
+): Promise<void> {
+  const pending = new Map<string, string>();
 
-  const normalized = normalizeName(cleaned);
-  if (!normalized) return null;
+  for (const raw of names) {
+    const cleaned = raw.replace(/\s+/g, " ").trim();
+    if (!cleaned) continue;
+    const normalized = normalizeName(cleaned);
+    if (!normalized || cache.has(normalized)) continue;
+    // A name repeated within the page must appear once: ON CONFLICT cannot
+    // affect the same row twice in one statement.
+    pending.set(normalized, cleaned);
+  }
 
-  const cached = cache.get(normalized);
-  if (cached) return cached;
+  if (pending.size === 0) return;
+
+  const normalized = [...pending.keys()];
+  const display = [...pending.values()];
 
   const rows = await sql(
     `INSERT INTO clubs (federation_id, name, normalized_name)
-     VALUES ($1::smallint, $2::varchar, $3::varchar)
+     SELECT $1::smallint, d.name, d.norm
+       FROM UNNEST($2::varchar[], $3::varchar[]) AS d(norm, name)
      ON CONFLICT (federation_id, normalized_name) DO UPDATE SET name = EXCLUDED.name
-     RETURNING id`,
-    [FFC_FEDERATION_ID, cleaned, normalized]
+     RETURNING id, normalized_name`,
+    [FFC_FEDERATION_ID, normalized, display]
   );
 
-  const id = rows[0].id as string;
-  cache.set(normalized, id);
-  return id;
+  for (const row of rows) {
+    cache.set(row.normalized_name as string, row.id as string);
+  }
 }
 
 /**
- * Upserts the rider behind a ranking row.
+ * Upserts a page of riders in one statement.
  *
- * The ranking is authoritative for the licence category, but must not clobber
- * the result-derived counters, so only identity fields are written here.
+ * The ranking is authoritative for the licence category, but must never clobber
+ * the counters derived from results, so only identity fields are written.
  */
-async function upsertRider(
-  row: RankingRow,
-  clubId: string | null,
-  cache: Map<string, string>
-): Promise<string | null> {
-  const uciId = (row.id ?? "").trim();
-  const lastName = (row.nom ?? "").trim();
-  if (!uciId || !lastName) return null;
+async function upsertRiders(
+  rows: RankingRow[],
+  clubCache: Map<string, string>,
+  riderCache: Map<string, string>
+): Promise<void> {
+  const uciIds: string[] = [];
+  const lastNames: string[] = [];
+  const firstNames: (string | null)[] = [];
+  const normalized: string[] = [];
+  const clubIds: (string | null)[] = [];
+  const categories: (string | null)[] = [];
+  const seen = new Set<string>();
 
-  const cached = cache.get(uciId);
-  if (cached) return cached;
+  for (const row of rows) {
+    const uciId = (row.id ?? "").trim();
+    const lastName = (row.nom ?? "").trim();
+    if (!uciId || !lastName || seen.has(uciId)) continue;
+    seen.add(uciId);
 
-  const firstName = (row.prenom ?? "").trim();
-  const rows = await sql(
+    const firstName = (row.prenom ?? "").trim();
+    const clubKey = normalizeName((row.club ?? "").trim());
+
+    uciIds.push(uciId);
+    lastNames.push(lastName);
+    firstNames.push(firstName || null);
+    normalized.push(normalizeName(`${lastName} ${firstName}`));
+    clubIds.push(clubCache.get(clubKey) ?? null);
+    categories.push((row.categorie ?? "").trim() || null);
+  }
+
+  if (uciIds.length === 0) return;
+
+  const inserted = await sql(
     `INSERT INTO riders (uci_id, last_name, first_name, normalized_name, current_club_id, category)
-     VALUES ($1::varchar, $2::varchar, $3::varchar, $4::varchar, $5::uuid, $6::varchar)
+     SELECT * FROM UNNEST($1::varchar[], $2::varchar[], $3::varchar[], $4::varchar[], $5::uuid[], $6::varchar[])
      ON CONFLICT (uci_id) DO UPDATE SET
        last_name       = EXCLUDED.last_name,
        first_name      = COALESCE(EXCLUDED.first_name, riders.first_name),
        normalized_name = EXCLUDED.normalized_name,
        current_club_id = COALESCE(EXCLUDED.current_club_id, riders.current_club_id),
        category        = COALESCE(EXCLUDED.category, riders.category)
-     RETURNING id`,
-    [
-      uciId,
-      lastName,
-      firstName || null,
-      normalizeName(`${lastName} ${firstName}`),
-      clubId,
-      (row.categorie ?? "").trim() || null,
-    ]
+     RETURNING id, uci_id`,
+    [uciIds, lastNames, firstNames, normalized, clubIds, categories]
   );
 
-  const id = rows[0].id as string;
-  cache.set(uciId, id);
-  return id;
+  for (const row of inserted) {
+    riderCache.set(row.uci_id as string, row.id as string);
+  }
 }
 
 async function ingestRanking(
@@ -203,18 +231,49 @@ async function ingestRanking(
 
     if (page.rows.length === 0) break;
 
-    for (const row of page.rows) {
-      const clubName = (row.club ?? "").trim();
-      const clubId = clubName ? await getOrCreateClub(clubName, clubCache) : null;
-      const riderId = await upsertRider(row, clubId, riderCache);
-      if (!riderId) continue;
+    // Three statements per page rather than three per rider.
+    await resolveClubs(
+      page.rows.map((r) => r.club ?? ""),
+      clubCache
+    );
+    await upsertRiders(page.rows, clubCache, riderCache);
 
+    const uciIds: string[] = [];
+    const riderIds: (string | null)[] = [];
+    const ranks: (number | null)[] = [];
+    const points: (number | null)[] = [];
+    const categories: (string | null)[] = [];
+    const clubNames: (string | null)[] = [];
+    const clubIds: (string | null)[] = [];
+    const licences: (number | null)[] = [];
+    const seen = new Set<string>();
+
+    for (const row of page.rows) {
+      const uciId = (row.id ?? "").trim();
+      if (!uciId || seen.has(uciId)) continue;
+      const riderId = riderCache.get(uciId);
+      if (!riderId) continue;
+      seen.add(uciId);
+
+      const clubName = (row.club ?? "").trim();
+      uciIds.push(uciId);
+      riderIds.push(riderId);
+      ranks.push(parseRank(row.data1));
+      points.push(parsePoints(row.data2));
+      categories.push((row.categorie ?? "").trim() || null);
+      clubNames.push(clubName || null);
+      clubIds.push(clubCache.get(normalizeName(clubName)) ?? null);
+      licences.push(row.nblicence ?? null);
+    }
+
+    if (uciIds.length > 0) {
       await sql(
         `INSERT INTO rider_rankings
            (ranking_type, season, uci_id, rider_id, rank, points, category,
             club_name, club_id, licence_count)
-         VALUES ($1::varchar, $2::smallint, $3::varchar, $4::uuid, $5::int,
-                 $6::numeric, $7::varchar, $8::varchar, $9::uuid, $10::smallint)
+         SELECT $1::varchar, $2::smallint, d.*
+           FROM UNNEST($3::varchar[], $4::uuid[], $5::int[], $6::numeric[],
+                       $7::varchar[], $8::varchar[], $9::uuid[], $10::smallint[]) AS d
          ON CONFLICT (ranking_type, season, uci_id) DO UPDATE SET
            rider_id      = EXCLUDED.rider_id,
            rank          = EXCLUDED.rank,
@@ -225,19 +284,11 @@ async function ingestRanking(
            licence_count = EXCLUDED.licence_count,
            captured_at   = now()`,
         [
-          type,
-          season,
-          (row.id ?? "").trim(),
-          riderId,
-          parseRank(row.data1),
-          parsePoints(row.data2),
-          (row.categorie ?? "").trim() || null,
-          clubName || null,
-          clubId,
-          row.nblicence ?? null,
+          type, season, uciIds, riderIds, ranks, points,
+          categories, clubNames, clubIds, licences,
         ]
       );
-      stored++;
+      stored += uciIds.length;
     }
 
     more = page.more;
