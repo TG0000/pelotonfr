@@ -43,6 +43,9 @@ function computeHash(race: ScrapedRace, federationId: number): string {
         race.discipline,
         race.raceType ?? "",
         race.level ?? "",
+        race.notes ?? "",
+        race.organizer ?? "",
+        race.distanceKm ?? "",
         [...race.categories].sort().join(","),
       ].join("|")
     )

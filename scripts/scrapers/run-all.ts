@@ -98,6 +98,33 @@ async function finishLog(
   );
 }
 
+/**
+ * Retires races the source no longer lists.
+ *
+ * Restricted to the horizon the run actually covered: outside it, absence means
+ * the scraper never looked, not that the race was withdrawn. Also cleans up rows
+ * left behind by earlier scraper generations.
+ */
+async function retireWithdrawnRaces(
+  federationId: number,
+  seenExternalIds: string[],
+  coverageDays: number
+): Promise<number> {
+  if (seenExternalIds.length === 0) return 0;
+
+  const rows = await sql(
+    `UPDATE races SET is_active = false
+      WHERE federation_id = $1::smallint
+        AND is_active = true
+        AND COALESCE(race_date_end, race_date) >= CURRENT_DATE
+        AND COALESCE(race_date_end, race_date) <= CURRENT_DATE + ($3::int * INTERVAL '1 day')
+        AND external_id <> ALL($2::text[])
+      RETURNING id`,
+    [federationId, seenExternalIds, coverageDays]
+  );
+  return rows.length;
+}
+
 async function retirePastRaces(): Promise<number> {
   // A multi-day race stays current until its LAST day, so the cutoff uses the
   // end date when there is one.
@@ -136,6 +163,17 @@ async function main() {
       console.log(
         `  db: +${stats.inserted} new, ~${stats.updated} updated, =${stats.skipped} unchanged`
       );
+
+      if (result.coverageDays) {
+        const withdrawn = await retireWithdrawnRaces(
+          result.federationId,
+          result.races.map((r) => r.externalId),
+          result.coverageDays
+        );
+        if (withdrawn > 0) {
+          console.log(`  ${withdrawn} races no longer listed, retired`);
+        }
+      }
 
       await finishLog(logId, result, stats.inserted, stats.updated, stats.skipped);
     } catch (err) {

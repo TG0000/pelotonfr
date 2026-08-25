@@ -44,6 +44,15 @@ export interface ScraperResult {
   races: ScrapedRace[];
   errors: ScraperError[];
   durationMs: number;
+
+  /**
+   * How far ahead this run is authoritative, in days.
+   *
+   * Within that horizon, a race the source no longer lists has been withdrawn,
+   * so it can be retired. Beyond it, absence means only that the scrape did not
+   * look that far, so those races must be left alone.
+   */
+  coverageDays?: number;
 }
 
 export interface ScraperError {

@@ -389,5 +389,8 @@ export async function scrapeFFC(): Promise<ScraperResult> {
     races,
     errors,
     durationMs: Date.now() - start,
+    // Only claim coverage when the run actually completed; a partly-failed
+    // scrape must not be used to retire races it simply never saw.
+    coverageDays: errors.length === 0 ? MONTHS_AHEAD * 30 : undefined,
   };
 }
