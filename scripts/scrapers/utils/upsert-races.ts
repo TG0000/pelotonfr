@@ -67,7 +67,7 @@ function slugify(text: string): string {
  * "12e GP de Dieulouard - Access 3-4" and "13e GP de Dieulouard - Access 3-4"
  * collapse onto one event.
  */
-function eventKey(name: string): string {
+export function eventKey(name: string): string {
   return normalizePlace(
     name
       // Leading edition ordinal: "12e", "3ème", "1er".
@@ -264,6 +264,21 @@ export async function upsertRaces(
 
       if (result.length === 0) {
         skipped++;
+        // The content-hash guard above suppresses the whole UPDATE, which would
+        // also suppress the derived links — so a race whose description has not
+        // changed since before it had a venue or an event would never acquire
+        // one. Relationships are repaired separately, and only when missing.
+        if (venueId || eventId) {
+          await sql(
+            `UPDATE races
+                SET venue_id = COALESCE(venue_id, $3::uuid),
+                    event_id = COALESCE(event_id, $4::uuid)
+              WHERE federation_id = $1::smallint
+                AND external_id = $2::varchar
+                AND (venue_id IS NULL OR event_id IS NULL)`,
+            [federationId, race.externalId, venueId, eventId]
+          );
+        }
       } else if (Number((result[0] as { xmax: string }).xmax) === 0) {
         inserted++;
       } else {
