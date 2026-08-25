@@ -102,7 +102,7 @@ export async function getRaces(
   }
 
   const from = dateFrom || today;
-  conditions.push(`r.race_date >= $${paramIdx}::date`);
+  conditions.push(`COALESCE(r.race_date_end, r.race_date) >= $${paramIdx}::date`);
   params.push(from);
   paramIdx++;
 
@@ -174,7 +174,7 @@ export async function getRaces(
     mainParams.push(cat);
     mi++;
   }
-  mainConditions.push(`r.race_date >= $${mi}::date`);
+  mainConditions.push(`COALESCE(r.race_date_end, r.race_date) >= $${mi}::date`);
   mainParams.push(dateFrom || today);
   mi++;
   if (dateTo) {
@@ -254,7 +254,7 @@ export async function getUpcomingRaces(limit = 10): Promise<Race[]> {
             ST_Y(r.location::geometry) AS lat
      FROM races r
      JOIN federations f ON f.id = r.federation_id
-     WHERE r.race_date >= $1 AND r.is_cancelled = false AND r.is_active = true
+     WHERE COALESCE(r.race_date_end, r.race_date) >= $1 AND r.is_cancelled = false AND r.is_active = true
      ORDER BY r.race_date ASC
      LIMIT $2`,
     [today, limit]
@@ -293,7 +293,7 @@ export async function getRacesForMap(
     mi++;
   }
 
-  conditions.push(`r.race_date >= $${mi}::date`);
+  conditions.push(`COALESCE(r.race_date_end, r.race_date) >= $${mi}::date`);
   params.push(dateFrom || today);
   mi++;
 
@@ -345,7 +345,7 @@ export async function getRaceStats(): Promise<RaceStats> {
 
   const rows = await sql(
     `SELECT f.slug AS federation_slug,
-       COUNT(*) FILTER (WHERE r.race_date >= $1 AND r.is_cancelled = false AND r.is_active = true) AS fed_count
+       COUNT(*) FILTER (WHERE COALESCE(r.race_date_end, r.race_date) >= $1 AND r.is_cancelled = false AND r.is_active = true) AS fed_count
      FROM races r
      JOIN federations f ON f.id = r.federation_id
      GROUP BY f.slug`,
@@ -354,9 +354,9 @@ export async function getRaceStats(): Promise<RaceStats> {
 
   const [totRow] = await sql(
     `SELECT
-       COUNT(*) FILTER (WHERE r.race_date >= $1 AND r.is_cancelled = false AND r.is_active = true) AS total,
-       COUNT(*) FILTER (WHERE r.race_date >= $1 AND r.race_date <= $2 AND r.is_cancelled = false AND r.is_active = true) AS this_week,
-       COUNT(*) FILTER (WHERE r.race_date >= $1 AND r.race_date <= $3 AND r.is_cancelled = false AND r.is_active = true) AS next_month
+       COUNT(*) FILTER (WHERE COALESCE(r.race_date_end, r.race_date) >= $1 AND r.is_cancelled = false AND r.is_active = true) AS total,
+       COUNT(*) FILTER (WHERE COALESCE(r.race_date_end, r.race_date) >= $1 AND r.race_date <= $2 AND r.is_cancelled = false AND r.is_active = true) AS this_week,
+       COUNT(*) FILTER (WHERE COALESCE(r.race_date_end, r.race_date) >= $1 AND r.race_date <= $3 AND r.is_cancelled = false AND r.is_active = true) AS next_month
      FROM races r`,
     [today, weekEnd, monthEnd]
   );
@@ -395,7 +395,7 @@ export async function getRacesForCalendar(
   let mi = 1;
 
   // Parameterized date bounds
-  conditions.push(`r.race_date >= $${mi}`);
+  conditions.push(`COALESCE(r.race_date_end, r.race_date) >= $${mi}`);
   params.push(dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom) ? dateFrom : today);
   mi++;
 
