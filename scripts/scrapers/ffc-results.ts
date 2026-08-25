@@ -299,30 +299,43 @@ async function ingestRace(
   return { stored, skipped, found: true };
 }
 
-/** Recomputes the per-rider counters the UI reads. */
-async function refreshRiderAggregates(): Promise<void> {
-  await sql(
-    `UPDATE riders r
-        SET result_count  = s.total,
-            win_count     = s.wins,
-            podium_count  = s.podiums,
-            last_raced_on = s.last_date
-       FROM (
-         SELECT rr.rider_id,
-                COUNT(*)                                    AS total,
-                COUNT(*) FILTER (WHERE rr.rank = 1)         AS wins,
-                COUNT(*) FILTER (WHERE rr.rank BETWEEN 1 AND 3) AS podiums,
-                MAX(ra.race_date)                           AS last_date
-           FROM race_results rr
-           JOIN races ra ON ra.id = rr.race_id
-          GROUP BY rr.rider_id
-       ) s
-      WHERE s.rider_id = r.id
-        AND (r.result_count IS DISTINCT FROM s.total
-          OR r.win_count IS DISTINCT FROM s.wins
-          OR r.podium_count IS DISTINCT FROM s.podiums
-          OR r.last_raced_on IS DISTINCT FROM s.last_date)`
-  );
+/**
+ * Recomputes the per-rider counters the UI reads.
+ *
+ * Scoped to the riders this run actually touched. Recomputing the whole table
+ * scans every result row and, past ~80k rows, exceeded the driver's request
+ * timeout — which failed the run after its work was already committed.
+ */
+async function refreshRiderAggregates(riderIds: string[]): Promise<void> {
+  const CHUNK = 400;
+
+  for (let i = 0; i < riderIds.length; i += CHUNK) {
+    const slice = riderIds.slice(i, i + CHUNK);
+    await sql(
+      `UPDATE riders r
+          SET result_count  = s.total,
+              win_count     = s.wins,
+              podium_count  = s.podiums,
+              last_raced_on = s.last_date
+         FROM (
+           SELECT rr.rider_id,
+                  COUNT(*)                                        AS total,
+                  COUNT(*) FILTER (WHERE rr.rank = 1)             AS wins,
+                  COUNT(*) FILTER (WHERE rr.rank BETWEEN 1 AND 3) AS podiums,
+                  MAX(ra.race_date)                               AS last_date
+             FROM race_results rr
+             JOIN races ra ON ra.id = rr.race_id
+            WHERE rr.rider_id = ANY($1::uuid[])
+            GROUP BY rr.rider_id
+         ) s
+        WHERE s.rider_id = r.id
+          AND (r.result_count IS DISTINCT FROM s.total
+            OR r.win_count IS DISTINCT FROM s.wins
+            OR r.podium_count IS DISTINCT FROM s.podiums
+            OR r.last_raced_on IS DISTINCT FROM s.last_date)`,
+      [slice]
+    );
+  }
 }
 
 async function main() {
@@ -386,7 +399,7 @@ async function main() {
     await politeDelay(300);
   }
 
-  await refreshRiderAggregates();
+  await refreshRiderAggregates([...riderCache.values()]);
 
   const [summary] = await sql(
     `SELECT (SELECT COUNT(*) FROM riders)       AS riders,
