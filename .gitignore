@@ -45,3 +45,6 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# Local recovery artefact from the April repo corruption
+.git.corrupt/

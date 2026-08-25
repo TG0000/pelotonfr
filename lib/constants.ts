@@ -11,9 +11,11 @@ export const DISCIPLINES = [
   { value: "contre_la_montre", label: "Contre-la-montre" },
   { value: "course_par_etapes", label: "Course par étapes" },
   { value: "cyclosportive", label: "Cyclosportive" },
+  { value: "gravel", label: "Gravel" },
   { value: "vtt", label: "VTT" },
   { value: "cyclocross", label: "Cyclocross" },
   { value: "bmx", label: "BMX" },
+  { value: "pump_track", label: "Pump Track" },
   { value: "piste", label: "Piste" },
 ] as const;
 
@@ -22,9 +24,11 @@ export type Discipline =
   | "contre_la_montre"
   | "course_par_etapes"
   | "cyclosportive"
+  | "gravel"
   | "vtt"
   | "cyclocross"
   | "bmx"
+  | "pump_track"
   | "piste";
 
 export const CATEGORIES = [

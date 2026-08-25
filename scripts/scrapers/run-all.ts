@@ -1,28 +1,54 @@
 /**
- * Main scraper orchestrator.
- * Run with: npx tsx scripts/scrapers/run-all.ts
- * Requires DATABASE_URL env var.
+ * Scraper orchestrator.
+ *
+ *   npm run scrape                 # every federation
+ *   npm run scrape -- --only=ffc   # one federation
+ *   npm run scrape -- --no-geocode # skip the venue-naming pass
+ *
+ * Pipeline, in order:
+ *   1. scrape each federation into ScrapedRace[]
+ *   2. upsert races, creating venues and recurring events along the way
+ *   3. name any new venue in one bulk reverse-geocoding request
+ *   4. copy the freshly resolved names back onto their races
+ *   5. retire races that are long past
  */
 
-import "dotenv/config";
-import { neon } from "@neondatabase/serverless";
+import { loadEnv, requireEnv } from "../lib/load-env";
 import { scrapeFFC } from "./ffc";
 import { scrapeFSGT } from "./fsgt";
 import { scrapeUFOLEP } from "./ufolep";
-import { upsertRaces, geocodePendingRaces } from "./utils/upsert-races";
+import {
+  upsertRaces,
+  backfillRacesFromVenues,
+  refreshEventAggregates,
+} from "./utils/upsert-races";
+import { resolveVenueNames } from "./utils/venues";
+import { createSql } from "./utils/db";
 import type { ScraperResult } from "../../lib/scraper-types";
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error("❌ DATABASE_URL is not set");
-  process.exit(1);
+loadEnv();
+const DATABASE_URL = requireEnv("DATABASE_URL");
+
+const sql = createSql(DATABASE_URL);
+
+const SCRAPERS = [
+  { name: "FFC", slug: "ffc", fn: scrapeFFC, fedId: 1 },
+  { name: "FSGT", slug: "fsgt", fn: scrapeFSGT, fedId: 2 },
+  { name: "UFOLEP", slug: "ufolep", fn: scrapeUFOLEP, fedId: 3 },
+] as const;
+
+function parseArgs() {
+  const only = process.argv
+    .find((a) => a.startsWith("--only="))
+    ?.split("=")[1]
+    ?.toLowerCase();
+  return {
+    only,
+    geocode: !process.argv.includes("--no-geocode"),
+  };
 }
 
-const _neon = neon(DATABASE_URL);
-const sql = (query: string, params?: unknown[]) =>
-  _neon.query(query, params ?? []) as Promise<Record<string, unknown>[]>;
-
-async function createLog(federationId: number | null): Promise<number> {
+async function createLog(federationId: number): Promise<number> {
   const rows = await sql(
     `INSERT INTO scraper_logs (federation_id) VALUES ($1) RETURNING id`,
     [federationId]
@@ -30,96 +56,143 @@ async function createLog(federationId: number | null): Promise<number> {
   return (rows[0] as { id: number }).id;
 }
 
-async function updateLog(
+async function finishLog(
   id: number,
   result: ScraperResult,
   inserted: number,
   updated: number,
   skipped: number
 ) {
+  const status =
+    result.errors.length === 0
+      ? "success"
+      : result.races.length > 0
+        ? "partial"
+        : "failed";
+
   await sql(
     `UPDATE scraper_logs SET
-       finished_at = now(),
-       status = $2,
-       races_found = $3,
-       races_inserted = $4,
-       races_updated = $5,
-       races_skipped = $6,
-       error_message = $7
+       finished_at = now(), status = $2, races_found = $3,
+       races_inserted = $4, races_updated = $5, races_skipped = $6,
+       error_message = $7, metadata = $8
      WHERE id = $1`,
     [
       id,
-      result.errors.length === 0
-        ? "success"
-        : result.races.length > 0
-        ? "partial"
-        : "failed",
+      status,
       result.races.length,
       inserted,
       updated,
       skipped,
-      result.errors.length > 0
-        ? result.errors.map((e) => e.message).join("; ")
+      result.errors.length
+        ? result.errors
+            .slice(0, 20)
+            .map((e) => e.message)
+            .join("; ")
         : null,
+      JSON.stringify({
+        durationMs: result.durationMs,
+        errorCount: result.errors.length,
+        withCoordinates: result.races.filter((r) => r.lat != null).length,
+      }),
     ]
   );
 }
 
-async function markOldRacesInactive() {
-  await sql(
+async function retirePastRaces(): Promise<number> {
+  // A multi-day race stays current until its LAST day, so the cutoff uses the
+  // end date when there is one.
+  const rows = await sql(
     `UPDATE races SET is_active = false
-     WHERE race_date < CURRENT_DATE - INTERVAL '7 days' AND is_active = true`
+      WHERE COALESCE(race_date_end, race_date) < CURRENT_DATE - INTERVAL '7 days'
+        AND is_active = true
+      RETURNING id`
   );
-  console.log("Marked old races inactive");
+  return rows.length;
 }
 
 async function main() {
-  console.log("🚴 PelotonFR scraper starting...\n");
+  const { only, geocode } = parseArgs();
+  const started = Date.now();
 
-  const scrapers = [
-    { name: "FFC", fn: scrapeFFC, fedId: 1 },
-    { name: "FSGT", fn: scrapeFSGT, fedId: 2 },
-    { name: "UFOLEP", fn: scrapeUFOLEP, fedId: 3 },
-  ];
+  console.log("PelotonFR scraper\n");
 
-  for (const { name, fn, fedId } of scrapers) {
-    console.log(`\n📡 Running ${name} scraper...`);
+  const selected = SCRAPERS.filter((s) => !only || s.slug === only);
+  if (selected.length === 0) {
+    console.error(`Unknown federation "${only}".`);
+    process.exit(1);
+  }
+
+  for (const { name, fn, fedId } of selected) {
+    console.log(`--- ${name} ---`);
     const logId = await createLog(fedId);
 
     try {
       const result = await fn();
       console.log(
-        `  Found ${result.races.length} races, ${result.errors.length} errors (${result.durationMs}ms)`
+        `  scraped ${result.races.length} races, ${result.errors.length} errors (${result.durationMs}ms)`
       );
 
-      const stats = await upsertRaces(result.races, result.federationId, DATABASE_URL!);
+      const stats = await upsertRaces(result.races, result.federationId, sql);
       console.log(
-        `  DB: +${stats.inserted} inserted, ~${stats.updated} updated, =${stats.skipped} skipped`
+        `  db: +${stats.inserted} new, ~${stats.updated} updated, =${stats.skipped} unchanged`
       );
 
-      await updateLog(logId, result, stats.inserted, stats.updated, stats.skipped);
+      await finishLog(logId, result, stats.inserted, stats.updated, stats.skipped);
     } catch (err) {
-      console.error(`  ❌ ${name} scraper failed:`, err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`  ${name} failed: ${message}`);
       await sql(
         `UPDATE scraper_logs SET status='failed', finished_at=now(), error_message=$2 WHERE id=$1`,
-        [logId, String(err)]
+        [logId, message]
       );
     }
+    console.log("");
   }
 
-  // Geocoding pass
-  console.log("\n🗺️  Geocoding pending races...");
-  const geocoded = await geocodePendingRaces(DATABASE_URL!);
-  console.log(`  Geocoded ${geocoded} races`);
+  if (geocode) {
+    console.log("--- venues ---");
+    let totalResolved = 0;
+    // Each pass drains up to `batchSize` venues; loop until the backlog is gone.
+    for (let round = 0; round < 10; round++) {
+      const { resolved, failed } = await resolveVenueNames(sql, 1000);
+      if (resolved === 0 && failed === 0) break;
+      totalResolved += resolved;
+      console.log(`  round ${round + 1}: ${resolved} named, ${failed} unresolved`);
+      if (resolved === 0) break;
+    }
+    console.log(`  ${totalResolved} venues named`);
 
-  // Mark old races inactive
-  console.log("\n🗑️  Marking old races inactive...");
-  await markOldRacesInactive();
+    const backfilled = await backfillRacesFromVenues(sql);
+    console.log(`  ${backfilled} races updated from their venue`);
+    console.log("");
+  }
 
-  console.log("\n✅ Scraping complete!");
+  await refreshEventAggregates(sql);
+
+  const retired = await retirePastRaces();
+  if (retired > 0) console.log(`${retired} past races retired`);
+
+  const [summary] = await sql(
+    `SELECT
+       COUNT(*) FILTER (WHERE is_active AND NOT is_cancelled
+                        AND COALESCE(race_date_end, race_date) >= CURRENT_DATE) AS upcoming,
+       COUNT(*) FILTER (WHERE is_active AND NOT is_cancelled
+                        AND COALESCE(race_date_end, race_date) >= CURRENT_DATE
+                        AND location IS NOT NULL) AS located
+     FROM races`
+  );
+
+  const upcoming = Number(summary.upcoming);
+  const located = Number(summary.located);
+  const pct = upcoming ? Math.round((located / upcoming) * 100) : 0;
+
+  console.log(
+    `\nDone in ${Math.round((Date.now() - started) / 1000)}s — ` +
+      `${upcoming} upcoming races, ${located} located (${pct}%)`
+  );
 }
 
 main().catch((err) => {
-  console.error("Fatal error:", err);
+  console.error("Fatal:", err);
   process.exit(1);
 });
