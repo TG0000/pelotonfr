@@ -31,21 +31,26 @@ const DATABASE_URL = requireEnv("DATABASE_URL");
 
 const sql = createSql(DATABASE_URL);
 
-const SCRAPERS = [
-  { name: "FFC", slug: "ffc", fn: scrapeFFC, fedId: 1 },
-  { name: "FSGT", slug: "fsgt", fn: scrapeFSGT, fedId: 2 },
-  { name: "UFOLEP", slug: "ufolep", fn: scrapeUFOLEP, fedId: 3 },
-] as const;
-
 function parseArgs() {
   const only = process.argv
     .find((a) => a.startsWith("--only="))
     ?.split("=")[1]
     ?.toLowerCase();
+  const backfillArg = process.argv.find((a) => a.startsWith("--backfill="));
   return {
     only,
     geocode: !process.argv.includes("--no-geocode"),
+    /** Days of past FFC calendar to collect, for results ingestion. */
+    backfillDays: backfillArg ? Number(backfillArg.split("=")[1]) : 0,
   };
+}
+
+function buildScrapers(backfillDays: number) {
+  return [
+    { name: "FFC", slug: "ffc", fn: () => scrapeFFC({ backfillDays }), fedId: 1 },
+    { name: "FSGT", slug: "fsgt", fn: scrapeFSGT, fedId: 2 },
+    { name: "UFOLEP", slug: "ufolep", fn: scrapeUFOLEP, fedId: 3 },
+  ];
 }
 
 async function createLog(federationId: number): Promise<number> {
@@ -138,12 +143,14 @@ async function retirePastRaces(): Promise<number> {
 }
 
 async function main() {
-  const { only, geocode } = parseArgs();
+  const { only, geocode, backfillDays } = parseArgs();
   const started = Date.now();
 
   console.log("PelotonFR scraper\n");
 
-  const selected = SCRAPERS.filter((s) => !only || s.slug === only);
+  const selected = buildScrapers(backfillDays).filter(
+    (s) => !only || s.slug === only
+  );
   if (selected.length === 0) {
     console.error(`Unknown federation "${only}".`);
     process.exit(1);

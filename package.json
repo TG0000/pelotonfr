@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "scrape": "tsx scripts/scrapers/run-all.ts",
+    "scrape:history": "tsx scripts/scrapers/ffc-history.ts",
+    "scrape:results": "tsx scripts/scrapers/ffc-results.ts",
+    "geocode": "tsx scripts/scrapers/geocode-only.ts",
     "db:migrate": "tsx scripts/db/migrate.ts",
     "db:migrate:dry": "tsx scripts/db/migrate.ts --dry-run"
   },

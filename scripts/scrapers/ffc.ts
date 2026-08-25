@@ -37,6 +37,16 @@ const WINDOW_DAYS = 14;
 /** How far ahead to scrape. */
 const MONTHS_AHEAD = 12;
 
+export interface FfcScrapeOptions {
+  /**
+   * Days of past calendar to also collect. Past races carry the competition
+   * code that their results page is addressed by, so backfilling history is
+   * what makes results — and therefore rider records — available at all.
+   */
+  backfillDays?: number;
+  monthsAhead?: number;
+}
+
 /**
  * Maps the FFC discipline label to a coarse family. The original label is kept
  * in `raceType`, so "VTT - Enduro" and "Piste Vitesse" are not flattened away.
@@ -213,12 +223,14 @@ interface Window {
 }
 
 /** Builds consecutive 14-day windows covering the scraping horizon. */
-function buildWindows(monthsAhead: number): Window[] {
+function buildWindows(monthsAhead: number, backfillDays = 0): Window[] {
   const windows: Window[] = [];
   const start = new Date();
   start.setUTCHours(12, 0, 0, 0);
+  if (backfillDays > 0) start.setUTCDate(start.getUTCDate() - backfillDays);
 
-  const horizon = new Date(start);
+  const horizon = new Date();
+  horizon.setUTCHours(12, 0, 0, 0);
   horizon.setUTCMonth(horizon.getUTCMonth() + monthsAhead);
 
   let cursor = new Date(start);
@@ -333,15 +345,22 @@ async function scrapeWindow(
   return races;
 }
 
-export async function scrapeFFC(): Promise<ScraperResult> {
+export async function scrapeFFC(
+  options: FfcScrapeOptions = {}
+): Promise<ScraperResult> {
+  const monthsAhead = options.monthsAhead ?? MONTHS_AHEAD;
+  const backfillDays = options.backfillDays ?? 0;
+
   const start = Date.now();
   const errors: ScraperError[] = [];
   const byKey = new Map<string, ScrapedRace>();
 
-  const windows = buildWindows(MONTHS_AHEAD);
+  const windows = buildWindows(monthsAhead, backfillDays);
   console.log(
     `FFC: scanning ${windows.length} windows of ${WINDOW_DAYS} days ` +
-      `(${MONTHS_AHEAD} months ahead)...`
+      `(${monthsAhead} months ahead` +
+      (backfillDays ? `, ${backfillDays} days back` : "") +
+      `)...`
   );
 
   let withCoords = 0;
@@ -391,6 +410,6 @@ export async function scrapeFFC(): Promise<ScraperResult> {
     durationMs: Date.now() - start,
     // Only claim coverage when the run actually completed; a partly-failed
     // scrape must not be used to retire races it simply never saw.
-    coverageDays: errors.length === 0 ? MONTHS_AHEAD * 30 : undefined,
+    coverageDays: errors.length === 0 ? monthsAhead * 30 : undefined,
   };
 }
