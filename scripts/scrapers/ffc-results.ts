@@ -181,6 +181,10 @@ async function getOrCreateRider(
 
   // Without a UCI ID two riders sharing a name are indistinguishable, and
   // merging them would silently corrupt every career statistic built on top.
+  //
+  // In practice this only bites in youth categories (U15 and below), where a
+  // licensee may not have been issued a UCI ID yet. Adult Open/Access fields —
+  // the ones this product is about — come back complete.
   if (!uciId || !lastName) return null;
 
   const cached = cache.get(uciId);

@@ -189,14 +189,29 @@ async function main() {
   );
 
   const byId = new Map<string, ScrapedRace>();
+
+  // Deep pagination gets slower and less reliable the further it goes, so every
+  // so often we re-anchor on the oldest date seen and start paging again from
+  // page 1. Overlap between chunks is harmless — entries are deduplicated.
+  const REANCHOR_EVERY = 25;
+
+  let anchor: Date | null = null;
   let page = 1;
+  let pagesFetched = 0;
   let reachedCutoff = false;
   let emptyPages = 0;
+  /**
+   * Re-anchoring deliberately re-reads the boundary date, so the first page or
+   * two of a new chunk are expected to be entirely familiar. Only a sustained
+   * run of nothing-new means the index has actually run dry.
+   */
+  let noFreshStreak = 0;
 
-  while (page <= maxPages && !reachedCutoff) {
+  while (pagesFetched < maxPages && !reachedCutoff) {
     let result: IndexPage;
     try {
-      result = await fetchIndexPage(null, page);
+      result = await fetchIndexPage(anchor, page);
+      pagesFetched++;
     } catch (err) {
       console.error(
         `  page ${page} failed: ${err instanceof Error ? err.message : String(err)}`
@@ -224,14 +239,26 @@ async function main() {
       }
     }
 
-    if (page % 20 === 0 || reachedCutoff) {
+    if (pagesFetched % 25 === 0 || reachedCutoff) {
       const oldest = result.oldestDate ? formatDate(result.oldestDate) : "?";
-      console.log(`  page ${page}: ${byId.size} races collected (oldest ${oldest})`);
+      console.log(
+        `  ${pagesFetched} pages: ${byId.size} races collected (oldest ${oldest})`
+      );
     }
 
-    if (fresh === 0 && result.races.length > 0 && page > 3) {
-      // Pagination has started repeating itself.
-      break;
+    if (fresh === 0 && result.races.length > 0) noFreshStreak++;
+    else noFreshStreak = 0;
+
+    if (noFreshStreak >= 8) break;
+
+    if (page >= REANCHOR_EVERY && result.oldestDate) {
+      const next = result.oldestDate;
+      // If re-anchoring would not move us backwards, the index has run out.
+      if (anchor && next >= anchor) break;
+      anchor = next;
+      page = 1;
+      await politeDelay(250);
+      continue;
     }
 
     page++;
