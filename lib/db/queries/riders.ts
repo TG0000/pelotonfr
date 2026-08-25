@@ -181,7 +181,7 @@ export async function getLikelyCompetitors(
      SELECT r.id, r.uci_id, r.last_name, r.first_name,
             r.result_count, r.win_count, r.podium_count, r.last_raced_on,
             c.name AS club_name,
-            COUNT(*)                       AS appearances,
+            COUNT(DISTINCT ra.race_date)   AS appearances,
             MIN(rr.rank) FILTER (WHERE rr.rank IS NOT NULL) AS best_rank,
             (ARRAY_AGG(rr.rank ORDER BY ra.race_date DESC))[1] AS last_rank,
             MAX(ra.race_date)              AS last_seen_on

@@ -310,12 +310,28 @@ export async function backfillRacesFromVenues(sql: SqlFn): Promise<number> {
   return rows.length;
 }
 
-/** Refreshes the denormalised edition counters on `events`. */
+/**
+ * Refreshes the denormalised counters on `events`.
+ *
+ * An edition is a date, not a row: one meeting publishes a separate race per
+ * category, and counting rows would report a single-edition event as having
+ * held six.
+ */
 export async function refreshEventAggregates(sql: SqlFn): Promise<void> {
   await sql(
     `UPDATE events e
-        SET edition_count = c.n
-       FROM (SELECT event_id, COUNT(*) AS n FROM races WHERE event_id IS NOT NULL GROUP BY event_id) c
-      WHERE c.event_id = e.id AND e.edition_count IS DISTINCT FROM c.n`
+        SET edition_count = c.editions,
+            race_count    = c.races
+       FROM (
+         SELECT event_id,
+                COUNT(DISTINCT race_date) AS editions,
+                COUNT(*)                  AS races
+           FROM races
+          WHERE event_id IS NOT NULL
+          GROUP BY event_id
+       ) c
+      WHERE c.event_id = e.id
+        AND (e.edition_count IS DISTINCT FROM c.editions
+          OR e.race_count IS DISTINCT FROM c.races)`
   );
 }
