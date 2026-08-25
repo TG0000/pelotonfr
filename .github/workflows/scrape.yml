@@ -19,7 +19,7 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +46,21 @@ jobs:
           else
             npm run scrape
           fi
+
+      # The calendar only serves the future, so races that have just taken place
+      # are re-discovered through the results index before their classifications
+      # are fetched.
+      - name: Discover recently finished races
+        if: ${{ !inputs.federation || inputs.federation == 'ffc' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run scrape:history -- --days=21 --max-pages=80
+
+      - name: Ingest published results
+        if: ${{ !inputs.federation || inputs.federation == 'ffc' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run scrape:results -- --limit=400
 
       - name: Open issue on failure
         if: failure()
