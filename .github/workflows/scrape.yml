@@ -2,13 +2,24 @@ name: Daily Race Scraper
 
 on:
   schedule:
-    - cron: '0 2 * * *'   # 2:00 AM UTC daily
-  workflow_dispatch:        # Manual trigger from GitHub UI
+    - cron: '0 2 * * *'   # 02:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      federation:
+        description: 'Limit to one federation (ffc, fsgt, ufolep). Leave empty for all.'
+        required: false
+        type: string
+
+# A second run starting while the first is still writing would fight over the
+# same rows; queue them instead.
+concurrency:
+  group: scrape
+  cancel-in-progress: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -21,20 +32,46 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Apply pending migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:migrate
+
       - name: Run scrapers
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx tsx scripts/scrapers/run-all.ts
+        run: |
+          if [ -n "${{ inputs.federation }}" ]; then
+            npm run scrape -- --only=${{ inputs.federation }}
+          else
+            npm run scrape
+          fi
 
       - name: Open issue on failure
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
+            const date = new Date().toISOString().split('T')[0];
+            const title = `Scraper failed on ${date}`;
+
+            // Avoid piling up one issue per day for the same ongoing breakage.
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'scraper',
+            });
+            if (existing.some((i) => i.title === title)) return;
+
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `🚨 Scraper failed on ${new Date().toISOString().split('T')[0]}`,
-              body: `The daily race scraper failed. Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`,
-              labels: ['bug', 'scraper']
-            })
+              title,
+              body: [
+                'The daily race scraper failed.',
+                '',
+                `[Workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              ].join('\n'),
+              labels: ['bug', 'scraper'],
+            });
