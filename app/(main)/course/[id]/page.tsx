@@ -6,6 +6,8 @@ import { buttonVariants } from "@/lib/button-variants";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { RaceBadge } from "@/components/races/RaceBadge";
+import { RaceCompetitors } from "@/components/riders/RaceCompetitors";
+import { Suspense } from "react";
 import { getRaceById } from "@/lib/db/queries/races";
 import { FEDERATIONS } from "@/lib/constants";
 import { format } from "date-fns";
@@ -162,6 +164,17 @@ export default async function RaceDetailPage({ params }: PageProps) {
           <p className="text-sm text-muted-foreground">{race.notes}</p>
         </div>
       )}
+
+      {/* Competitors */}
+      <div className="mb-8">
+        <Suspense
+          fallback={
+            <div className="h-24 rounded-lg bg-muted/40 animate-pulse" />
+          }
+        >
+          <RaceCompetitors raceId={race.id} />
+        </Suspense>
+      </div>
 
       {/* Source link */}
       {race.sourceUrl && (

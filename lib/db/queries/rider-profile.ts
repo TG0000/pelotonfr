@@ -444,3 +444,177 @@ export async function getRanking(
     categories,
   };
 }
+
+// ============================================================
+// Race competitors
+// ============================================================
+
+export interface RaceCompetitor {
+  /** Null when the published name matched no rider we know. */
+  riderId: string | null;
+  uciId: string | null;
+  lastName: string;
+  firstName: string | null;
+  clubName: string | null;
+  category: string | null;
+  bib: string | null;
+
+  currentPoints: number | null;
+  currentRank: number | null;
+  bestPoints: number | null;
+  bestSeason: number | null;
+  winCount: number | null;
+  podiumCount: number | null;
+  resultCount: number | null;
+
+  /** Races finished in the last 120 days — the "racing right now" signal. */
+  recentRaces: number;
+  recentPodiums: number;
+
+  kind: ThreatKind;
+  /** True when the rider is on a published start list rather than predicted. */
+  confirmed: boolean;
+  /** How confident the name→rider link is, for entries from a start list. */
+  matchMethod: string | null;
+}
+
+function classify(row: {
+  recentRaces: number;
+  recentPodiums: number;
+  currentPoints: number | null;
+  bestPoints: number | null;
+}): ThreatKind {
+  const current = row.currentPoints ?? 0;
+  const best = row.bestPoints ?? 0;
+
+  if (row.recentRaces > 0 && (row.recentPodiums > 0 || current > 0)) {
+    return "in_form";
+  }
+  // Materially stronger in an earlier season than the current standing shows:
+  // the rider coming back, whose ranking understates them.
+  if (best > 0 && current < best * 0.5) return "returning";
+  return "regular";
+}
+
+/**
+ * Who a rider will be up against.
+ *
+ * Prefers a published start list when the regional press has one, and falls
+ * back to whoever rode past editions of the same event otherwise. Both are
+ * enriched the same way, so the page reads identically either way — only
+ * `confirmed` distinguishes a certainty from a prediction.
+ */
+export async function getRaceCompetitors(
+  raceId: string,
+  limit = 40
+): Promise<{ competitors: RaceCompetitor[]; source: "startlist" | "history" }> {
+  const [entered] = await sql(
+    `SELECT COUNT(*) AS n FROM engagements WHERE race_id = $1`,
+    [raceId]
+  );
+
+  const hasStartList = Number((entered as { n: string }).n) > 0;
+
+  const rows = hasStartList
+    ? await sql(
+        `SELECT e.bib, e.match_method,
+                e.last_name_raw AS last_name, e.first_name_raw AS first_name,
+                COALESCE(c.name, e.club_name_raw) AS club_name,
+                COALESCE(r.category, e.category_raw) AS category,
+                r.id AS rider_id, r.uci_id,
+                r.current_points, r.current_rank, r.best_points, r.best_season,
+                r.win_count, r.podium_count, r.result_count,
+                COALESCE(rec.races, 0)   AS recent_races,
+                COALESCE(rec.podiums, 0) AS recent_podiums
+           FROM engagements e
+           LEFT JOIN riders r ON r.id = e.rider_id
+           LEFT JOIN clubs c  ON c.id = r.current_club_id
+           LEFT JOIN LATERAL (
+             SELECT COUNT(*) AS races,
+                    COUNT(*) FILTER (WHERE rr.rank BETWEEN 1 AND 3) AS podiums
+               FROM race_results rr
+               JOIN races ra ON ra.id = rr.race_id
+              WHERE rr.rider_id = r.id
+                AND ra.race_date >= CURRENT_DATE - INTERVAL '120 days'
+                AND ra.race_date <= CURRENT_DATE
+           ) rec ON true
+          WHERE e.race_id = $1
+          ORDER BY COALESCE(r.current_points, -1) DESC, e.last_name_raw
+          LIMIT $2`,
+        [raceId, limit]
+      )
+    : await sql(
+        `WITH target AS (
+           SELECT event_id, race_date, categories FROM races WHERE id = $1
+         ),
+         past AS (
+           SELECT ra.id
+             FROM races ra, target t
+            WHERE ra.event_id = t.event_id
+              AND ra.event_id IS NOT NULL
+              AND ra.id <> $1
+              AND ra.race_date < t.race_date
+              AND (t.categories = '{}' OR ra.categories = '{}'
+                   OR ra.categories && t.categories)
+         )
+         SELECT NULL::varchar AS bib, NULL::varchar AS match_method,
+                r.last_name, r.first_name, c.name AS club_name, r.category,
+                r.id AS rider_id, r.uci_id,
+                r.current_points, r.current_rank, r.best_points, r.best_season,
+                r.win_count, r.podium_count, r.result_count,
+                COALESCE(rec.races, 0)   AS recent_races,
+                COALESCE(rec.podiums, 0) AS recent_podiums
+           FROM race_results rr
+           JOIN past p ON p.id = rr.race_id
+           JOIN riders r ON r.id = rr.rider_id
+           LEFT JOIN clubs c ON c.id = r.current_club_id
+           LEFT JOIN LATERAL (
+             SELECT COUNT(*) AS races,
+                    COUNT(*) FILTER (WHERE r2.rank BETWEEN 1 AND 3) AS podiums
+               FROM race_results r2
+               JOIN races ra ON ra.id = r2.race_id
+              WHERE r2.rider_id = r.id
+                AND ra.race_date >= CURRENT_DATE - INTERVAL '120 days'
+                AND ra.race_date <= CURRENT_DATE
+           ) rec ON true
+          GROUP BY r.id, r.last_name, r.first_name, c.name, r.category, r.uci_id,
+                   r.current_points, r.current_rank, r.best_points, r.best_season,
+                   r.win_count, r.podium_count, r.result_count,
+                   rec.races, rec.podiums
+          ORDER BY COALESCE(r.current_points, -1) DESC
+          LIMIT $2`,
+        [raceId, limit]
+      );
+
+  const competitors = rows.map((row) => {
+    const r = row as Record<string, unknown>;
+    const recentRaces = Number(r.recent_races ?? 0);
+    const recentPodiums = Number(r.recent_podiums ?? 0);
+    const currentPoints = num(r.current_points);
+    const bestPoints = num(r.best_points);
+
+    return {
+      riderId: (r.rider_id as string) ?? null,
+      uciId: (r.uci_id as string) ?? null,
+      lastName: (r.last_name as string) ?? "",
+      firstName: (r.first_name as string) ?? null,
+      clubName: (r.club_name as string) ?? null,
+      category: (r.category as string) ?? null,
+      bib: (r.bib as string) ?? null,
+      currentPoints,
+      currentRank: num(r.current_rank),
+      bestPoints,
+      bestSeason: num(r.best_season),
+      winCount: r.win_count != null ? Number(r.win_count) : null,
+      podiumCount: r.podium_count != null ? Number(r.podium_count) : null,
+      resultCount: r.result_count != null ? Number(r.result_count) : null,
+      recentRaces,
+      recentPodiums,
+      kind: classify({ recentRaces, recentPodiums, currentPoints, bestPoints }),
+      confirmed: hasStartList,
+      matchMethod: (r.match_method as string) ?? null,
+    };
+  });
+
+  return { competitors, source: hasStartList ? "startlist" : "history" };
+}
