@@ -213,15 +213,25 @@ export async function getRidersToWatch(
 ): Promise<RiderToWatch[]> {
   const rows = await sql(
     `WITH target AS (
-       SELECT event_id, race_date FROM races WHERE id = $1
+       SELECT event_id, race_date, categories FROM races WHERE id = $1
      ),
      past_editions AS (
+       -- An event groups every category race of one meeting, so a U15 race and
+       -- an Open 1 race share it. Restrict to editions whose categories overlap
+       -- the target's, otherwise a U15 rider would be shown opponents they will
+       -- never line up against. When either side is uncategorised there is
+       -- nothing to filter on, so the whole event is used.
        SELECT ra.id, ra.race_date
          FROM races ra, target t
         WHERE ra.event_id = t.event_id
           AND ra.event_id IS NOT NULL
           AND ra.id <> $1
           AND ra.race_date < t.race_date
+          AND (
+            t.categories = '{}'
+            OR ra.categories = '{}'
+            OR ra.categories && t.categories
+          )
      ),
      here AS (
        SELECT rr.rider_id,
