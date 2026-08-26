@@ -83,6 +83,52 @@ export const CATEGORIES: CategoryDef[] = [
 
 const BY_VALUE = new Map(CATEGORIES.map((c) => [c.value, c]));
 
+/**
+ * The senior road ladder, strongest first.
+ *
+ * Races state a *band*, not a list: "Open 2 - Access 2" is open to Open 3 and
+ * Access 1 as well, and reading it as two endpoints silently excluded everyone
+ * in between. Ranking the ladder is what lets the span be filled.
+ */
+const SENIOR_LADDER = [
+  "elite",
+  "open1",
+  "open2",
+  "open3",
+  "access1",
+  "access2",
+  "access3",
+  "access4",
+] as const;
+
+const SENIOR_RANK = new Map(SENIOR_LADDER.map((v, i) => [v as string, i]));
+
+/** The FSGT ladder, strongest first, and equally a band when a race states one. */
+const FSGT_LADDER = ["fsgt1", "fsgt2", "fsgt3", "fsgt4", "fsgt5", "fsgt6"] as const;
+const FSGT_RANK = new Map(FSGT_LADDER.map((v, i) => [v as string, i]));
+
+/**
+ * Fills the span between the highest and lowest category mentioned.
+ *
+ * Applied per ladder: a race open to "Elite-Open-Access-U19" spans the senior
+ * ladder and separately admits U19, and merging the two would invent
+ * categories that were never offered.
+ */
+function fillLadderSpan(
+  values: Set<string>,
+  ladder: readonly string[],
+  rankOf: Map<string, number>
+): void {
+  const ranks = [...values]
+    .map((v) => rankOf.get(v))
+    .filter((r): r is number => r !== undefined);
+  if (ranks.length < 2) return;
+
+  const lo = Math.min(...ranks);
+  const hi = Math.max(...ranks);
+  for (let i = lo; i <= hi; i++) values.add(ladder[i]);
+}
+
 export function categoryLabel(value: string): string {
   return BY_VALUE.get(value)?.label ?? value;
 }
@@ -181,7 +227,8 @@ export function normalizeCategories(
     else ["1", "2", "3"].forEach((d) => found.add(`open${d}`));
   }
 
-  const accessMatch = /access\s*([\d\s,\-/+.]*)/.exec(text);
+  // Organisers misspell it: "Acccess" and "Acces" both occur in real titles.
+  const accessMatch = /\bac{2,}[eé]?s+\s*([\d\s,\-/+.]*)/.exec(text);
   if (accessMatch) {
     const digits = accessMatch[1].match(/[1-4]/g);
     if (digits?.length) digits.forEach((d) => found.add(`access${d}`));
@@ -205,6 +252,16 @@ export function normalizeCategories(
       found.add(`fsgt${m[1]}`);
     }
   }
+
+  // A race states a band, not an enumeration: "Open 2 - Access 2" is open to
+  // Open 3 and Access 1 too. Each ladder is spanned separately.
+  fillLadderSpan(found, SENIOR_LADDER, SENIOR_RANK);
+  fillLadderSpan(
+    found,
+    YOUTH_LADDER.map((y) => y.value),
+    new Map(YOUTH_LADDER.map((y, i) => [y.value as string, i]))
+  );
+  fillLadderSpan(found, FSGT_LADDER, FSGT_RANK);
 
   return [...found].filter((v) => BY_VALUE.has(v));
 }
