@@ -85,6 +85,16 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run scrape:categories
 
+      # Runs last: alerts should describe the calendar as it stands after the
+      # night's scrape, not as it stood before.
+      - name: Send alert digests
+        if: ${{ !inputs.federation }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NEXT_PUBLIC_SITE_URL: https://pelotonfr.vercel.app
+        run: npm run alerts:send
+
       - name: Open issue on failure
         if: failure()
         uses: actions/github-script@v7
