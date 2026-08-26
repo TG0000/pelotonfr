@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
-import { Bike, Map, List, CalendarDays, Menu, Bell } from "lucide-react";
+import { Bike, Map, List, CalendarDays, Menu, Bell, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import {
@@ -20,6 +20,7 @@ const navLinks = [
   { href: "/carte", label: "Carte", icon: Map },
   { href: "/calendrier", label: "Calendrier", icon: CalendarDays },
   { href: "/alertes", label: "Alertes", icon: Bell },
+  { href: "/profil", label: "Profil", icon: UserRound },
 ];
 
 function NavLink({
