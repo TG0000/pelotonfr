@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { displayRaceName } from "@/lib/race-name";
+import { PlaceLabel, placeLabel } from "@/components/races/RacePrimitives";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -26,7 +27,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     if (!race) return { title: "Course introuvable" };
     return {
       title: displayRaceName(race.name),
-      description: `${displayRaceName(race.name)} — ${race.city} le ${format(new Date(race.raceDate + "T12:00:00Z"), "d MMMM yyyy", { locale: fr })}`,
+      description: `${displayRaceName(race.name)} — ${placeLabel(race).text} le ${format(new Date(race.raceDate + "T12:00:00Z"), "d MMMM yyyy", { locale: fr })}`,
     };
   } catch {
     return { title: "Course" };
@@ -98,9 +99,12 @@ export default async function RaceDetailPage({ params }: PageProps) {
           <div className="flex items-center gap-2">
             <MapPin className="size-4 text-primary" />
             <span>
-              {race.city}
-              {race.departmentCode && ` (${race.departmentCode})`}
-              {race.departmentName && ` — ${race.departmentName}`}
+              <PlaceLabel race={race} />
+              {placeLabel(race).approximate && (
+                <span className="ml-2 text-sm text-muted-foreground">
+                  commune non communiquée
+                </span>
+              )}
             </span>
           </div>
         </div>

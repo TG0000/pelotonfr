@@ -7,6 +7,8 @@ import {
   CategorySummary,
   FEDERATION_COLOR,
   FederationMark,
+  PlaceLabel,
+  placeLabel,
 } from "./RacePrimitives";
 
 export const MONTHS = [
@@ -160,7 +162,7 @@ export function MonthGrid({
                     <Link
                       key={`${day}-${race.id}`}
                       href={`/course/${race.id}`}
-                      title={`${displayRaceName(race.name)} — ${race.city}`}
+                      title={`${displayRaceName(race.name)} — ${placeLabel(race).text}`}
                       className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] leading-tight hover:bg-surface-3"
                     >
                       <span
@@ -214,8 +216,7 @@ export function MonthGrid({
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <MapPin className="size-3" />
-                    {race.city}
-                    {race.departmentCode && ` (${race.departmentCode})`}
+                    <PlaceLabel race={race} />
                   </div>
                 </div>
                 <FederationMark slug={race.federationSlug} withLabel />
@@ -265,10 +266,10 @@ export function MonthGrid({
                       <div className="truncate text-sm font-medium">
                         {displayRaceName(race.name)}
                       </div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {race.city}
-                        {race.departmentCode && ` (${race.departmentCode})`}
-                      </div>
+                      <PlaceLabel
+                        race={race}
+                        className="block text-xs text-muted-foreground"
+                      />
                     </div>
                   </Link>
                 ))}

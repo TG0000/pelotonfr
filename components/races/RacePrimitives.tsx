@@ -205,6 +205,63 @@ export function DisciplineTag({
   );
 }
 
+/** The placeholder the scrapers write when a source names no commune. */
+const UNKNOWN_TOWN = "Lieu à préciser";
+
+/**
+ * Where a race is, as honestly as we know it.
+ *
+ * Most races name their commune. The rest are known only to a department —
+ * the federation's results index gives one point for a whole department, so
+ * claiming a town there would invent one. Those say the department instead of
+ * repeating a placeholder that tells a rider nothing.
+ */
+export function placeLabel(race: {
+  city: string;
+  departmentCode: string | null;
+  departmentName: string | null;
+}): { text: string; suffix: string | null; approximate: boolean } {
+  const known = race.city && race.city !== UNKNOWN_TOWN;
+  if (known) {
+    return {
+      text: race.city,
+      suffix: race.departmentCode,
+      approximate: false,
+    };
+  }
+  if (race.departmentName) {
+    return { text: race.departmentName, suffix: race.departmentCode, approximate: true };
+  }
+  return { text: "Lieu à préciser", suffix: null, approximate: true };
+}
+
+/** Renders {@link placeLabel}, marking an approximate location as such. */
+export function PlaceLabel({
+  race,
+  className,
+}: {
+  race: Parameters<typeof placeLabel>[0];
+  className?: string;
+}) {
+  const place = placeLabel(race);
+  return (
+    <span className={cn("truncate", className)}>
+      {place.approximate && (
+        <span
+          className="text-muted-foreground/70"
+          title="Commune non communiquée : seul le département est connu"
+        >
+          ≈{" "}
+        </span>
+      )}
+      {place.text}
+      {place.suffix && (
+        <span className="text-muted-foreground/70"> ({place.suffix})</span>
+      )}
+    </span>
+  );
+}
+
 /** Distance from the rider's chosen point, when they asked for one. */
 export function DistanceTag({ km }: { km?: number | null }) {
   if (km == null) return null;

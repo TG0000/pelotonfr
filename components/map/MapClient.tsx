@@ -12,6 +12,7 @@ import {
   FEDERATION_COLOR,
   FederationMark,
   parseRaceDate,
+  PlaceLabel,
 } from "@/components/races/RacePrimitives";
 import { EmptyState } from "@/components/common/States";
 import { cn } from "@/lib/utils";
@@ -67,10 +68,7 @@ function ResultRow({
           <div className="truncate text-sm font-semibold group-hover:text-primary">
             {displayRaceName(race.name)}
           </div>
-          <div className="truncate text-xs text-muted-foreground">
-            {race.city}
-            {race.departmentCode && ` (${race.departmentCode})`}
-          </div>
+          <PlaceLabel race={race} className="block text-xs text-muted-foreground" />
           <div className="mt-0.5 flex items-center gap-2">
             <FederationMark slug={race.federationSlug} withLabel />
             <CategorySummary categories={race.categories} />

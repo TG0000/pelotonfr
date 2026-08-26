@@ -11,6 +11,7 @@ import {
   FEDERATION_COLOR,
   FederationMark,
   parseRaceDate,
+  PlaceLabel,
 } from "./RacePrimitives";
 
 interface RaceCardProps {
@@ -88,12 +89,7 @@ export function RaceCard({
 
         <div className="mt-1 flex items-center gap-2 min-w-0">
           <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground truncate">
-            {race.city}
-            {race.departmentCode && (
-              <span className="text-muted-foreground/70"> ({race.departmentCode})</span>
-            )}
-          </span>
+          <PlaceLabel race={race} className="text-sm text-muted-foreground" />
           <DisciplineTag discipline={race.discipline} raceType={race.raceType} />
         </div>
 

@@ -173,8 +173,13 @@ export async function upsertRaces(
       // from raw coordinates has no name yet, so the race takes the best label
       // available now; `backfillRacesFromVenues` replaces it once the bulk
       // reverse-geocoding pass has named the venue.
-      const city =
-        race.city ?? race.departmentName ?? "Lieu à préciser";
+      //
+      // The department name is deliberately NOT used as a fallback. The
+      // results index gives only a department, and substituting it put
+      // "Vendée" in the town field of 3 804 races — which the interface then
+      // showed as though it were where the race is held. The department is
+      // already carried in its own columns; an unknown town says so.
+      const city = race.city ?? "Lieu à préciser";
 
       const result = await sql(
         `INSERT INTO races (
@@ -317,7 +322,10 @@ export async function upsertRaces(
 export async function backfillRacesFromVenues(sql: SqlFn): Promise<number> {
   const rows = await sql(
     `UPDATE races r
-        SET city             = COALESCE(v.city, r.city),
+        -- NULLIF so the placeholder counts as absent: a race whose town is
+        -- "Lieu à préciser" has no town, and COALESCE alone treated that
+        -- string as an answer and kept it forever.
+        SET city             = COALESCE(v.city, NULLIF(r.city, 'Lieu à préciser')),
             postcode         = COALESCE(v.postcode, r.postcode),
             department_code  = COALESCE(v.department_code, r.department_code),
             department_name  = COALESCE(v.department_name, r.department_name),
