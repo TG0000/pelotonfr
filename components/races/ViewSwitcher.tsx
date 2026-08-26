@@ -35,16 +35,19 @@ export function ViewSwitcher({ current }: { current: RaceView }) {
   }
 
   return (
+    /* A plain group rather than a tablist: these buttons navigate, they do
+       not reveal panels in the page, and announcing tabs to a screen reader
+       promises arrow-key behaviour that does not exist. */
     <div
-      role="tablist"
+      role="group"
       aria-label="Affichage"
       className="inline-flex rounded-lg border border-border bg-surface-2 p-0.5"
     >
       {VIEWS.map(({ value, label, Icon }) => (
         <button
           key={value}
-          role="tab"
-          aria-selected={value === current}
+          type="button"
+          aria-current={value === current ? "true" : undefined}
           onClick={() => select(value)}
           className={cn(
             "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",

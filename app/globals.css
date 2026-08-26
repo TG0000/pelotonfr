@@ -166,7 +166,16 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+  }
+
+  /* Keyboard focus has to be seen from across the room; the previous
+     half-transparent ring on every element was closer to decoration than to a
+     focus indicator. Only :focus-visible, so a mouse click stays quiet. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
   body {
     @apply bg-background text-foreground;
@@ -185,6 +194,24 @@
 }
 
 @layer utilities {
+  /* Lets a keyboard reach the races without walking the whole navigation. */
+  .skip-link {
+    position: absolute;
+    left: 0.75rem;
+    top: -3rem;
+    z-index: 100;
+    padding: 0.5rem 0.9rem;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: top 120ms ease;
+  }
+  .skip-link:focus {
+    top: 0;
+  }
+
   /* A horizontal scroller that does not drag the page sideways with it. */
   .scroll-x {
     overflow-x: auto;

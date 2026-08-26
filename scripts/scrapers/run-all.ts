@@ -47,9 +47,11 @@ function parseArgs() {
 
 function buildScrapers(backfillDays: number) {
   return [
-    { name: "FFC", slug: "ffc", fn: () => scrapeFFC({ backfillDays }), fedId: 1 },
-    { name: "FSGT", slug: "fsgt", fn: scrapeFSGT, fedId: 2 },
-    { name: "UFOLEP", slug: "ufolep", fn: scrapeUFOLEP, fedId: 3 },
+    // The federation id travels on the scraper's own result, so it is not
+    // repeated here where the two could drift apart.
+    { name: "FFC", slug: "ffc", fn: () => scrapeFFC({ backfillDays }) },
+    { name: "FSGT", slug: "fsgt", fn: scrapeFSGT },
+    { name: "UFOLEP", slug: "ufolep", fn: scrapeUFOLEP },
   ];
 }
 
@@ -85,7 +87,10 @@ async function finishLog(
       id,
       status,
       result.races.length,
-      inserted + updated,
+      // Everything we still hold correctly, which includes the rows that
+      // needed no change: a calendar with nothing new to say has not lost
+      // anything, and counting only writes reported it as a shortfall.
+      inserted + updated + skipped,
       result.errors.length
         ? result.errors
             .slice(0, 20)
@@ -157,7 +162,7 @@ async function main() {
     process.exit(1);
   }
 
-  for (const { name, slug, fn, fedId } of selected) {
+  for (const { name, slug, fn } of selected) {
     console.log(`--- ${name} ---`);
     const logId = await createLog(slug);
 

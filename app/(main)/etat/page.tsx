@@ -50,9 +50,7 @@ export default async function EtatPage() {
 
       {broken.length > 0 && (
         <p className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
-          <b>
-            {broken.length} source{broken.length > 1 ? "s" : ""} à l&apos;arrêt.
-          </b>{" "}
+          <b>{`${broken.length} source${broken.length > 1 ? "s" : ""} à l'arrêt.`}</b>{" "}
           Les courses affichées peuvent être incomplètes ou périmées.
         </p>
       )}

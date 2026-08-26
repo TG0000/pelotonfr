@@ -8,8 +8,15 @@ export default function MainLayout({
 }) {
   return (
     <>
+      {/* Reaching the races by keyboard meant tabbing through the whole
+          navigation on every page. */}
+      <a href="#contenu" className="skip-link">
+        Aller au contenu
+      </a>
       <Navbar />
-      <main className="flex-1">{children}</main>
+      <main id="contenu" className="flex-1">
+        {children}
+      </main>
       <Footer />
     </>
   );

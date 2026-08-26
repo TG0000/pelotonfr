@@ -8,6 +8,7 @@ import { MobileFilters } from "@/components/races/MobileFilters";
 import { ActiveFilters } from "@/components/races/ActiveFilters";
 import { RaceCard } from "@/components/races/RaceCard";
 import { Pagination } from "@/components/common/Pagination";
+import { EmptyState } from "@/components/common/States";
 import { MapClient } from "@/components/map/MapClient";
 import { ViewSwitcher, type RaceView } from "@/components/races/ViewSwitcher";
 import {
@@ -278,13 +279,11 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
                 closeHref={`/calendrier${buildQuery(base, { jour: undefined })}`}
               />
             ) : listResult.races.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border py-20 text-center">
-                <SearchX className="mx-auto mb-4 size-10 text-muted-foreground/40" />
-                <p className="mb-1 font-medium">Aucune course ne correspond</p>
-                <p className="text-sm text-muted-foreground">
-                  Élargissez la période ou retirez une catégorie.
-                </p>
-              </div>
+              <EmptyState
+                icon={SearchX}
+                title="Aucune course ne correspond"
+                action="Élargissez la période ou retirez une catégorie."
+              />
             ) : (
               <>
                 <div className="flex flex-col divide-y divide-border/60">

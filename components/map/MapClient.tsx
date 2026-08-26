@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ChevronUp, Crosshair, MapPinned, X } from "lucide-react";
-import { MapControls } from "./MapControls";
+import { FilterDrawer } from "./FilterDrawer";
 import {
   CategorySummary,
   DateBlock,
@@ -13,6 +13,7 @@ import {
   FederationMark,
   parseRaceDate,
 } from "@/components/races/RacePrimitives";
+import { EmptyState } from "@/components/common/States";
 import { cn } from "@/lib/utils";
 import { displayRaceName } from "@/lib/race-name";
 import type { Race } from "@/types";
@@ -139,13 +140,12 @@ export function MapClient({ races }: MapClientProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visible.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <Crosshair className="mx-auto mb-3 size-8 text-muted-foreground/40" />
-            <p className="text-sm font-medium">Aucune course dans cette zone</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Dézoomez ou élargissez vos filtres.
-            </p>
-          </div>
+          <EmptyState
+            compact
+            icon={Crosshair}
+            title="Aucune course dans cette zone"
+            action="Dézoomez ou élargissez la période."
+          />
         ) : (
           <div className="divide-y divide-border/60">
             {visible.map((race) => (
@@ -167,9 +167,7 @@ export function MapClient({ races }: MapClientProps) {
       {/* Desktop: a permanent list beside the map, the pattern anyone who has
           searched for a place online already knows. */}
       <aside className="hidden w-[22rem] shrink-0 flex-col border-r border-border bg-surface-1 lg:flex xl:w-[24rem]">
-        <div className="border-b border-border p-3">
-          <MapControls />
-        </div>
+        <FilterDrawer />
         {panel}
       </aside>
 
@@ -184,12 +182,6 @@ export function MapClient({ races }: MapClientProps) {
         />
 
         {/* Mobile: controls float, results come up as a sheet. */}
-        <div className="absolute left-3 right-3 top-3 z-10 lg:hidden">
-          <div className="rounded-xl border border-border bg-surface-1/95 p-2 shadow-lg backdrop-blur">
-            <MapControls compact />
-          </div>
-        </div>
-
         <button
           onClick={() => setSheetOpen(true)}
           className={cn(
