@@ -14,7 +14,9 @@
     "db:relink-events": "tsx scripts/db/relink-events.ts",
     "db:migrate": "tsx scripts/db/migrate.ts",
     "db:migrate:dry": "tsx scripts/db/migrate.ts --dry-run",
-    "scrape:rankings": "tsx scripts/scrapers/ffc-rankings.ts"
+    "scrape:rankings": "tsx scripts/scrapers/ffc-rankings.ts",
+    "scrape:categories": "tsx scripts/scrapers/amivelo-categories.ts",
+    "db:recompute-categories": "tsx scripts/db/recompute-categories.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

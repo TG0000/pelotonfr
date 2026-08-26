@@ -24,6 +24,7 @@
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { politeDelay } from "./utils/http";
 import { createSql } from "./utils/db";
+import { normalizeCategories } from "../../lib/categories";
 
 loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
@@ -71,6 +72,21 @@ function normalizeName(value: string): string {
 }
 
 /** "26559,08" → 26559.08 */
+/**
+ * The ranking's own wording, reduced to our canonical vocabulary.
+ *
+ * It lists more than racing categories: referees and team staff hold licences
+ * too, labelled "Arbitre National Elite" or "Encadrement Cyclisme Pro". Storing
+ * those verbatim made them read as Élite and Pro riders, which would put a
+ * referee into a start-list analysis.
+ */
+function canonicalCategory(raw: string | undefined): string | null {
+  const cleaned = (raw ?? "").trim();
+  if (!cleaned) return null;
+  const values = normalizeCategories(cleaned, "ffc");
+  return values[0] ?? null;
+}
+
 function parsePoints(value: string | undefined): number | null {
   if (!value) return null;
   const n = Number.parseFloat(value.replace(/\s/g, "").replace(",", "."));
@@ -193,7 +209,7 @@ async function upsertRiders(
     firstNames.push(firstName || null);
     normalized.push(normalizeName(`${lastName} ${firstName}`));
     clubIds.push(clubCache.get(clubKey) ?? null);
-    categories.push((row.categorie ?? "").trim() || null);
+    categories.push(canonicalCategory(row.categorie));
   }
 
   if (uciIds.length === 0) return;
@@ -268,7 +284,7 @@ async function ingestRanking(
       riderIds.push(riderId);
       ranks.push(parseRank(row.data1));
       points.push(parsePoints(row.data2));
-      categories.push((row.categorie ?? "").trim() || null);
+      categories.push(canonicalCategory(row.categorie));
       clubNames.push(clubName || null);
       clubIds.push(clubCache.get(normalizeName(clubName)) ?? null);
       licences.push(row.nblicence ?? null);
