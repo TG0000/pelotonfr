@@ -1,3 +1,4 @@
+import { toDateOnly } from "@/lib/date";
 import { sql } from "../index";
 
 /**
@@ -36,14 +37,6 @@ export interface RiderResult {
   clubName: string | null;
 }
 
-function toDateStr(value: unknown): string | null {
-  if (!value) return null;
-  if (value instanceof Date) return value.toISOString().split("T")[0];
-  const s = String(value);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toISOString().split("T")[0];
-}
 
 function buildRider(row: Record<string, unknown>): Rider {
   return {
@@ -55,7 +48,7 @@ function buildRider(row: Record<string, unknown>): Rider {
     resultCount: Number(row.result_count ?? 0),
     winCount: Number(row.win_count ?? 0),
     podiumCount: Number(row.podium_count ?? 0),
-    lastRacedOn: toDateStr(row.last_raced_on),
+    lastRacedOn: toDateOnly(row.last_raced_on),
   };
 }
 
@@ -133,7 +126,7 @@ export async function getRiderResults(
     return {
       raceId: r.race_id as string,
       raceName: r.race_name as string,
-      raceDate: toDateStr(r.race_date) ?? "",
+      raceDate: toDateOnly(r.race_date) ?? "",
       city: (r.city as string) ?? null,
       departmentCode: (r.department_code as string) ?? null,
       discipline: r.discipline as string,
@@ -204,7 +197,7 @@ export async function getLikelyCompetitors(
       appearances: Number(r.appearances),
       bestRank: r.best_rank != null ? Number(r.best_rank) : null,
       lastRank: r.last_rank != null ? Number(r.last_rank) : null,
-      lastSeenOn: toDateStr(r.last_seen_on),
+      lastSeenOn: toDateOnly(r.last_seen_on),
     };
   });
 }
@@ -243,7 +236,7 @@ export async function getHeadToHead(
     return {
       raceId: r.race_id as string,
       raceName: r.race_name as string,
-      raceDate: toDateStr(r.race_date) ?? "",
+      raceDate: toDateOnly(r.race_date) ?? "",
       rankA: r.rank_a != null ? Number(r.rank_a) : null,
       rankB: r.rank_b != null ? Number(r.rank_b) : null,
     };
@@ -284,7 +277,7 @@ export async function getEventHistory(
     const r = row as Record<string, unknown>;
     return {
       raceId: r.race_id as string,
-      raceDate: toDateStr(r.race_date) ?? "",
+      raceDate: toDateOnly(r.race_date) ?? "",
       name: r.name as string,
       finisherCount: r.finisher_count != null ? Number(r.finisher_count) : null,
       winnerName: (r.winner_name as string) ?? null,

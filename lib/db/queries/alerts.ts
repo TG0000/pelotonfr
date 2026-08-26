@@ -1,4 +1,5 @@
 import { sql } from "../index";
+import { toDateOnly } from "@/lib/date";
 
 /**
  * Alert rules: "tell me about Open 2 races within 60 km, three weeks ahead".
@@ -41,14 +42,6 @@ export interface AlertMatch {
   distanceKm: number | null;
 }
 
-function toDateStr(value: unknown): string | null {
-  if (!value) return null;
-  if (value instanceof Date) return value.toISOString().split("T")[0];
-  const s = String(value);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toISOString().split("T")[0];
-}
 
 function buildRule(row: Record<string, unknown>): AlertRule {
   return {
@@ -217,7 +210,7 @@ export async function getRuleMatches(
     return {
       raceId: r.race_id as string,
       name: r.name as string,
-      raceDate: toDateStr(r.race_date) ?? "",
+      raceDate: toDateOnly(r.race_date) ?? "",
       city: (r.city as string) ?? null,
       departmentCode: (r.department_code as string) ?? null,
       discipline: r.discipline as string,

@@ -1,3 +1,4 @@
+import { toDateOnly } from "@/lib/date";
 import { sql } from "../index";
 
 /**
@@ -15,14 +16,6 @@ import { sql } from "../index";
 /** Maps a race date onto the FFC ranking season it counts towards. */
 const SEASON_EXPR = `EXTRACT(YEAR FROM (ra.race_date + INTERVAL '2 months'))::int`;
 
-function toDateStr(value: unknown): string | null {
-  if (!value) return null;
-  if (value instanceof Date) return value.toISOString().split("T")[0];
-  const s = String(value);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toISOString().split("T")[0];
-}
 
 function num(value: unknown): number | null {
   return value == null ? null : Number(value);
@@ -76,7 +69,7 @@ function buildIdentity(row: Record<string, unknown>): RiderIdentity {
     resultCount: Number(row.result_count ?? 0),
     winCount: Number(row.win_count ?? 0),
     podiumCount: Number(row.podium_count ?? 0),
-    lastRacedOn: toDateStr(row.last_raced_on),
+    lastRacedOn: toDateOnly(row.last_raced_on),
     currentPoints: num(row.current_points),
     currentRank: num(row.current_rank),
     currentSeason: num(row.current_season),
@@ -304,7 +297,7 @@ export async function getRidersToWatch(
       appearances,
       bestRankHere,
       lastRankHere: num(r.last_rank_here),
-      lastSeenHere: toDateStr(r.last_seen_here),
+      lastSeenHere: toDateOnly(r.last_seen_here),
       recentRaces,
       recentWins,
       recentPodiums,

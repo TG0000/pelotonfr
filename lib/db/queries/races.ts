@@ -1,18 +1,9 @@
+import { toDateOnly, todayISO } from "@/lib/date";
 import { sql } from "../index";
 import type { Race, PaginatedRaces, RaceFilters } from "@/types";
 
 const PAGE_SIZE = 24;
 
-function toDateStr(val: unknown): string {
-  if (!val) return "";
-  if (val instanceof Date) return val.toISOString().split("T")[0];
-  const s = String(val);
-  // Already ISO date YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  // Could be a full ISO timestamp
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? s : d.toISOString().split("T")[0];
-}
 
 function buildRaceFromRow(row: Record<string, unknown>): Race {
   return {
@@ -23,8 +14,8 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     name: row.name as string,
     slug: row.slug as string | null,
     sourceUrl: row.source_url as string | null,
-    raceDate: toDateStr(row.race_date),
-    raceDateEnd: row.race_date_end ? toDateStr(row.race_date_end) : null,
+    raceDate: toDateOnly(row.race_date) ?? "",
+    raceDateEnd: row.race_date_end ? toDateOnly(row.race_date_end) : null,
     city: row.city as string,
     departmentCode: row.department_code as string | null,
     departmentName: row.department_name as string | null,
@@ -44,9 +35,9 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     contactEmail: row.contact_email as string | null,
     contactPhone: row.contact_phone as string | null,
     notes: row.notes as string | null,
-    scrapedAt: row.scraped_at ? toDateStr(row.scraped_at) : "",
-    createdAt: row.created_at ? toDateStr(row.created_at) : "",
-    updatedAt: row.updated_at ? toDateStr(row.updated_at) : "",
+    scrapedAt: toDateOnly(row.scraped_at) ?? "",
+    createdAt: toDateOnly(row.created_at) ?? "",
+    updatedAt: toDateOnly(row.updated_at) ?? "",
     distanceFromUserKm:
       row.distance_from_user_km != null
         ? Number(row.distance_from_user_km)
@@ -73,7 +64,7 @@ export async function getRaces(
 
   const offset = (page - 1) * PAGE_SIZE;
   const radiusMeters = radius * 1000;
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
 
   // Build dynamic WHERE clauses
   const conditions: string[] = [
@@ -247,7 +238,7 @@ export async function getRaceById(id: string): Promise<Race | null> {
 }
 
 export async function getUpcomingRaces(limit = 10): Promise<Race[]> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
   const rows = await sql(
     `SELECT r.*, f.slug AS federation_slug,
             ST_X(r.location::geometry) AS lng,
@@ -267,7 +258,7 @@ export async function getRacesForMap(
 ): Promise<Race[]> {
   // Returns lightweight race data for map markers (no pagination)
   const { fed = [], disc = [], cat = [], dateFrom, dateTo, lat, lng, radius = 50, q = "" } = filters;
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
 
   const conditions: string[] = [
     "r.is_cancelled = false",
@@ -339,9 +330,9 @@ export interface RaceStats {
 }
 
 export async function getRaceStats(): Promise<RaceStats> {
-  const today = new Date().toISOString().split("T")[0];
-  const weekEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const monthEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const today = todayISO();
+  const weekEnd = toDateOnly(new Date(Date.now() + 7 * 86400000)) ?? today;
+  const monthEnd = toDateOnly(new Date(Date.now() + 30 * 86400000)) ?? today;
 
   const rows = await sql(
     `SELECT f.slug AS federation_slug,
@@ -385,7 +376,7 @@ export async function getRacesForCalendar(
   filters: Partial<RaceFilters> = {}
 ): Promise<CalendarDay[]> {
   const { fed = [], disc = [], cat = [], dateFrom, dateTo } = filters;
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
   const threeMonths = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
     .toISOString()
     .split("T")[0];

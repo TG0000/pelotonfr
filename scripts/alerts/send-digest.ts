@@ -18,13 +18,20 @@
 
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "../scrapers/utils/db";
+import { toDateOnly } from "../../lib/date";
 
 loadEnv();
 const DATABASE_URL = requireEnv("DATABASE_URL");
 const sql = createSql(DATABASE_URL);
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM = process.env.ALERT_FROM_EMAIL ?? "PelotonFR <alertes@pelotonfr.fr>";
+/**
+ * Resend refuses any sender on an unverified domain. Its shared test address
+ * works immediately but only delivers to the account owner, so it is the
+ * default until pelotonfr.fr is verified — at which point setting
+ * ALERT_FROM_EMAIL switches sending over with no code change.
+ */
+const FROM = process.env.ALERT_FROM_EMAIL ?? "PelotonFR <onboarding@resend.dev>";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://pelotonfr.vercel.app";
 
 const FEDERATION_LABEL: Record<string, string> = {
@@ -52,8 +59,11 @@ interface Match {
   distance_km: number | null;
 }
 
-function formatDate(value: string): string {
-  const date = new Date(`${value}T12:00:00Z`);
+
+function formatDate(value: unknown): string {
+  const iso = toDateOnly(value) ?? String(value);
+  const date = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return iso;
   return date.toLocaleDateString("fr-FR", {
     weekday: "long",
     day: "numeric",
@@ -226,7 +236,7 @@ async function main() {
       `  ${rule.email.padEnd(30)} ${String(matches.length).padStart(2)} course(s) — ${subject}`
     );
     for (const m of matches.slice(0, 3)) {
-      console.log(`      ${m.race_date} ${m.name.slice(0, 52)}`);
+      console.log(`      ${formatDate(m.race_date)} — ${m.name.slice(0, 52)}`);
     }
 
     if (dryRun) continue;

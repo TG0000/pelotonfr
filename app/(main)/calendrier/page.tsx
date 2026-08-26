@@ -9,6 +9,7 @@ import { MobileFilters } from "@/components/races/MobileFilters";
 import { RaceBadge, FederationDot } from "@/components/races/RaceBadge";
 import type { FederationSlug, Discipline } from "@/lib/constants";
 import { format, startOfWeek, isSameWeek } from "date-fns";
+import { toDateOnly } from "@/lib/date";
 import { fr } from "date-fns/locale";
 
 export const metadata: Metadata = {
@@ -52,12 +53,12 @@ function getWeekendRange() {
   sat.setDate(now.getDate() + ((6 - day + 7) % 7 || 7));
   const sun = new Date(sat);
   sun.setDate(sat.getDate() + 1);
-  return { from: sat.toISOString().split("T")[0], to: sun.toISOString().split("T")[0] };
+  return { from: (toDateOnly(sat) ?? ""), to: (toDateOnly(sun) ?? "") };
 }
 
 function getPresets() {
   const now = new Date();
-  const today = now.toISOString().split("T")[0];
+  const today = (toDateOnly(now) ?? "");
   const weekend = getWeekendRange();
   const weekEnd = new Date(now); weekEnd.setDate(now.getDate() + 7);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -65,9 +66,9 @@ function getPresets() {
   const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
   return [
     { label: "Ce week-end", from: weekend.from, to: weekend.to },
-    { label: "7 prochains jours", from: today, to: weekEnd.toISOString().split("T")[0] },
-    { label: "Ce mois", from: today, to: monthEnd.toISOString().split("T")[0] },
-    { label: "Mois prochain", from: nextMonthStart.toISOString().split("T")[0], to: nextMonthEnd.toISOString().split("T")[0] },
+    { label: "7 prochains jours", from: today, to: (toDateOnly(weekEnd) ?? "") },
+    { label: "Ce mois", from: today, to: (toDateOnly(monthEnd) ?? "") },
+    { label: "Mois prochain", from: (toDateOnly(nextMonthStart) ?? ""), to: (toDateOnly(nextMonthEnd) ?? "") },
   ];
 }
 
