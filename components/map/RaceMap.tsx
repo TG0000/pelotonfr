@@ -5,6 +5,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Race } from "@/types";
 import { FRANCE_CENTER, FRANCE_ZOOM } from "@/lib/constants";
+import { oklchToHex } from "@/lib/color";
 
 interface RaceMapProps {
   races: Race[];
@@ -22,14 +23,39 @@ const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 /* Read from the stylesheet rather than repeated here: the map used its own
    hard-coded hexes, so a federation was one colour in the list and another on
    the map. */
+
+/** Used when a token is missing or cannot be parsed. */
+const FALLBACK: Record<string, string> = {
+  ffc: "#3b82f6",
+  fsgt: "#22c55e",
+  ufolep: "#f97316",
+};
+
+/**
+ * Resolves a theme token to a colour MapLibre accepts.
+ *
+ * The palette is authored in OKLCH, which MapLibre's style parser rejects:
+ * `addLayer` threw inside the load handler, so every layer after the first was
+ * skipped and the map showed a basemap with no races on it at all. Converting
+ * here keeps the stylesheet the single source of truth rather than adding a
+ * second hard-coded palette for the map to drift from.
+ */
+function resolveColor(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  if (/^(#|rgb|hsl)/i.test(trimmed)) return trimmed;
+  return oklchToHex(trimmed) ?? fallback;
+}
+
 function federationPalette(): Record<string, string> {
-  if (typeof window === "undefined") return {};
+  if (typeof window === "undefined") return { ...FALLBACK };
   const s = getComputedStyle(document.documentElement);
-  return {
-    ffc: s.getPropertyValue("--ffc").trim() || "#3b82f6",
-    fsgt: s.getPropertyValue("--fsgt").trim() || "#22c55e",
-    ufolep: s.getPropertyValue("--ufolep").trim() || "#f97316",
-  };
+  return Object.fromEntries(
+    Object.entries(FALLBACK).map(([slug, fallback]) => [
+      slug,
+      resolveColor(s.getPropertyValue(`--${slug}`), fallback),
+    ])
+  );
 }
 
 function racesToGeoJSON(
@@ -45,7 +71,7 @@ function racesToGeoJSON(
         geometry: { type: "Point", coordinates: [r.lng!, r.lat!] },
         properties: {
           id: r.id,
-          color: palette[r.federationSlug] ?? "var(--primary)",
+          color: palette[r.federationSlug] ?? FALLBACK.ffc,
         },
       })),
   };
@@ -106,7 +132,18 @@ export function RaceMap({
 
     const palette = federationPalette();
 
-    m.on("load", () => {
+    /* Sources and layers need the style, not a rendered frame.
+       MapLibre's `load` event only fires from inside the render loop, so a map
+       created while its tab or panel is hidden — where requestAnimationFrame is
+       throttled to a standstill — never received it, and the races were never
+       added at all. `style.load` is driven by the style request finishing, so
+       it arrives either way. */
+    const whenStyleReady = (fn: () => void) => {
+      if (m.isStyleLoaded()) fn();
+      else m.once("style.load", fn);
+    };
+
+    whenStyleReady(() => {
       m.addSource(SOURCE, {
         type: "geojson",
         data: racesToGeoJSON(racesRef.current, palette),
@@ -311,7 +348,8 @@ export function RaceMap({
     };
 
     if (ready.current) fit();
-    else m.once("load", fit);
+    else if (m.isStyleLoaded()) fit();
+    else m.once("style.load", fit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey]);
 
@@ -349,9 +387,11 @@ export function RaceMap({
         "width:14px;height:14px;border-radius:50%;background:var(--primary);" +
         "border:3px solid white;box-shadow:0 0 0 4px color-mix(in oklch, var(--primary) 30%, transparent);";
       userMarker.current = new maplibregl.Marker({ element: el });
-      userMarker.current.addTo(m);
     }
-    userMarker.current.setLngLat([userLocation.lng, userLocation.lat]);
+    /* Position before attaching: adding a marker that has no coordinates yet
+       throws inside MapLibre, which is what broke the whole page the moment a
+       town was picked from the search. */
+    userMarker.current.setLngLat([userLocation.lng, userLocation.lat]).addTo(m);
   }, [userLocation]);
 
   /* Sized directly rather than by `absolute inset-0`: maplibre-gl.css sets
