@@ -1,20 +1,149 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useCallback } from "react";
-import { Search, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { LocationSearch } from "@/components/common/LocationSearch";
-import { FEDERATIONS, DISCIPLINES, CATEGORIES, DEFAULT_RADIUS_KM } from "@/lib/constants";
+import { FEDERATIONS, DISCIPLINES, DEFAULT_RADIUS_KM } from "@/lib/constants";
+import { CATEGORIES as CATEGORY_DEFS } from "@/lib/categories";
+import { toDateOnly } from "@/lib/date";
+import { cn } from "@/lib/utils";
 import type { GeocodingResult } from "@/types";
-
-type MultiKey = "fed" | "disc" | "cat";
 
 interface RaceFiltersProps {
   showLocation?: boolean;
+}
+
+/**
+ * Categories, as a rider thinks of them.
+ *
+ * The old list was a single wall of pills built from a hand-written copy of the
+ * vocabulary in lib/constants — and that copy had drifted: it offered "Open2"
+ * and "Cadets" while the scrapers write "open2" and "u17", so most of the
+ * filters matched nothing. Sourcing the canonical vocabulary directly makes
+ * that class of drift impossible.
+ */
+const CATEGORY_SECTIONS: Array<{
+  title: string;
+  values: string[];
+  /** Sections a rider rarely wants start closed. */
+  defaultOpen: boolean;
+}> = [
+  {
+    title: "Route FFC",
+    values: CATEGORY_DEFS.filter(
+      (c) => c.group === "ffc" && !c.value.startsWith("cat")
+    ).map((c) => c.value),
+    defaultOpen: true,
+  },
+  {
+    title: "FSGT",
+    values: CATEGORY_DEFS.filter((c) => c.group === "fsgt").map((c) => c.value),
+    defaultOpen: false,
+  },
+  {
+    title: "Jeunes",
+    values: CATEGORY_DEFS.filter((c) => c.group === "youth").map((c) => c.value),
+    defaultOpen: false,
+  },
+  {
+    title: "Autres",
+    values: CATEGORY_DEFS.filter(
+      (c) => c.group === "women" || (c.group === "other" && c.value !== "staff")
+    ).map((c) => c.value),
+    defaultOpen: false,
+  },
+];
+
+const LABEL_BY_VALUE = new Map(CATEGORY_DEFS.map((c) => [c.value, c.label]));
+
+/** A short label: the sidebar has no room for "U17 (Cadet)". */
+function shortLabel(value: string): string {
+  const full = LABEL_BY_VALUE.get(value) ?? value;
+  return full.replace(/\s*\(.*\)$/, "");
+}
+
+function Pill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "text-xs px-2.5 py-1 rounded-full border transition-colors",
+        active
+          ? "bg-primary text-primary-foreground border-primary"
+          : "bg-surface-1 border-border hover:border-primary/50 hover:bg-surface-2"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SectionTitle({
+  children,
+  count,
+}: {
+  children: React.ReactNode;
+  count?: number;
+}) {
+  return (
+    <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {children}
+      {count ? (
+        <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-bold text-primary">
+          {count}
+        </span>
+      ) : null}
+    </h3>
+  );
+}
+
+/** A section that can be folded away, so the sidebar stays scannable. */
+function Collapsible({
+  title,
+  activeCount,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  activeCount: number;
+  defaultOpen: boolean;
+  children: React.ReactNode;
+}) {
+  // A section holding an active filter must never hide it.
+  const [open, setOpen] = useState(defaultOpen || activeCount > 0);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center justify-between gap-2 text-left"
+      >
+        <SectionTitle count={activeCount}>{title}</SectionTitle>
+        <ChevronDown
+          className={cn(
+            "size-3.5 text-muted-foreground transition-transform",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open && <div className="flex flex-wrap gap-1.5">{children}</div>}
+    </div>
+  );
 }
 
 export function RaceFilters({ showLocation = false }: RaceFiltersProps) {
@@ -22,39 +151,16 @@ export function RaceFilters({ showLocation = false }: RaceFiltersProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const getValues = useCallback(
-    (key: string) => searchParams.getAll(key),
-    [searchParams]
-  );
-
   const updateParam = useCallback(
     (key: string, value: string, checked: boolean) => {
       const params = new URLSearchParams(searchParams.toString());
       const current = params.getAll(key);
-
       params.delete(key);
       params.delete("page");
-
-      if (checked) {
-        [...current, value].forEach((v) => params.append(key, v));
-      } else {
-        current.filter((v) => v !== value).forEach((v) => params.append(key, v));
-      }
-
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
-    },
-    [router, pathname, searchParams]
-  );
-
-  const setParam = useCallback(
-    (key: string, value: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("page");
-      if (value) {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
+      const next = checked
+        ? [...current, value]
+        : current.filter((v) => v !== value);
+      next.forEach((v) => params.append(key, v));
       router.push(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [router, pathname, searchParams]
@@ -77,112 +183,141 @@ export function RaceFilters({ showLocation = false }: RaceFiltersProps) {
     router.push(pathname, { scroll: false });
   }, [router, pathname]);
 
-  function handleLocationSelect(result: GeocodingResult | null) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("page");
-    if (result) {
-      params.set("lat", String(result.lat));
-      params.set("lng", String(result.lng));
-      if (!params.has("radius")) params.set("radius", String(DEFAULT_RADIUS_KM));
-    } else {
-      params.delete("lat");
-      params.delete("lng");
-    }
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
-  }
-
-  function handleRadiusChange(val: number | readonly number[]) {
-    const v = Array.isArray(val) ? (val as number[])[0] : (val as number);
-    setParam("radius", String(v));
-  }
-
-  const hasFilters =
-    searchParams.toString().length > 0 &&
-    searchParams.toString() !== "page=1";
-
-  const fedValues = getValues("fed");
-  const discValues = getValues("disc");
-  const catValues = getValues("cat");
-  const q = searchParams.get("q") ?? "";
+  const fedValues = searchParams.getAll("fed");
+  const discValues = searchParams.getAll("disc");
+  const catValues = searchParams.getAll("cat");
+  const urlQuery = searchParams.get("q") ?? "";
   const dateFrom = searchParams.get("dateFrom") ?? "";
   const dateTo = searchParams.get("dateTo") ?? "";
   const lat = searchParams.get("lat");
   const lng = searchParams.get("lng");
   const radius = Number(searchParams.get("radius") ?? DEFAULT_RADIUS_KM);
 
-  function FilterGroup({
-    title,
-    items,
-    paramKey,
-    activeValues,
-  }: {
-    title: string;
-    items: Array<{ value: string; label: string }>;
-    paramKey: MultiKey;
-    activeValues: string[];
-  }) {
-    return (
-      <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {title}
-        </h3>
-        <div className="flex flex-wrap gap-1.5">
-          {items.map((item) => {
-            const active = activeValues.includes(item.value);
-            return (
-              <button
-                key={item.value}
-                onClick={() => updateParam(paramKey, item.value, !active)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-                  active
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border hover:border-primary/50 hover:bg-muted"
-                }`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
+  /* Search: typed locally, pushed on a pause.
+     Navigating on every keystroke re-ran the query letter by letter and the
+     input lost its place mid-word — the single worst thing about the old page. */
+  const [query, setQuery] = useState(urlQuery);
+  const typing = useRef(false);
+
+  useEffect(() => {
+    if (!typing.current) setQuery(urlQuery);
+  }, [urlQuery]);
+
+  useEffect(() => {
+    if (query === urlQuery) return;
+    const id = setTimeout(() => {
+      typing.current = false;
+      setParams({ q: query });
+    }, 350);
+    return () => clearTimeout(id);
+  }, [query, urlQuery, setParams]);
+
+  /* The radius slider behaves the same way: dragging it fired a navigation per
+     step, which made the whole page feel like it was fighting the cursor.
+     `null` means nobody is dragging, so the URL is the truth — which is also
+     how the slider picks up a radius set from somewhere else, with no effect
+     syncing one piece of state to another. */
+  const [drag, setDrag] = useState<number | null>(null);
+  const radiusDraft = drag ?? radius;
+
+  function handleLocationSelect(result: GeocodingResult | null) {
+    if (result) {
+      setParams({
+        lat: String(result.lat),
+        lng: String(result.lng),
+        radius: searchParams.get("radius") ?? String(DEFAULT_RADIUS_KM),
+      });
+    } else {
+      setParams({ lat: "", lng: "" });
+    }
   }
 
+  /** Date presets, built from local calendar days rather than UTC instants. */
+  const presets = useMemo(() => {
+    const today = new Date();
+    const iso = (d: Date) => toDateOnly(d) ?? "";
+
+    const saturday = new Date(today);
+    saturday.setDate(today.getDate() + ((6 - today.getDay() + 7) % 7 || 7));
+    const sunday = new Date(saturday);
+    sunday.setDate(saturday.getDate() + 1);
+
+    const inDays = (n: number) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + n);
+      return d;
+    };
+
+    return [
+      { label: "Ce week-end", from: iso(saturday), to: iso(sunday) },
+      { label: "7 jours", from: iso(today), to: iso(inDays(7)) },
+      { label: "30 jours", from: iso(today), to: iso(inDays(30)) },
+    ];
+  }, []);
+
+  const activeCount =
+    fedValues.length +
+    discValues.length +
+    catValues.length +
+    (urlQuery ? 1 : 0) +
+    (dateFrom || dateTo ? 1 : 0) +
+    (lat && lng ? 1 : 0);
+
   return (
-    <aside className="w-full flex flex-col gap-5">
-      {/* Search */}
+    <aside className="flex w-full flex-col gap-5">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Rechercher une course, ville..."
-          className="pl-9"
-          value={q}
-          onChange={(e) => setParam("q", e.target.value)}
+          placeholder="Course, ville…"
+          className="pl-9 pr-8"
+          value={query}
+          onChange={(e) => {
+            typing.current = true;
+            setQuery(e.target.value);
+          }}
         />
+        {query && (
+          <button
+            type="button"
+            aria-label="Effacer la recherche"
+            onClick={() => {
+              typing.current = true;
+              setQuery("");
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Location (optional) */}
       {showLocation && (
         <div className="flex flex-col gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Près de moi
-          </h3>
+          <SectionTitle>Près de moi</SectionTitle>
           <LocationSearch
             onSelect={handleLocationSelect}
-            placeholder="Ville ou code postal..."
+            placeholder="Ville ou code postal…"
           />
           {lat && lng && (
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 pt-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Rayon</span>
-                <span className="font-medium">{radius} km</span>
+                <span className="font-medium tabular-nums">{radiusDraft} km</span>
               </div>
               <Slider
                 min={10}
                 max={300}
                 step={10}
-                value={[radius]}
-                onValueChange={handleRadiusChange}
+                value={[radiusDraft]}
+                onValueChange={(v) =>
+                  setDrag(Array.isArray(v) ? v[0] : (v as number))
+                }
+                onValueCommitted={(v: number | readonly number[]) => {
+                  setDrag(null);
+                  setParams({
+                    radius: String(Array.isArray(v) ? v[0] : (v as number)),
+                  });
+                }}
                 className="w-full"
               />
             </div>
@@ -190,105 +325,120 @@ export function RaceFilters({ showLocation = false }: RaceFiltersProps) {
         </div>
       )}
 
-      {/* Date range */}
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Période
-        </h3>
-        {/* Quick presets */}
-        <div className="flex flex-wrap gap-1">
-          {[
-            { label: "Week-end", days: [6, 7] },
-            { label: "7j", days: [0, 7] },
-            { label: "30j", days: [0, 30] },
-          ].map(({ label, days }) => {
-            const from = new Date();
-            from.setDate(from.getDate() + days[0]);
-            const to = new Date();
-            to.setDate(to.getDate() + days[1]);
-            // Adjust weekend to next Saturday
-            if (label === "Week-end") {
-              const day = from.getDay();
-              from.setDate(from.getDate() + ((6 - day + 7) % 7 || 7));
-              to.setDate(from.getDate() + 1);
-            }
-            const fromStr = from.toISOString().split("T")[0];
-            const toStr = to.toISOString().split("T")[0];
-            const isActive = dateFrom === fromStr && dateTo === toStr;
-            return (
-              <button
-                key={label}
-                onClick={() => setParams({ dateFrom: fromStr, dateTo: toStr })}
-                className={`text-xs px-2 py-0.5 rounded border transition-all ${
-                  isActive
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border hover:border-primary/50"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
+        <SectionTitle>Période</SectionTitle>
+        <div className="flex flex-wrap gap-1.5">
+          {presets.map((p) => (
+            <Pill
+              key={p.label}
+              active={dateFrom === p.from && dateTo === p.to}
+              onClick={() =>
+                setParams(
+                  dateFrom === p.from && dateTo === p.to
+                    ? { dateFrom: "", dateTo: "" }
+                    : { dateFrom: p.from, dateTo: p.to }
+                )
+              }
+            >
+              {p.label}
+            </Pill>
+          ))}
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex items-center gap-2">
           <Input
             type="date"
+            aria-label="À partir du"
             value={dateFrom}
-            onChange={(e) => setParam("dateFrom", e.target.value)}
+            onChange={(e) => setParams({ dateFrom: e.target.value })}
             className="text-xs"
           />
-          <span className="text-muted-foreground text-sm shrink-0">→</span>
+          <span className="shrink-0 text-sm text-muted-foreground">→</span>
           <Input
             type="date"
+            aria-label="Jusqu'au"
             value={dateTo}
-            onChange={(e) => setParam("dateTo", e.target.value)}
+            onChange={(e) => setParams({ dateTo: e.target.value })}
             className="text-xs"
           />
         </div>
       </div>
 
-      <Separator />
+      <div className="flex flex-col gap-2">
+        <SectionTitle count={fedValues.length}>Fédération</SectionTitle>
+        <div className="flex flex-wrap gap-1.5">
+          {FEDERATIONS.map((f) => (
+            <Pill
+              key={f.slug}
+              active={fedValues.includes(f.slug)}
+              onClick={() =>
+                updateParam("fed", f.slug, !fedValues.includes(f.slug))
+              }
+            >
+              {f.name}
+            </Pill>
+          ))}
+        </div>
+      </div>
 
-      <FilterGroup
-        title="Fédération"
-        paramKey="fed"
-        activeValues={fedValues}
-        items={FEDERATIONS.map((f) => ({ value: f.slug, label: f.name }))}
-      />
+      <div className="flex flex-col gap-2">
+        <SectionTitle count={discValues.length}>Discipline</SectionTitle>
+        <div className="flex flex-wrap gap-1.5">
+          {DISCIPLINES.map((d) => (
+            <Pill
+              key={d.value}
+              active={discValues.includes(d.value)}
+              onClick={() =>
+                updateParam("disc", d.value, !discValues.includes(d.value))
+              }
+            >
+              {d.label}
+            </Pill>
+          ))}
+        </div>
+      </div>
 
-      <FilterGroup
-        title="Discipline"
-        paramKey="disc"
-        activeValues={discValues}
-        items={DISCIPLINES.map((d) => ({ value: d.value, label: d.label }))}
-      />
-
-      <FilterGroup
-        title="Catégorie"
-        paramKey="cat"
-        activeValues={catValues}
-        items={CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
-      />
-
-      {hasFilters && (
-        <>
-          <Separator />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={clearAll}
-            className="w-full gap-2"
+      <div className="flex flex-col gap-3 border-t border-border pt-4">
+        <SectionTitle count={catValues.length}>Catégorie</SectionTitle>
+        {CATEGORY_SECTIONS.map((section) => (
+          <Collapsible
+            key={section.title}
+            title={section.title}
+            defaultOpen={section.defaultOpen}
+            activeCount={
+              section.values.filter((v) => catValues.includes(v)).length
+            }
           >
-            <X className="size-3.5" />
-            Effacer tous les filtres
-          </Button>
-        </>
+            {section.values.map((value) => (
+              <Pill
+                key={value}
+                active={catValues.includes(value)}
+                onClick={() =>
+                  updateParam("cat", value, !catValues.includes(value))
+                }
+              >
+                {shortLabel(value)}
+              </Pill>
+            ))}
+          </Collapsible>
+        ))}
+      </div>
+
+      {activeCount > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={clearAll}
+          className="w-full gap-2"
+        >
+          <X className="size-3.5" />
+          Effacer ({activeCount})
+        </Button>
       )}
     </aside>
   );
 }
 
-/** Returns the count of active filters (for badge display) */
+/** The number of active filters, for the mobile trigger's badge. */
 export function useActiveFilterCount(): number {
   const searchParams = useSearchParams();
   return (

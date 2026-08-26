@@ -411,8 +411,8 @@ export async function getRacesForCalendar(
   }
 
   const rows = await sql(
-    `SELECT r.id, r.name, r.race_date, r.city, r.department_code,
-            r.discipline, r.categories, r.level, r.is_cancelled,
+    `SELECT r.id, r.name, r.race_date, r.race_date_end, r.city, r.department_code,
+            r.discipline, r.race_type, r.categories, r.level, r.is_cancelled,
             r.federation_id, f.slug AS federation_slug,
             ST_X(r.location::geometry) AS lng,
             ST_Y(r.location::geometry) AS lat

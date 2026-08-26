@@ -10,6 +10,7 @@ import { LocationSearch } from "@/components/common/LocationSearch";
 import { FEDERATIONS, DISCIPLINES } from "@/lib/constants";
 import { CATEGORIES, categoryLabel } from "@/lib/categories";
 import type { GeocodingResult } from "@/types";
+import { displayRaceName } from "@/lib/race-name";
 
 interface RuleMatch {
   raceId: string;
@@ -247,7 +248,7 @@ export function AlertManager() {
               <ul className="mt-1.5 flex flex-col gap-0.5">
                 {rule.matches.slice(0, 3).map((m) => (
                   <li key={m.raceId} className="truncate">
-                    {m.raceDate} — {m.name}
+                    {m.raceDate} — {displayRaceName(m.name)}
                     {m.distanceKm != null && ` · ${Math.round(m.distanceKm)} km`}
                   </li>
                 ))}

@@ -7,7 +7,8 @@ import type { FederationSlug, Discipline } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Carte des courses",
-  description: "Visualisez toutes les courses cyclistes en France sur une carte interactive",
+  description:
+    "Visualisez toutes les courses cyclistes en France sur une carte interactive",
 };
 
 interface PageProps {
@@ -46,13 +47,17 @@ export default async function CartePage({ searchParams }: PageProps) {
   }
 
   return (
-    <div style={{ position: "fixed", top: "3.5rem", left: 0, right: 0, bottom: 0 }}>
-      <Suspense fallback={
-        <div className="w-full h-full flex items-center justify-center bg-muted/20">
-          <span className="text-muted-foreground">Chargement...</span>
-        </div>
-      }>
-        <MapClient initialRaces={races} />
+    // The map owns everything below the header. `fixed` rather than a flex
+    // child so the container has a real height the moment MapLibre measures it.
+    <div className="fixed inset-x-0 bottom-0 top-14">
+      <Suspense
+        fallback={
+          <div className="grid h-full w-full place-items-center bg-surface-2">
+            <span className="text-sm text-muted-foreground">Chargement…</span>
+          </div>
+        }
+      >
+        <MapClient races={races} />
       </Suspense>
     </div>
   );

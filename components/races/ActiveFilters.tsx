@@ -3,7 +3,8 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback } from "react";
 import { X } from "lucide-react";
-import { FEDERATIONS, DISCIPLINES, CATEGORIES } from "@/lib/constants";
+import { FEDERATIONS, DISCIPLINES } from "@/lib/constants";
+import { categoryLabel } from "@/lib/categories";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -111,13 +112,13 @@ export function ActiveFilters() {
 
   // Categories
   searchParams.getAll("cat").forEach((val) => {
-    const cat = CATEGORIES.find((c) => c.value === val);
-    if (cat) {
-      chips.push({
-        label: cat.label,
-        onRemove: () => removeParam("cat", val),
-      });
-    }
+    // Labelled through the canonical vocabulary: a chip built from a separate
+    // copy of the list silently disappeared whenever the two drifted apart,
+    // leaving an active filter the rider could neither see nor remove.
+    chips.push({
+      label: categoryLabel(val),
+      onRemove: () => removeParam("cat", val),
+    });
   });
 
   if (chips.length === 0) return null;

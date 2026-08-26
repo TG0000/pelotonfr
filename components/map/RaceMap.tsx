@@ -1,262 +1,362 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useRouter } from "next/navigation";
-import type { Race, RaceFilters } from "@/types";
+import type { Race } from "@/types";
 import { FRANCE_CENTER, FRANCE_ZOOM } from "@/lib/constants";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
 
 interface RaceMapProps {
-  initialRaces: Race[];
-  filters: Partial<RaceFilters>;
+  races: Race[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  /** The races currently inside the viewport, so the list can follow the map. */
+  onVisibleChange: (ids: string[]) => void;
   userLocation?: { lat: number; lng: number } | null;
+  /** Re-frames the map on the races the filters returned. */
+  fitKey: string;
 }
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
-const FED_COLORS: Record<string, string> = {
-  ffc: "#3b82f6",
-  fsgt: "#22c55e",
-  ufolep: "#f97316",
-};
+/* Read from the stylesheet rather than repeated here: the map used its own
+   hard-coded hexes, so a federation was one colour in the list and another on
+   the map. */
+function federationPalette(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const s = getComputedStyle(document.documentElement);
+  return {
+    ffc: s.getPropertyValue("--ffc").trim() || "#3b82f6",
+    fsgt: s.getPropertyValue("--fsgt").trim() || "#22c55e",
+    ufolep: s.getPropertyValue("--ufolep").trim() || "#f97316",
+  };
+}
 
-function racesToGeoJSON(races: Race[]): GeoJSON.FeatureCollection {
+function racesToGeoJSON(
+  races: Race[],
+  palette: Record<string, string>
+): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
     features: races
       .filter((r) => r.lat != null && r.lng != null)
       .map((r) => ({
         type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [r.lng!, r.lat!],
-        },
+        geometry: { type: "Point", coordinates: [r.lng!, r.lat!] },
         properties: {
           id: r.id,
-          name: r.name,
-          city: r.city,
-          raceDate: r.raceDate,
-          discipline: r.discipline,
-          federationSlug: r.federationSlug,
-          color: FED_COLORS[r.federationSlug] ?? "#6366f1",
+          color: palette[r.federationSlug] ?? "var(--primary)",
         },
       })),
   };
 }
 
-export function RaceMap({ initialRaces, filters, userLocation }: RaceMapProps) {
-  const mapContainer = useRef<HTMLDivElement>(null);
+const SOURCE = "races";
+const LAYER_CLUSTER = "race-clusters";
+const LAYER_CLUSTER_COUNT = "race-cluster-count";
+const LAYER_POINT = "race-points";
+const LAYER_SELECTED = "race-selected";
+
+export function RaceMap({
+  races,
+  selectedId,
+  onSelect,
+  onVisibleChange,
+  userLocation,
+  fitKey,
+}: RaceMapProps) {
+  const container = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const router = useRouter();
-  const [mapReady, setMapReady] = useState(false);
+  const ready = useRef(false);
+  const userMarker = useRef<maplibregl.Marker | null>(null);
 
-  const initMap = useCallback(() => {
-    if (!mapContainer.current || map.current) return;
+  /* Callbacks live in refs so that a new function identity from the parent
+     never tears the map down. The previous version listed `userLocation` as a
+     dependency of its init callback, so any change destroyed and rebuilt the
+     map — and because the ready flag was already set, the rebuilt map never
+     got its layers back and rendered as an empty canvas. */
+  const onSelectRef = useRef(onSelect);
+  const onVisibleRef = useRef(onVisibleChange);
+  const racesRef = useRef(races);
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+    onVisibleRef.current = onVisibleChange;
+    racesRef.current = races;
+  });
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
+  /* Create the map exactly once. */
+  useEffect(() => {
+    if (!container.current || map.current) return;
+
+    const m = new maplibregl.Map({
+      container: container.current,
       style: MAP_STYLE,
-      center: userLocation
-        ? [userLocation.lng, userLocation.lat]
-        : FRANCE_CENTER,
-      zoom: userLocation ? 9 : FRANCE_ZOOM,
+      center: FRANCE_CENTER,
+      zoom: FRANCE_ZOOM,
+      attributionControl: { compact: true },
+    });
+    map.current = m;
+
+    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    m.addControl(
+      new maplibregl.GeolocateControl({ trackUserLocation: false }),
+      "top-right"
+    );
+    m.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
+
+    const palette = federationPalette();
+
+    m.on("load", () => {
+      m.addSource(SOURCE, {
+        type: "geojson",
+        data: racesToGeoJSON(racesRef.current, palette),
+        cluster: true,
+        clusterMaxZoom: 11,
+        clusterRadius: 48,
+        promoteId: "id",
+      });
+
+      m.addLayer({
+        id: LAYER_CLUSTER,
+        type: "circle",
+        source: SOURCE,
+        filter: ["has", "point_count"],
+        paint: {
+          "circle-color": palette.ffc,
+          "circle-radius": [
+            "interpolate", ["linear"], ["get", "point_count"],
+            2, 16, 25, 24, 100, 32,
+          ],
+          "circle-stroke-width": 3,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-opacity": 0.9,
+          "circle-opacity": 0.92,
+        },
+      });
+
+      m.addLayer({
+        id: LAYER_CLUSTER_COUNT,
+        type: "symbol",
+        source: SOURCE,
+        filter: ["has", "point_count"],
+        layout: {
+          "text-field": ["get", "point_count_abbreviated"],
+          // The style's own font stack: naming a font it does not ship makes
+          // the whole symbol layer fail to render.
+          "text-font": ["Noto Sans Bold"],
+          "text-size": 13,
+          "text-allow-overlap": true,
+        },
+        paint: { "text-color": "#ffffff" },
+      });
+
+      m.addLayer({
+        id: LAYER_POINT,
+        type: "circle",
+        source: SOURCE,
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": 8,
+          "circle-stroke-width": 2.5,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+
+      // A halo under the selected race, so map and list agree on what is active.
+      m.addLayer({
+        id: LAYER_SELECTED,
+        type: "circle",
+        source: SOURCE,
+        filter: ["==", ["get", "id"], "__none__"],
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": 16,
+          "circle-opacity": 0.25,
+          "circle-stroke-width": 2,
+          "circle-stroke-color": ["get", "color"],
+        },
+      });
+
+      ready.current = true;
+      /* Re-measure once the browser has settled the layout. MapLibre reads the
+         container size when it paints, and on first load that can happen while
+         the surrounding flex row is still resolving — leaving the map drawn
+         into a fraction of its canvas. */
+      m.resize();
+      requestAnimationFrame(() => m.resize());
+      publishVisible();
     });
 
-    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
-    map.current.addControl(new maplibregl.ScaleControl(), "bottom-left");
+    /* What the list should show.
+       Derived from the viewport bounds, not from rendered features: at country
+       zoom every point is inside a cluster, so no individual point is rendered
+       and a feature-based reading would report an empty map. */
+    function publishVisible() {
+      if (!ready.current) return;
+      const bounds = m.getBounds();
+      const ids = racesRef.current
+        .filter(
+          (r) =>
+            r.lat != null &&
+            r.lng != null &&
+            bounds.contains([r.lng, r.lat])
+        )
+        .map((r) => r.id);
+      onVisibleRef.current(ids);
+    }
 
-    map.current.on("load", () => {
-      setMapReady(true);
-    });
-  }, [userLocation]);
+    m.on("moveend", publishVisible);
 
-  useEffect(() => {
-    initMap();
-    return () => {
-      map.current?.remove();
-      map.current = null;
-    };
-  }, [initMap]);
-
-  // Update race data
-  useEffect(() => {
-    if (!mapReady || !map.current) return;
-
-    const geoJSON = racesToGeoJSON(initialRaces);
-
-    // Remove existing layers/sources
-    ["race-clusters", "cluster-count", "race-points"].forEach((layer) => {
-      if (map.current!.getLayer(layer)) map.current!.removeLayer(layer);
-    });
-    if (map.current.getSource("races")) map.current.removeSource("races");
-
-    map.current.addSource("races", {
-      type: "geojson",
-      data: geoJSON,
-      cluster: true,
-      clusterMaxZoom: 12,
-      clusterRadius: 50,
+    m.on("click", LAYER_POINT, (e) => {
+      const id = e.features?.[0]?.properties?.id as string | undefined;
+      if (id) onSelectRef.current(id);
     });
 
-    // Cluster circles
-    map.current.addLayer({
-      id: "race-clusters",
-      type: "circle",
-      source: "races",
-      filter: ["has", "point_count"],
-      paint: {
-        "circle-color": [
-          "step",
-          ["get", "point_count"],
-          "#3b82f6",
-          10, "#f97316",
-          50, "#ef4444",
-        ],
-        "circle-radius": [
-          "step",
-          ["get", "point_count"],
-          18,
-          10, 24,
-          50, 30,
-        ],
-        "circle-stroke-width": 2,
-        "circle-stroke-color": "#ffffff",
-        "circle-opacity": 0.9,
-      },
-    });
-
-    // Cluster count labels
-    map.current.addLayer({
-      id: "cluster-count",
-      type: "symbol",
-      source: "races",
-      filter: ["has", "point_count"],
-      layout: {
-        "text-field": ["get", "point_count_abbreviated"],
-        "text-font": ["Open Sans Bold"],
-        "text-size": 13,
-      },
-      paint: {
-        "text-color": "#ffffff",
-      },
-    });
-
-    // Individual race points
-    map.current.addLayer({
-      id: "race-points",
-      type: "circle",
-      source: "races",
-      filter: ["!", ["has", "point_count"]],
-      paint: {
-        "circle-color": ["get", "color"],
-        "circle-radius": 9,
-        "circle-stroke-width": 2,
-        "circle-stroke-color": "#ffffff",
-        "circle-opacity": 0.9,
-      },
-    });
-
-    // Click on cluster → zoom in
-    map.current.on("click", "race-clusters", async (e) => {
-      const features = map.current!.queryRenderedFeatures(e.point, { layers: ["race-clusters"] });
-      const clusterId = features[0]?.properties?.cluster_id as number;
+    m.on("click", LAYER_CLUSTER, async (e) => {
+      const feature = m.queryRenderedFeatures(e.point, {
+        layers: [LAYER_CLUSTER],
+      })[0];
+      const clusterId = feature?.properties?.cluster_id as number | undefined;
       if (clusterId == null) return;
       try {
-        const zoom = await (map.current!.getSource("races") as maplibregl.GeoJSONSource).getClusterExpansionZoom(clusterId);
-        const coords = (features[0].geometry as GeoJSON.Point).coordinates as [number, number];
-        map.current!.easeTo({ center: coords, zoom });
+        const source = m.getSource(SOURCE) as maplibregl.GeoJSONSource;
+        const zoom = await source.getClusterExpansionZoom(clusterId);
+        m.easeTo({
+          center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
+          zoom,
+          duration: 500,
+        });
       } catch {
-        // ignore
+        // A cluster that vanished mid-animation is not worth reporting.
       }
     });
 
-    // Click on individual race → show popup
-    map.current.on("click", "race-points", (e) => {
-      if (!e.features?.[0]) return;
-      const props = e.features[0].properties as {
-        id: string;
-        name: string;
-        city: string;
-        raceDate: string;
-        federationSlug: string;
-        discipline: string;
-      };
-      const coords = (e.features[0].geometry as GeoJSON.Point).coordinates as [number, number];
-      const dateFormatted = format(new Date(props.raceDate + "T12:00:00Z"), "d MMM yyyy", { locale: fr });
-
-      const popup = new maplibregl.Popup({ offset: 12, maxWidth: "240px" })
-        .setLngLat(coords)
-        .setHTML(
-          `<div style="font-family: system-ui; padding: 4px;">
-            <div style="font-weight:600; margin-bottom:4px; font-size:13px; line-height:1.3">${props.name}</div>
-            <div style="color:#6b7280; font-size:12px; margin-bottom:2px">📅 ${dateFormatted}</div>
-            <div style="color:#6b7280; font-size:12px; margin-bottom:8px">📍 ${props.city}</div>
-            <a href="/course/${props.id}" style="display:inline-block; background:#3b82f6; color:white; font-size:11px; padding:4px 10px; border-radius:4px; text-decoration:none; font-weight:500">
-              Voir les détails →
-            </a>
-          </div>`
-        )
-        .addTo(map.current!);
+    // Clicking empty map closes whatever was open.
+    m.on("click", (e) => {
+      const hits = m.queryRenderedFeatures(e.point, {
+        layers: [LAYER_POINT, LAYER_CLUSTER].filter((l) => m.getLayer(l)),
+      });
+      if (hits.length === 0) onSelectRef.current(null);
     });
 
-    // Cursor changes
-    map.current.on("mouseenter", "race-points", () => {
-      map.current!.getCanvas().style.cursor = "pointer";
-    });
-    map.current.on("mouseleave", "race-points", () => {
-      map.current!.getCanvas().style.cursor = "";
-    });
-    map.current.on("mouseenter", "race-clusters", () => {
-      map.current!.getCanvas().style.cursor = "pointer";
-    });
-    map.current.on("mouseleave", "race-clusters", () => {
-      map.current!.getCanvas().style.cursor = "";
-    });
-  }, [mapReady, initialRaces, router]);
+    for (const layer of [LAYER_POINT, LAYER_CLUSTER]) {
+      m.on("mouseenter", layer, () => {
+        m.getCanvas().style.cursor = "pointer";
+      });
+      m.on("mouseleave", layer, () => {
+        m.getCanvas().style.cursor = "";
+      });
+    }
 
-  // User location marker
+    /* The map is created inside a flex layout that may still be settling, and
+       MapLibre reads the container size once at construction. Without this it
+       initialises at zero height and paints nothing — the blank map. */
+    const observer = new ResizeObserver(() => m.resize());
+    observer.observe(container.current);
+
+    return () => {
+      observer.disconnect();
+      ready.current = false;
+      m.remove();
+      map.current = null;
+    };
+  }, []);
+
+  /* Feed new data in rather than rebuilding: setData keeps the viewport. */
   useEffect(() => {
-    if (!mapReady || !map.current || !userLocation) return;
+    const m = map.current;
+    if (!m || !ready.current) return;
+    const source = m.getSource(SOURCE) as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    source.setData(racesToGeoJSON(races, federationPalette()));
 
-    const el = document.createElement("div");
-    el.className = "user-location-marker";
-    el.style.cssText = `
-      width: 16px; height: 16px; border-radius: 50%;
-      background: #3b82f6; border: 3px solid white;
-      box-shadow: 0 0 0 3px rgba(59,130,246,0.4);
-    `;
+    const bounds = m.getBounds();
+    onVisibleRef.current(
+      races
+        .filter((r) => r.lat != null && r.lng != null && bounds.contains([r.lng, r.lat]))
+        .map((r) => r.id)
+    );
+  }, [races]);
 
-    new maplibregl.Marker({ element: el })
-      .setLngLat([userLocation.lng, userLocation.lat])
-      .addTo(map.current);
-  }, [mapReady, userLocation]);
+  /* Frame the result set, but only when the filters actually changed — doing it
+     on every data update would yank the map back while the rider is panning. */
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
 
-  const racesWithCoords = initialRaces.filter((r) => r.lat && r.lng).length;
+    const points = races.filter((r) => r.lat != null && r.lng != null);
+    if (points.length === 0) return;
 
-  return (
-    <div className="relative w-full h-full">
-      <div ref={mapContainer} style={{ position: "absolute", inset: 0 }} />
+    /* Frame where the racing actually is.
+       The calendar legitimately includes Réunion and Guadeloupe, and fitting
+       every point put the Atlantic on screen and metropolitan France in a
+       thumbnail. Trimming the tails frames the bulk of the field; the overseas
+       races are still on the map, a pan or a search away. */
+    const fit = () => {
+      const lats = points.map((r) => r.lat!).sort((a, b) => a - b);
+      const lngs = points.map((r) => r.lng!).sort((a, b) => a - b);
+      const at = (arr: number[], q: number) =>
+        arr[Math.min(arr.length - 1, Math.max(0, Math.round((arr.length - 1) * q)))];
 
-      {/* Legend */}
-      <div className="absolute bottom-8 right-4 bg-background/90 backdrop-blur-sm border rounded-lg p-3 text-xs flex flex-col gap-1.5 shadow-sm">
-        <div className="font-semibold text-muted-foreground mb-1">Fédérations</div>
-        {[
-          { color: "#3b82f6", label: "FFC" },
-          { color: "#22c55e", label: "FSGT" },
-          { color: "#f97316", label: "UFOLEP" },
-        ].map(({ color, label }) => (
-          <div key={label} className="flex items-center gap-2">
-            <div className="size-3 rounded-full" style={{ backgroundColor: color }} />
-            <span>{label}</span>
-          </div>
-        ))}
-        <div className="mt-1 text-muted-foreground">
-          {racesWithCoords} course{racesWithCoords !== 1 ? "s" : ""} affichée{racesWithCoords !== 1 ? "s" : ""}
-        </div>
-      </div>
-    </div>
-  );
+      const trim = points.length >= 20;
+      const bounds = new maplibregl.LngLatBounds(
+        [trim ? at(lngs, 0.03) : lngs[0], trim ? at(lats, 0.03) : lats[0]],
+        [
+          trim ? at(lngs, 0.97) : lngs[lngs.length - 1],
+          trim ? at(lats, 0.97) : lats[lats.length - 1],
+        ]
+      );
+      m.fitBounds(bounds, { padding: 60, maxZoom: 11, duration: 600 });
+    };
+
+    if (ready.current) fit();
+    else m.once("load", fit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey]);
+
+  /* Highlight the selection and bring it into view. */
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready.current || !m.getLayer(LAYER_SELECTED)) return;
+
+    m.setFilter(LAYER_SELECTED, ["==", ["get", "id"], selectedId ?? "__none__"]);
+
+    if (!selectedId) return;
+    const race = races.find((r) => r.id === selectedId);
+    if (race?.lat != null && race.lng != null) {
+      const bounds = m.getBounds();
+      if (!bounds.contains([race.lng, race.lat])) {
+        m.easeTo({ center: [race.lng, race.lat], duration: 500 });
+      }
+    }
+  }, [selectedId, races]);
+
+  /* The rider's own position, as a single reusable marker. */
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+
+    if (!userLocation) {
+      userMarker.current?.remove();
+      userMarker.current = null;
+      return;
+    }
+
+    if (!userMarker.current) {
+      const el = document.createElement("div");
+      el.style.cssText =
+        "width:14px;height:14px;border-radius:50%;background:var(--primary);" +
+        "border:3px solid white;box-shadow:0 0 0 4px color-mix(in oklch, var(--primary) 30%, transparent);";
+      userMarker.current = new maplibregl.Marker({ element: el });
+      userMarker.current.addTo(m);
+    }
+    userMarker.current.setLngLat([userLocation.lng, userLocation.lat]);
+  }, [userLocation]);
+
+  /* Sized directly rather than by `absolute inset-0`: maplibre-gl.css sets
+     `position: relative` on `.maplibregl-map`, and because it is bundled after
+     the utility layer it wins on source order — the container fell back to
+     auto height, measured zero, and the map painted nothing. */
+  return <div ref={container} className="h-full w-full" />;
 }

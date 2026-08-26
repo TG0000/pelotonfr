@@ -19,6 +19,7 @@
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "../scrapers/utils/db";
 import { toDateOnly } from "../../lib/date";
+import { displayRaceName } from "../../lib/race-name";
 
 loadEnv();
 const DATABASE_URL = requireEnv("DATABASE_URL");
@@ -103,7 +104,7 @@ function renderEmail(rule: Rule, matches: Match[]): { subject: string; html: str
           </div>
           <a href="${SITE_URL}/course/${m.race_id}"
              style="font-size:15px;font-weight:600;color:#1d4ed8;text-decoration:none;">
-            ${escapeHtml(m.name)}
+            ${escapeHtml(displayRaceName(m.name))}
           </a>
           <div style="font-size:13px;color:#4b5563;margin-top:2px;">
             ${escapeHtml(place)}${distance} ·
@@ -137,7 +138,7 @@ function renderEmail(rule: Rule, matches: Match[]): { subject: string; html: str
         .filter(Boolean)
         .join(" ");
       const distance = m.distance_km != null ? ` · ${Math.round(m.distance_km)} km` : "";
-      return `${formatDate(m.race_date)} — ${m.name}\n  ${place}${distance}\n  ${SITE_URL}/course/${m.race_id}`;
+      return `${formatDate(m.race_date)} — ${displayRaceName(m.name)}\n  ${place}${distance}\n  ${SITE_URL}/course/${m.race_id}`;
     }),
     "",
     `Gérer mes alertes : ${SITE_URL}/alertes`,

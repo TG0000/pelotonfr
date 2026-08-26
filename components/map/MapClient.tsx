@@ -1,94 +1,228 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { MapSidebar } from "./MapSidebar";
-import type { Race, GeocodingResult } from "@/types";
+import Link from "next/link";
+import { ChevronUp, Crosshair, MapPinned, X } from "lucide-react";
+import { MapControls } from "./MapControls";
+import {
+  CategorySummary,
+  DateBlock,
+  FEDERATION_COLOR,
+  FederationMark,
+  parseRaceDate,
+} from "@/components/races/RacePrimitives";
+import { cn } from "@/lib/utils";
+import { displayRaceName } from "@/lib/race-name";
+import type { Race } from "@/types";
 
 const RaceMap = dynamic(
   () => import("./RaceMap").then((m) => ({ default: m.RaceMap })),
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center w-full h-full bg-muted/30 animate-pulse">
-        <span className="text-sm text-muted-foreground">Chargement de la carte...</span>
+      <div className="absolute inset-0 grid place-items-center bg-surface-2">
+        <span className="text-sm text-muted-foreground">Chargement de la carte…</span>
       </div>
     ),
   }
 );
 
 interface MapClientProps {
-  initialRaces: Race[];
+  races: Race[];
 }
 
-export function MapClient({ initialRaces }: MapClientProps) {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
-    () => {
-      const lat = searchParams.get("lat");
-      const lng = searchParams.get("lng");
-      if (lat && lng) return { lat: Number(lat), lng: Number(lng) };
-      return null;
-    }
-  );
-  const [races, setRaces] = useState<Race[]>(initialRaces);
+/** One race in the panel beside the map. */
+function ResultRow({
+  race,
+  selected,
+  onSelect,
+}: {
+  race: Race;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
 
-  // Sync races when server re-renders with new filter params
+  // Selecting on the map should reveal the row, not leave it below the fold.
   useEffect(() => {
-    setRaces(initialRaces);
-  }, [initialRaces]);
-
-  const handleLocationChange = useCallback(
-    async (result: GeocodingResult | null) => {
-      setUserLocation(result ? { lat: result.lat, lng: result.lng } : null);
-
-      if (!result) {
-        setRaces(initialRaces);
-        return;
-      }
-
-      // Fetch races near new location
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("lat", String(result.lat));
-      params.set("lng", String(result.lng));
-
-      try {
-        const res = await fetch(`/api/races?${params.toString()}`);
-        const data = (await res.json()) as { races: Race[] };
-        setRaces(data.races);
-      } catch {
-        // Keep existing races on error
-      }
-    },
-    [initialRaces, searchParams]
-  );
-
-  const filters = {
-    fed: searchParams.getAll("fed") as Race["federationSlug"][],
-    disc: searchParams.getAll("disc") as Race["discipline"][],
-    cat: searchParams.getAll("cat"),
-    lat: userLocation?.lat ?? null,
-    lng: userLocation?.lng ?? null,
-    radius: Number(searchParams.get("radius") ?? 50),
-  };
+    if (selected) ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selected]);
 
   return (
-    <div className="relative w-full h-full">
-      <RaceMap
-        initialRaces={races}
-        filters={filters}
-        userLocation={userLocation}
-      />
+    <div
+      ref={ref}
+      onMouseEnter={onSelect}
+      className={cn(
+        "relative cursor-pointer border-l-[3px] px-3 py-2.5 transition-colors",
+        selected ? "bg-surface-2" : "border-l-transparent hover:bg-surface-2/60"
+      )}
+      style={selected ? { borderLeftColor: FEDERATION_COLOR[race.federationSlug] } : undefined}
+    >
+      <Link href={`/course/${race.id}`} className="flex items-center gap-3 group">
+        <DateBlock date={race.raceDate} dateEnd={race.raceDateEnd} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold group-hover:text-primary">
+            {displayRaceName(race.name)}
+          </div>
+          <div className="truncate text-xs text-muted-foreground">
+            {race.city}
+            {race.departmentCode && ` (${race.departmentCode})`}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2">
+            <FederationMark slug={race.federationSlug} withLabel />
+            <CategorySummary categories={race.categories} />
+          </div>
+        </div>
+      </Link>
+    </div>
+  );
+}
 
-      {/* Floating sidebar */}
-      <div className="absolute top-4 left-4 z-10">
-        <MapSidebar
-          raceCount={races.filter((r) => r.lat && r.lng).length}
-          onLocationChange={handleLocationChange}
+export function MapClient({ races }: MapClientProps) {
+  const searchParams = useSearchParams();
+
+  const userLocation = useMemo(() => {
+    const lat = searchParams.get("lat");
+    const lng = searchParams.get("lng");
+    return lat && lng ? { lat: Number(lat), lng: Number(lng) } : null;
+  }, [searchParams]);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [visibleIds, setVisibleIds] = useState<string[] | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  /* Re-frame the map when the filters change, not when React happens to hand
+     down a new array. */
+  const fitKey = searchParams.toString();
+
+  const byId = useMemo(() => new Map(races.map((r) => [r.id, r])), [races]);
+
+  /** The races inside the current viewport, earliest first. */
+  const visible = useMemo(() => {
+    const source =
+      visibleIds === null
+        ? races
+        : visibleIds.map((id) => byId.get(id)).filter((r): r is Race => Boolean(r));
+    return [...source].sort(
+      (a, b) => parseRaceDate(a.raceDate).getTime() - parseRaceDate(b.raceDate).getTime()
+    );
+  }, [visibleIds, races, byId]);
+
+  const handleVisibleChange = useCallback((ids: string[]) => {
+    setVisibleIds(ids);
+  }, []);
+
+  const panel = (
+    <>
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <div>
+          <div className="text-sm font-semibold">
+            {visible.length.toLocaleString("fr-FR")} course
+            {visible.length > 1 ? "s" : ""}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            dans la zone affichée
+          </div>
+        </div>
+        {selectedId && (
+          <button
+            onClick={() => setSelectedId(null)}
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2"
+            aria-label="Désélectionner"
+          >
+            <X className="size-4" />
+          </button>
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {visible.length === 0 ? (
+          <div className="px-6 py-16 text-center">
+            <Crosshair className="mx-auto mb-3 size-8 text-muted-foreground/40" />
+            <p className="text-sm font-medium">Aucune course dans cette zone</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Dézoomez ou élargissez vos filtres.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/60">
+            {visible.map((race) => (
+              <ResultRow
+                key={race.id}
+                race={race}
+                selected={race.id === selectedId}
+                onSelect={() => setSelectedId(race.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-full w-full">
+      {/* Desktop: a permanent list beside the map, the pattern anyone who has
+          searched for a place online already knows. */}
+      <aside className="hidden w-[22rem] shrink-0 flex-col border-r border-border bg-surface-1 lg:flex xl:w-[24rem]">
+        <div className="border-b border-border p-3">
+          <MapControls />
+        </div>
+        {panel}
+      </aside>
+
+      <div className="relative min-w-0 flex-1">
+        <RaceMap
+          races={races}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onVisibleChange={handleVisibleChange}
+          userLocation={userLocation}
+          fitKey={fitKey}
         />
+
+        {/* Mobile: controls float, results come up as a sheet. */}
+        <div className="absolute left-3 right-3 top-3 z-10 lg:hidden">
+          <div className="rounded-xl border border-border bg-surface-1/95 p-2 shadow-lg backdrop-blur">
+            <MapControls compact />
+          </div>
+        </div>
+
+        <button
+          onClick={() => setSheetOpen(true)}
+          className={cn(
+            "absolute bottom-4 left-1/2 z-10 -translate-x-1/2 lg:hidden",
+            "flex items-center gap-2 rounded-full bg-primary px-4 py-2.5",
+            "text-sm font-semibold text-primary-foreground shadow-lg",
+            sheetOpen && "hidden"
+          )}
+        >
+          <MapPinned className="size-4" />
+          {visible.length} course{visible.length > 1 ? "s" : ""}
+          <ChevronUp className="size-4" />
+        </button>
+
+        {sheetOpen && (
+          <div className="absolute inset-x-0 bottom-0 z-20 flex h-[65%] flex-col rounded-t-2xl border-t border-border bg-surface-1 shadow-2xl lg:hidden">
+            <button
+              onClick={() => setSheetOpen(false)}
+              className="mx-auto my-2 h-1.5 w-10 rounded-full bg-border"
+              aria-label="Fermer la liste"
+            />
+            {panel}
+          </div>
+        )}
+
+        <div className="pointer-events-none absolute bottom-8 right-3 z-10 hidden rounded-lg border border-border bg-surface-1/90 px-3 py-2 text-xs shadow-sm backdrop-blur sm:block">
+          <div className="mb-1.5 font-semibold text-muted-foreground">Fédération</div>
+          <div className="flex flex-col gap-1">
+            {(["ffc", "fsgt", "ufolep"] as const).map((slug) => (
+              <FederationMark key={slug} slug={slug} withLabel />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

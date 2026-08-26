@@ -1,107 +1,115 @@
 import Link from "next/link";
-import { MapPin, Calendar, ChevronRight, Trophy } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { RaceBadge, FederationDot } from "./RaceBadge";
+import { ChevronRight, MapPin } from "lucide-react";
 import type { Race } from "@/types";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+import { displayRaceName } from "@/lib/race-name";
+import {
+  CategorySummary,
+  DateBlock,
+  DisciplineTag,
+  DistanceTag,
+  FEDERATION_COLOR,
+  FederationMark,
+  parseRaceDate,
+} from "./RacePrimitives";
 
 interface RaceCardProps {
   race: Race;
   showDistance?: boolean;
+  /** The viewer's categories, so their own races stand out in a long list. */
+  myCategories?: string[];
+  /** Today, as YYYY-MM-DD. Passed in rather than read here so the card renders
+      from its props alone and the server and client agree on the date. */
+  today?: string;
 }
 
-export function RaceCard({ race, showDistance }: RaceCardProps) {
-  const date = new Date(race.raceDate + "T12:00:00Z");
-  const dateEnd = race.raceDateEnd
-    ? new Date(race.raceDateEnd + "T12:00:00Z")
-    : null;
-
-  const formattedDate = format(date, "EEE d MMM", { locale: fr });
-  const formattedDateEnd = dateEnd
-    ? format(dateEnd, "d MMM", { locale: fr })
-    : null;
-  const formattedYear = format(date, "yyyy");
-
-  const dateDisplay = formattedDateEnd
-    ? `${formattedDate} → ${formattedDateEnd}`
-    : formattedDate;
-
-  // Highlight races within the next 7 days
-  const isThisWeek =
-    date.getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000 && date.getTime() >= Date.now();
+/**
+ * One race, as a row.
+ *
+ * A three-column grid of boxed cards looked designed but scanned badly: the eye
+ * had to restart at every card. A single column with the date pinned to a fixed
+ * left gutter lets a rider run straight down the dates, which is how anyone
+ * actually reads a calendar.
+ */
+export function RaceCard({
+  race,
+  showDistance,
+  myCategories,
+  today,
+}: RaceCardProps) {
+  const date = parseRaceDate(race.raceDate);
+  const now = today ? parseRaceDate(today).getTime() : null;
+  const isSoon =
+    now != null &&
+    date.getTime() >= now &&
+    date.getTime() - now < 7 * 24 * 60 * 60 * 1000;
 
   return (
-    <Link href={`/course/${race.id}`} className="block group">
-      <Card className="h-full transition-all duration-200 hover:shadow-md hover:border-primary/40 group-hover:-translate-y-0.5">
-        <CardContent className="p-4 flex flex-col gap-3">
-          {/* Header: fed dot + discipline + level */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <FederationDot slug={race.federationSlug} />
-            <RaceBadge type="federation" value={race.federationSlug} />
-            <RaceBadge type="discipline" value={race.discipline} />
-            {race.level && <RaceBadge type="level" value={race.level} />}
-            {race.isCancelled && (
-              <span className="ml-auto text-xs font-medium text-destructive bg-destructive/10 px-2 py-0.5 rounded-full">
-                Annulée
-              </span>
+    <Link
+      href={`/course/${race.id}`}
+      className={cn(
+        "group relative flex items-center gap-4 px-3 py-3 sm:px-4",
+        "rounded-xl border border-transparent bg-surface-1",
+        "transition-colors hover:border-border hover:bg-surface-2",
+        race.isCancelled && "opacity-60"
+      )}
+    >
+      {/* The federation is a colour on the edge, not another badge competing
+          with the race name. */}
+      <span
+        aria-hidden
+        className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full opacity-70"
+        style={{ background: FEDERATION_COLOR[race.federationSlug] ?? "var(--primary)" }}
+      />
+
+      <DateBlock
+        date={race.raceDate}
+        dateEnd={race.raceDateEnd}
+        className={isSoon ? "text-primary" : undefined}
+      />
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <h3
+            className={cn(
+              "font-semibold leading-snug truncate transition-colors",
+              "group-hover:text-primary",
+              race.isCancelled && "line-through"
             )}
-          </div>
-
-          {/* Title */}
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-              {race.name}
-            </h3>
-            <ChevronRight className="size-4 text-muted-foreground shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-
-          {/* Date + location */}
-          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="size-3.5 shrink-0" />
-              <span className={`capitalize font-medium ${isThisWeek ? "text-primary" : ""}`}>
-                {dateDisplay}
-              </span>
-              {!formattedDateEnd && (
-                <span className="text-muted-foreground/70">{formattedYear}</span>
-              )}
-              {isThisWeek && (
-                <span className="ml-auto text-xs font-semibold text-primary bg-primary/10 rounded px-1.5 py-0.5">
-                  Cette semaine
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <MapPin className="size-3.5 shrink-0" />
-              <span className="truncate">
-                {race.city}
-                {race.departmentCode && ` (${race.departmentCode})`}
-              </span>
-              {showDistance && race.distanceFromUserKm != null && (
-                <span className="ml-auto font-medium text-primary shrink-0">
-                  {Math.round(race.distanceFromUserKm)} km
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Categories */}
-          {race.categories.length > 0 && (
-            <div className="flex items-center gap-1 flex-wrap">
-              <Trophy className="size-3 text-muted-foreground" />
-              {race.categories.slice(0, 4).map((cat) => (
-                <RaceBadge key={cat} type="category" value={cat} />
-              ))}
-              {race.categories.length > 4 && (
-                <span className="text-xs text-muted-foreground">
-                  +{race.categories.length - 4}
-                </span>
-              )}
-            </div>
+          >
+            {displayRaceName(race.name)}
+          </h3>
+          {race.isCancelled && (
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-destructive">
+              Annulée
+            </span>
           )}
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="mt-1 flex items-center gap-2 min-w-0">
+          <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground truncate">
+            {race.city}
+            {race.departmentCode && (
+              <span className="text-muted-foreground/70"> ({race.departmentCode})</span>
+            )}
+          </span>
+          <DisciplineTag discipline={race.discipline} raceType={race.raceType} />
+        </div>
+
+        <div className="mt-1 flex items-center gap-2 min-w-0">
+          <FederationMark slug={race.federationSlug} withLabel />
+          <CategorySummary
+            categories={race.categories}
+            highlight={myCategories}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 shrink-0">
+        {showDistance && <DistanceTag km={race.distanceFromUserKm} />}
+        <ChevronRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+      </div>
     </Link>
   );
 }

@@ -13,6 +13,7 @@ import { FEDERATIONS } from "@/lib/constants";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { displayRaceName } from "@/lib/race-name";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -24,8 +25,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const race = await getRaceById(id);
     if (!race) return { title: "Course introuvable" };
     return {
-      title: race.name,
-      description: `${race.name} — ${race.city} le ${format(new Date(race.raceDate + "T12:00:00Z"), "d MMMM yyyy", { locale: fr })}`,
+      title: displayRaceName(race.name),
+      description: `${displayRaceName(race.name)} — ${race.city} le ${format(new Date(race.raceDate + "T12:00:00Z"), "d MMMM yyyy", { locale: fr })}`,
     };
   } catch {
     return { title: "Course" };
@@ -84,7 +85,7 @@ export default async function RaceDetailPage({ params }: PageProps) {
           )}
         </div>
 
-        <h1 className="text-3xl font-bold mb-4">{race.name}</h1>
+        <h1 className="text-3xl font-bold mb-4">{displayRaceName(race.name)}</h1>
 
         <div className="flex flex-col sm:flex-row gap-4 text-muted-foreground">
           <div className="flex items-center gap-2">

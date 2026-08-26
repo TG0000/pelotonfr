@@ -108,6 +108,18 @@ function parseSlashDate(value: string): Date | null {
 }
 
 /**
+ * The longest span a single race can plausibly cover.
+ *
+ * The federation occasionally publishes a range that spans a whole season —
+ * "Du 01/05/2026 au 29/08/2026" for a one-afternoon women's U17 event — which
+ * is one competition code covering several dates rather than a stage race. Kept
+ * as a range, such an entry stays "in progress" for months: it heads every
+ * upcoming list, drags the calendar back to May, and paints itself across the
+ * grid. The real ones are short — the Tour de l'Avenir runs seven days.
+ */
+const MAX_RACE_SPAN_DAYS = 10;
+
+/**
  * Parses "Le 01/09/2026" and "Du 04/09/2026 au 06/09/2026".
  */
 function parseDateCell(raw: string): { start: Date; end?: Date } | null {
@@ -118,7 +130,10 @@ function parseDateCell(raw: string): { start: Date; end?: Date } | null {
     const start = parseSlashDate(range[1]);
     const end = parseSlashDate(range[2]);
     if (!start) return null;
-    return end && end > start ? { start, end } : { start };
+    if (!end || end <= start) return { start };
+    const spanDays = (end.getTime() - start.getTime()) / 86_400_000;
+    // Beyond the plausible span, trust the opening date and drop the rest.
+    return spanDays <= MAX_RACE_SPAN_DAYS ? { start, end } : { start };
   }
 
   const single = /^Le\s+(\d{2}\/\d{2}\/\d{4})$/i.exec(text);

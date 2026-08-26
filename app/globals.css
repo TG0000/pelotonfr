@@ -46,6 +46,12 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* Elevation: a page is background, a card sits on it, a control sits on that.
+     Three levels is enough to read depth without the interface looking fussy. */
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
   /* Brand colors */
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
@@ -84,6 +90,10 @@
   --chart-3: oklch(0.58 0.22 30);
   --chart-4: oklch(0.60 0.20 300);
   --chart-5: oklch(0.55 0.22 15);
+  --surface-1: oklch(1 0 0);
+  --surface-2: oklch(0.975 0.005 250);
+  --surface-3: oklch(0.955 0.008 250);
+
   --radius: 0.625rem;
   --sidebar: oklch(0.97 0.006 250);
   --sidebar-foreground: oklch(0.13 0.025 250);
@@ -96,9 +106,15 @@
 }
 
 .dark {
-  --background: oklch(0.13 0.025 262);
-  --foreground: oklch(0.93 0.010 262);
-  --card: oklch(0.17 0.022 262);
+  /* Slightly lifted from pure black so elevation reads, and cooled just enough
+     to keep the cycling blue from looking grey against it. */
+  --background: oklch(0.145 0.020 264);
+  --foreground: oklch(0.95 0.008 264);
+  --card: oklch(0.185 0.020 264);
+
+  --surface-1: oklch(0.185 0.020 264);
+  --surface-2: oklch(0.215 0.020 264);
+  --surface-3: oklch(0.255 0.020 264);
   --card-foreground: oklch(0.93 0.010 262);
   --popover: oklch(0.17 0.022 262);
   --popover-foreground: oklch(0.93 0.010 262);
@@ -140,8 +156,30 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Numerals line up in tables and result lists. */
+    font-variant-numeric: tabular-nums;
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
+  }
+  /* Headings carry the hierarchy, so they get the tighter tracking that makes
+     a bold weight read as deliberate rather than merely heavy. */
+  h1, h2, h3 {
+    @apply tracking-tight;
+  }
+}
+
+@layer utilities {
+  /* A horizontal scroller that does not drag the page sideways with it. */
+  .scroll-x {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scroll-x::-webkit-scrollbar { height: 6px; }
+  .scroll-x::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 999px;
   }
 }
