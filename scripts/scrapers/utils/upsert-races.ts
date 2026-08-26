@@ -210,8 +210,12 @@ export async function upsertRaces(
            department_code  = EXCLUDED.department_code,
            department_name  = EXCLUDED.department_name,
            postcode         = EXCLUDED.postcode,
-           venue_id         = EXCLUDED.venue_id,
-           event_id         = EXCLUDED.event_id,
+           -- A source that cannot resolve a venue must not erase one another
+           -- source already found: the results index gives only a department,
+           -- so re-importing a past race was dropping the venue the calendar
+           -- had established for it.
+           venue_id         = COALESCE(EXCLUDED.venue_id, races.venue_id),
+           event_id         = COALESCE(EXCLUDED.event_id, races.event_id),
            competition_code = EXCLUDED.competition_code,
            season           = EXCLUDED.season,
            discipline       = EXCLUDED.discipline,
