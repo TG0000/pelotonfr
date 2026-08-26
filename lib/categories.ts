@@ -48,6 +48,19 @@ export const CATEGORIES: CategoryDef[] = [
   { value: "access4", label: "Access 4", group: "ffc" },
 
   // The FFC's pre-2021 ladder, still used by its own ranking export.
+  /**
+   * The Pays de la Loire and Bretagne committees group their road races A1 to
+   * A4 rather than by the national ladder. 134 upcoming races are labelled
+   * this way and carried no category at all, so they answered no filter. They
+   * are kept as their own values: the committees' own documents would settle
+   * how each maps onto Open and Access, and inventing that mapping here would
+   * put riders on start lines they are not entitled to.
+   */
+  { value: "a1", label: "A1 (Grand Ouest)", group: "ffc" },
+  { value: "a2", label: "A2 (Grand Ouest)", group: "ffc" },
+  { value: "a3", label: "A3 (Grand Ouest)", group: "ffc" },
+  { value: "a4", label: "A4 (Grand Ouest)", group: "ffc" },
+
   { value: "cat1", label: "1ère catégorie", group: "ffc" },
   { value: "cat2", label: "2ème catégorie", group: "ffc" },
   { value: "cat3", label: "3ème catégorie", group: "ffc" },
@@ -69,6 +82,9 @@ export const CATEGORIES: CategoryDef[] = [
   { value: "ecole", label: "École de cyclisme", group: "youth" },
 
   { value: "feminines", label: "Féminines", group: "women" },
+  /** Age-banded fields, standard in cyclo-cross, VTT and BMX. */
+  { value: "masters", label: "Masters", group: "other" },
+  { value: "seniors", label: "Seniors", group: "other" },
   { value: "espoirs", label: "Espoirs (U23)", group: "other" },
   { value: "pro", label: "Professionnels", group: "other" },
 
@@ -167,7 +183,13 @@ export function normalizeCategories(
   federationSlug?: string
 ): string[] {
   if (!raw) return [];
-  const text = strip(raw);
+  /**
+   * "Access 3 & 4" and "Access 3 et 4" are ranges written with the separator a
+   * human would use. The digit lists below stop at the first character they do
+   * not recognise, so the 4 was silently dropped and an Access 4 rider never
+   * saw the race. Normalised before anything else looks at the text.
+   */
+  const text = strip(raw).replace(/(\d)\s*(?:&|\bet\b|\+)\s*(\d)/g, "$1-$2");
   const found = new Set<string>();
 
   // Youth ranges first: they consume the numbers that follow.
@@ -194,7 +216,12 @@ export function normalizeCategories(
   if (/\bpoussin/.test(text)) found.add("u9");
   if (/\bpre\s*licencie/.test(text)) found.add("u7");
   if (/\bbaby/.test(text)) found.add("baby");
-  if (/ecole de cyclisme|ecole cyclisme/.test(text)) found.add("ecole");
+  if (/ecole de cyclisme|ecole cyclisme|ecole de velo|ecole velo/.test(text)) {
+    found.add("ecole");
+  }
+  if (/\bmaster/.test(text)) found.add("masters");
+  // "Senios" is a recurring typo in the federation's own titles.
+  if (/\bseniors?\b|\bsenios\b/.test(text)) found.add("seniors");
 
   // "Toutes", "Toute catégorie": the race is open to the whole ladder.
   if (/\btoutes?\b|\btoute\s+categorie/.test(text)) {
@@ -207,7 +234,7 @@ export function normalizeCategories(
     }
   }
 
-  if (/\bdames?\b|\bfeminin/.test(text)) found.add("feminines");
+  if (/\bdames?\b|\bfemmes?\b|\bfeminin/.test(text)) found.add("feminines");
   // Non-racing licences first: their wording contains "Elite" and "Pro", and
   // reading a referee as an Élite rider would put them in a start-list analysis.
   if (/\barbitre|encadrement|direction|directeur|entraineur|assistant|commissaire|dirigeant/.test(text)) {
@@ -215,9 +242,11 @@ export function normalizeCategories(
   }
 
   if (/\bpass\b/.test(text)) found.add("pass");
-  if (/\bespoir|u23\b/.test(text)) found.add("espoirs");
+  // "U23" and "U 23" both occur; the youth matcher above consumes neither,
+  // since 23 is not a youth band.
+  if (/\bespoir|\bu\s*23\b/.test(text)) found.add("espoirs");
   if (/\bpro\b|professionnel/.test(text)) found.add("pro");
-  if (/\belite?\b/.test(text)) found.add("elite");
+  if (/\belites?\b|\belit\b/.test(text)) found.add("elite");
 
   // "Open 2,3" / "Open 1-2-3" / "Open123"
   const openMatch = /open\s*([\d\s,\-/+.]*)/.exec(text);
@@ -233,6 +262,16 @@ export function normalizeCategories(
     const digits = accessMatch[1].match(/[1-4]/g);
     if (digits?.length) digits.forEach((d) => found.add(`access${d}`));
     else ["1", "2", "3", "4"].forEach((d) => found.add(`access${d}`));
+  }
+
+  // "(A3-A4)", "(A1.A2)", "(A2-A3-A4)" — the Grand Ouest committees' own
+  // grouping, always parenthesised and always adjacent to the town name.
+  for (const m of text.matchAll(/\ba([1-4])(?:\s*[-–./]\s*a?([1-4]))?/g)) {
+    found.add(`a${m[1]}`);
+    if (m[2]) {
+      const [lo, hi] = [Number(m[1]), Number(m[2])].sort();
+      for (let i = lo; i <= hi; i++) found.add(`a${i}`);
+    }
   }
 
   // "1ère catégorie", "3eme cat"
