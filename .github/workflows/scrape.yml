@@ -70,6 +70,21 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run scrape:rankings -- --current
 
+      # Start lists appear one to three days before a race, so this has to run
+      # nightly to catch them while they still matter.
+      - name: Collect published start lists
+        if: ${{ !inputs.federation }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run scrape:engagements -- --pages=4
+
+      # Categories for FSGT and UFOLEP, which their own calendar never states.
+      - name: Enrich categories
+        if: ${{ !inputs.federation }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run scrape:categories
+
       - name: Open issue on failure
         if: failure()
         uses: actions/github-script@v7
