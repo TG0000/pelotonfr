@@ -119,6 +119,7 @@ export async function RaceCompetitors({ raceId }: { raceId: string }) {
   if (data.competitors.length === 0) return null;
 
   const confirmed = data.source === "startlist";
+  const regional = data.source === "regional";
   const toWatch = data.competitors.filter(
     (c) => c.kind === "in_form" || c.kind === "returning"
   ).length;
@@ -128,7 +129,11 @@ export async function RaceCompetitors({ raceId }: { raceId: string }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="font-semibold flex items-center gap-2">
           <Users className="size-4 text-primary" />
-          {confirmed ? "Engagés" : "Concurrents probables"}
+          {confirmed
+            ? "Engagés"
+            : regional
+              ? "Le peloton du secteur"
+              : "Concurrents probables"}
           <span className="text-sm font-normal text-muted-foreground">
             {data.competitors.length}
           </span>
@@ -144,7 +149,9 @@ export async function RaceCompetitors({ raceId }: { raceId: string }) {
         <Info className="size-3.5 shrink-0 mt-0.5" />
         {confirmed
           ? "Liste des engagés publiée par la presse régionale, enrichie du classement national."
-          : "Estimé à partir des coureurs ayant disputé les éditions précédentes — la liste des engagés n’est pas encore publiée."}
+          : regional
+            ? "Aucune édition précédente au fichier : voici les coureurs actifs sur ces catégories dans le département cette saison. Ils indiquent le niveau du peloton, pas une liste de partants."
+            : "Estimé à partir des coureurs ayant disputé les éditions précédentes — la liste des engagés n’est pas encore publiée."}
       </p>
 
       <div className="flex flex-col gap-1.5">

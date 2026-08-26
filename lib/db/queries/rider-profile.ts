@@ -507,7 +507,10 @@ function classify(row: {
 export async function getRaceCompetitors(
   raceId: string,
   limit = 40
-): Promise<{ competitors: RaceCompetitor[]; source: "startlist" | "history" }> {
+): Promise<{
+  competitors: RaceCompetitor[];
+  source: "startlist" | "history" | "regional";
+}> {
   const [entered] = await sql(
     `SELECT COUNT(*) AS n FROM engagements WHERE race_id = $1`,
     [raceId]
@@ -616,5 +619,87 @@ export async function getRaceCompetitors(
     };
   });
 
-  return { competitors, source: hasStartList ? "startlist" : "history" };
+  if (competitors.length > 0) {
+    return { competitors, source: hasStartList ? "startlist" : "history" };
+  }
+
+  // Nothing published and no edition on record — common for an event we are
+  // seeing for the first time. The regional field is a weaker signal but a real
+  // one: a local race draws the riders who race that level nearby, and showing
+  // them beats showing an empty section.
+  return {
+    competitors: await getRegionalField(raceId, limit),
+    source: "regional",
+  };
+}
+
+/**
+ * Riders active at the same level, in the same department, this season.
+ *
+ * Used only as a last resort, and labelled as such by the caller, because it
+ * says who *could* be there rather than who will.
+ */
+async function getRegionalField(
+  raceId: string,
+  limit: number
+): Promise<RaceCompetitor[]> {
+  const rows = await sql(
+    `WITH target AS (
+       SELECT department_code, categories, race_date FROM races WHERE id = $1
+     )
+     SELECT NULL::varchar AS bib, NULL::varchar AS match_method,
+            r.last_name, r.first_name, c.name AS club_name, r.category,
+            r.id AS rider_id, r.uci_id,
+            r.current_points, r.current_rank, r.best_points, r.best_season,
+            r.win_count, r.podium_count, r.result_count,
+            COUNT(*)                                        AS recent_races,
+            COUNT(*) FILTER (WHERE rr.rank BETWEEN 1 AND 3) AS recent_podiums
+       FROM race_results rr
+       JOIN races ra ON ra.id = rr.race_id
+       JOIN target t ON true
+       JOIN riders r ON r.id = rr.rider_id
+       LEFT JOIN clubs c ON c.id = r.current_club_id
+      WHERE ra.department_code IS NOT NULL
+        AND ra.department_code = t.department_code
+        AND ra.race_date >= t.race_date - INTERVAL '150 days'
+        AND ra.race_date < t.race_date
+        AND (t.categories = '{}' OR ra.categories = '{}'
+             OR ra.categories && t.categories)
+      GROUP BY r.id, r.last_name, r.first_name, c.name, r.category, r.uci_id,
+               r.current_points, r.current_rank, r.best_points, r.best_season,
+               r.win_count, r.podium_count, r.result_count
+      ORDER BY COUNT(*) DESC, COALESCE(r.current_points, 0) DESC
+      LIMIT $2`,
+    [raceId, limit]
+  );
+
+  return rows.map((row) => {
+    const r = row as Record<string, unknown>;
+    const recentRaces = Number(r.recent_races ?? 0);
+    const recentPodiums = Number(r.recent_podiums ?? 0);
+    const currentPoints = num(r.current_points);
+    const bestPoints = num(r.best_points);
+
+    return {
+      riderId: (r.rider_id as string) ?? null,
+      uciId: (r.uci_id as string) ?? null,
+      lastName: (r.last_name as string) ?? "",
+      firstName: (r.first_name as string) ?? null,
+      clubName: (r.club_name as string) ?? null,
+      category: (r.category as string) ?? null,
+      bib: null,
+      currentPoints,
+      currentRank: num(r.current_rank),
+      bestPoints,
+      bestSeason: num(r.best_season),
+      winCount: r.win_count != null ? Number(r.win_count) : null,
+      podiumCount: r.podium_count != null ? Number(r.podium_count) : null,
+      resultCount: r.result_count != null ? Number(r.result_count) : null,
+      recentRaces,
+      recentPodiums,
+      kind: classify({ recentRaces, recentPodiums, currentPoints, bestPoints }),
+      confirmed: false,
+      matchMethod: null,
+    };
+  });
 }
