@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSiteUrl } from "@/lib/site-url";
 import { auth } from "@clerk/nextjs/server";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { saveConnection, saveFitness } from "@/lib/db/queries/strava";
@@ -16,7 +17,7 @@ import {
  * attacker's Strava account to whoever clicked it.
  */
 export async function GET(request: NextRequest) {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const base = await getSiteUrl();
   const params = request.nextUrl.searchParams;
 
   const fail = (reason: string) =>

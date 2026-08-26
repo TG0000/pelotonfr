@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
+import { getSiteUrl } from "@/lib/site-url";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { getConnection, disconnect } from "@/lib/db/queries/strava";
 import { authorizeUrl, stravaConfigured } from "@/lib/strava/client";
 
-function redirectUri(): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  return `${base}/api/strava/callback`;
+async function redirectUri(): Promise<string> {
+  return `${await getSiteUrl()}/api/strava/callback`;
 }
 
 export async function GET() {
@@ -26,7 +26,7 @@ export async function GET() {
     connection,
     // The Clerk id is carried through OAuth as `state` and checked on return,
     // which is what stops another site initiating the connection.
-    authorizeUrl: connection ? null : authorizeUrl(redirectUri(), userId),
+    authorizeUrl: connection ? null : authorizeUrl(await redirectUri(), userId),
   });
 }
 
