@@ -25,6 +25,7 @@ import * as cheerio from "cheerio";
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { fetchHtml, politeDelay } from "./utils/http";
 import { createSql } from "./utils/db";
+import { startRun } from "../lib/track-run";
 
 loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
@@ -642,9 +643,32 @@ async function main() {
     `\n${linkedRaces} start lists attached to a known race, ${unmatchedRaces} with no match.\n` +
       `${stored} entrants stored, ${matched} linked to a rider (${pct}%).`
   );
+
+  // Counted in start lists rather than entrants: a run that finds 263 lists
+  // and can place 30 of them is the failure worth seeing.
+  return {
+    seen: linkedRaces + unmatchedRaces,
+    written: linkedRaces,
+    metadata: { entrants: stored, ridersLinked: matched, unmatchedRaces },
+  };
 }
 
-main().catch((err) => {
+/**
+ * Wrapped so the run is recorded whichever way it ends — including the way
+ * that used to be invisible, where it simply never started.
+ */
+async function tracked() {
+  const run = await startRun(sql, "engagements");
+  try {
+    const totals = await main();
+    await run.finish(totals);
+  } catch (err) {
+    await run.fail(err);
+    throw err;
+  }
+}
+
+tracked().catch((err) => {
   console.error("Fatal:", err);
   process.exit(1);
 });

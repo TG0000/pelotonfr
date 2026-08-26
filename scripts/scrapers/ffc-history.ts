@@ -26,6 +26,7 @@ import { departmentCodeFromName } from "./utils/departments";
 import { upsertRaces } from "./utils/upsert-races";
 import type { ScrapedRace } from "../../lib/scraper-types";
 import type { Discipline, RaceLevel } from "../../lib/constants";
+import { startRun } from "../lib/track-run";
 
 loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
@@ -297,7 +298,22 @@ async function main() {
   );
 }
 
-main().catch((err) => {
+/**
+ * Wrapped so the run is recorded whichever way it ends — including the way
+ * that used to be invisible, where it simply never started.
+ */
+async function tracked() {
+  const run = await startRun(sql, "ffc-history");
+  try {
+    await main();
+    await run.finish(undefined);
+  } catch (err) {
+    await run.fail(err);
+    throw err;
+  }
+}
+
+tracked().catch((err) => {
   console.error("Fatal:", err);
   process.exit(1);
 });

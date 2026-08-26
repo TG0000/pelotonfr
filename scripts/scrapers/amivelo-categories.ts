@@ -28,6 +28,7 @@ import {
   extractQualifier,
   mentionsCancellation,
 } from "../../lib/categories";
+import { startRun } from "../lib/track-run";
 
 loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
@@ -328,8 +329,23 @@ async function main() {
 
 // Only run when invoked directly: this module also exports its parser, and
 // importing it must not kick off a full country-wide pass.
+/**
+ * Wrapped so the run is recorded whichever way it ends — including the way
+ * that used to be invisible, where it simply never started.
+ */
+async function tracked() {
+  const run = await startRun(sql, "categories");
+  try {
+    await main();
+    await run.finish(undefined);
+  } catch (err) {
+    await run.fail(err);
+    throw err;
+  }
+}
+
 if (process.argv[1]?.endsWith("amivelo-categories.ts")) {
-  main().catch((err) => {
+  tracked().catch((err) => {
     console.error("Fatal:", err);
     process.exit(1);
   });

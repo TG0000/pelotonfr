@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { Logo } from "@/components/brand/Logo";
+import { DataFreshness } from "./DataFreshness";
 
 export function Footer() {
   return (
@@ -12,7 +14,10 @@ export function Footer() {
             <span>— Toutes les courses cyclistes en France</span>
           </div>
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span>Données: FFC · FSGT · UFOLEP</span>
+            <span>Données : FFC · FSGT · UFOLEP</span>
+            <Suspense fallback={null}>
+              <DataFreshness />
+            </Suspense>
             <Link href="/mentions-legales" className="hover:text-foreground transition-colors">
               Mentions légales
             </Link>

@@ -95,6 +95,12 @@ jobs:
           NEXT_PUBLIC_SITE_URL: https://pelotonfr.vercel.app
         run: npm run alerts:send
 
+      # The collectors now record every run, so a step that is skipped or
+      # never reached shows up as an ageing source rather than as silence.
+      # The watchdog that reads those rows runs on Vercel Cron, deliberately
+      # outside this workflow: an alarm inside the thing it watches switches
+      # off with it, which is how this job went 73 days unnoticed.
+
       - name: Open issue on failure
         if: failure()
         uses: actions/github-script@v7

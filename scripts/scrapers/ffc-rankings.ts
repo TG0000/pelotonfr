@@ -25,6 +25,7 @@ import { loadEnv, requireEnv } from "../lib/load-env";
 import { politeDelay } from "./utils/http";
 import { createSql } from "./utils/db";
 import { normalizeCategories } from "../../lib/categories";
+import { startRun } from "../lib/track-run";
 
 loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
@@ -403,9 +404,26 @@ async function main() {
       `${summary.rankings} rows for ${summary.ranked_riders} distinct riders; ` +
       `${summary.with_current} of ${summary.riders} riders have a current standing.`
   );
+
+  return { seen: total, written: total };
 }
 
-main().catch((err) => {
+/**
+ * Wrapped so the run is recorded whichever way it ends — including the way
+ * that used to be invisible, where it simply never started.
+ */
+async function tracked() {
+  const run = await startRun(sql, "ffc-rankings");
+  try {
+    const totals = await main();
+    await run.finish(totals);
+  } catch (err) {
+    await run.fail(err);
+    throw err;
+  }
+}
+
+tracked().catch((err) => {
   console.error("Fatal:", err);
   process.exit(1);
 });

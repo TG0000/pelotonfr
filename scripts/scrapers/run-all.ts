@@ -53,10 +53,10 @@ function buildScrapers(backfillDays: number) {
   ];
 }
 
-async function createLog(federationId: number): Promise<number> {
+async function createLog(slug: string): Promise<number> {
   const rows = await sql(
-    `INSERT INTO scraper_logs (federation_id) VALUES ($1) RETURNING id`,
-    [federationId]
+    `INSERT INTO collector_runs (collector) VALUES ($1) RETURNING id`,
+    [`calendar-${slug}`]
   );
   return (rows[0] as { id: number }).id;
 }
@@ -76,18 +76,16 @@ async function finishLog(
         : "failed";
 
   await sql(
-    `UPDATE scraper_logs SET
-       finished_at = now(), status = $2, races_found = $3,
-       races_inserted = $4, races_updated = $5, races_skipped = $6,
-       error_message = $7, metadata = $8
+    `UPDATE collector_runs SET
+       finished_at = now(), status = $2,
+       items_seen = $3, items_written = $4,
+       error_message = $5, metadata = $6
      WHERE id = $1`,
     [
       id,
       status,
       result.races.length,
-      inserted,
-      updated,
-      skipped,
+      inserted + updated,
       result.errors.length
         ? result.errors
             .slice(0, 20)
@@ -97,6 +95,9 @@ async function finishLog(
       JSON.stringify({
         durationMs: result.durationMs,
         errorCount: result.errors.length,
+        inserted,
+        updated,
+        skipped,
         withCoordinates: result.races.filter((r) => r.lat != null).length,
       }),
     ]
@@ -156,9 +157,9 @@ async function main() {
     process.exit(1);
   }
 
-  for (const { name, fn, fedId } of selected) {
+  for (const { name, slug, fn, fedId } of selected) {
     console.log(`--- ${name} ---`);
-    const logId = await createLog(fedId);
+    const logId = await createLog(slug);
 
     try {
       const result = await fn();
