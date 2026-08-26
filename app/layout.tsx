@@ -1,17 +1,28 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/**
+ * Two voices, two jobs.
+ *
+ * Archivo has the sturdy, faintly condensed build of French road signage, which
+ * is the register the calendar side of the product speaks in. Plex Mono carries
+ * everything measured — dossards, times, placings, points — so a number always
+ * looks like a number and columns of them line up.
+ */
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -40,7 +51,7 @@ export default function RootLayout({
       <html
         lang="fr"
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+        className={`${archivo.variable} ${plexMono.variable} h-full antialiased`}
       >
         <head>
           {/* Anti-flash: apply dark class before hydration */}

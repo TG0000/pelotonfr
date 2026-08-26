@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
-import { Bike, CalendarDays, Menu, Bell, UserRound } from "lucide-react";
+import { CalendarDays, Menu, Bell, UserRound } from "lucide-react";
+import { Logo, Wordmark } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import {
@@ -57,11 +58,9 @@ export function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-sm">
       <div className="mx-auto max-w-7xl px-4 h-14 flex items-center gap-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 font-bold text-lg shrink-0">
-          <div className="flex items-center justify-center size-8 rounded-full bg-primary text-primary-foreground">
-            <Bike className="size-4" />
-          </div>
-          <span className="hidden sm:inline">PelotonFR</span>
+        <Link href="/" className="shrink-0" aria-label="PelotonFR — accueil">
+          <Logo className="size-8 sm:hidden" />
+          <Wordmark className="hidden sm:inline-flex" />
         </Link>
 
         {/* Desktop nav */}
@@ -107,8 +106,7 @@ export function Navbar() {
             <SheetContent side="right" className="w-64">
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
-                  <Bike className="size-5 text-primary" />
-                  PelotonFR
+                  <Wordmark />
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-1 mt-6">

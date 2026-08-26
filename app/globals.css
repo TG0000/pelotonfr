@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-heading: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -58,96 +58,110 @@
   --color-ffc: var(--ffc);
   --color-fsgt: var(--fsgt);
   --color-ufolep: var(--ufolep);
+  --color-highlight: var(--highlight);
 }
 
 :root {
-  /* PelotonFR brand: cycling blue as primary */
-  --background: oklch(0.99 0.004 250);
-  --foreground: oklch(0.13 0.025 250);
+  /* ---------------------------------------------------------------------
+     The route card — the register the whole free product speaks in.
+     Paper rather than screen-white, the navy of the mark for ink, and the
+     yellow of course arrows for anything that wants to be noticed. Every
+     value is derived from the five colours of the logo, so nothing on
+     screen is a colour the brand does not already own.
+     --------------------------------------------------------------------- */
+  --background: oklch(0.973 0.005 95);
+  --foreground: oklch(0.217 0.017 264);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0.025 250);
+  --card-foreground: oklch(0.217 0.017 264);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0.025 250);
-  --primary: oklch(0.50 0.20 250);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.008 250);
-  --secondary-foreground: oklch(0.25 0.025 250);
-  --muted: oklch(0.96 0.006 250);
-  --muted-foreground: oklch(0.52 0.018 250);
-  --accent: oklch(0.93 0.05 55);
-  --accent-foreground: oklch(0.30 0.10 55);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.010 250);
-  --input: oklch(0.91 0.010 250);
-  --ring: oklch(0.50 0.20 250);
-  --brand: oklch(0.50 0.20 250);
-  --brand-foreground: oklch(0.99 0 0);
-  --ffc: oklch(0.50 0.20 250);
-  --fsgt: oklch(0.52 0.18 145);
-  --ufolep: oklch(0.58 0.22 30);
-  --chart-1: oklch(0.50 0.20 250);
-  --chart-2: oklch(0.52 0.18 145);
-  --chart-3: oklch(0.58 0.22 30);
-  --chart-4: oklch(0.60 0.20 300);
-  --chart-5: oklch(0.55 0.22 15);
+  --popover-foreground: oklch(0.217 0.017 264);
+  --primary: oklch(0.373 0.087 259);
+  --primary-foreground: oklch(0.985 0.003 95);
+  --secondary: oklch(0.948 0.008 99);
+  --secondary-foreground: oklch(0.270 0.051 261);
+  --muted: oklch(0.948 0.008 99);
+  --muted-foreground: oklch(0.505 0.020 262);
+  /* Course-arrow yellow, darkened until it holds its own on paper. */
+  --accent: oklch(0.641 0.127 76);
+  --accent-foreground: oklch(0.985 0.003 95);
+  --highlight: oklch(0.834 0.141 85);
+  --destructive: oklch(0.505 0.180 27);
+  --border: oklch(0.895 0.008 99);
+  --input: oklch(0.895 0.008 99);
+  --ring: oklch(0.373 0.087 259);
+  --brand: oklch(0.270 0.051 261);
+  --brand-foreground: oklch(0.985 0.003 95);
+  --ffc: oklch(0.515 0.164 261);
+  --fsgt: oklch(0.567 0.127 152);
+  --ufolep: oklch(0.608 0.152 48);
+  --chart-1: oklch(0.373 0.087 259);
+  --chart-2: oklch(0.567 0.127 152);
+  --chart-3: oklch(0.608 0.152 48);
+  --chart-4: oklch(0.641 0.127 76);
+  --chart-5: oklch(0.696 0.051 262);
   --surface-1: oklch(1 0 0);
-  --surface-2: oklch(0.975 0.005 250);
-  --surface-3: oklch(0.955 0.008 250);
+  --surface-2: oklch(0.955 0.007 97);
+  --surface-3: oklch(0.928 0.009 99);
 
   --radius: 0.625rem;
-  --sidebar: oklch(0.97 0.006 250);
-  --sidebar-foreground: oklch(0.13 0.025 250);
-  --sidebar-primary: oklch(0.50 0.20 250);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.93 0.012 250);
-  --sidebar-accent-foreground: oklch(0.25 0.025 250);
-  --sidebar-border: oklch(0.91 0.010 250);
-  --sidebar-ring: oklch(0.50 0.20 250);
+  --sidebar: oklch(0.955 0.007 97);
+  --sidebar-foreground: oklch(0.217 0.017 264);
+  --sidebar-primary: oklch(0.373 0.087 259);
+  --sidebar-primary-foreground: oklch(0.985 0.003 95);
+  --sidebar-accent: oklch(0.928 0.009 99);
+  --sidebar-accent-foreground: oklch(0.270 0.051 261);
+  --sidebar-border: oklch(0.895 0.008 99);
+  --sidebar-ring: oklch(0.373 0.087 259);
 }
 
 .dark {
-  /* Slightly lifted from pure black so elevation reads, and cooled just enough
-     to keep the cycling blue from looking grey against it. */
-  --background: oklch(0.145 0.020 264);
-  --foreground: oklch(0.95 0.008 264);
-  --card: oklch(0.185 0.020 264);
-
-  --surface-1: oklch(0.185 0.020 264);
-  --surface-2: oklch(0.215 0.020 264);
-  --surface-3: oklch(0.255 0.020 264);
-  --card-foreground: oklch(0.93 0.010 262);
-  --popover: oklch(0.17 0.022 262);
-  --popover-foreground: oklch(0.93 0.010 262);
-  --primary: oklch(0.62 0.20 250);
-  --primary-foreground: oklch(0.12 0.025 250);
-  --secondary: oklch(0.22 0.022 262);
-  --secondary-foreground: oklch(0.93 0.010 262);
-  --muted: oklch(0.22 0.020 262);
-  --muted-foreground: oklch(0.60 0.018 262);
-  --accent: oklch(0.28 0.06 55);
-  --accent-foreground: oklch(0.90 0.08 55);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.62 0.20 250);
-  --brand: oklch(0.62 0.20 250);
-  --brand-foreground: oklch(0.12 0.025 250);
-  --ffc: oklch(0.62 0.20 250);
-  --fsgt: oklch(0.60 0.18 145);
-  --ufolep: oklch(0.68 0.22 30);
-  --chart-1: oklch(0.62 0.20 250);
-  --chart-2: oklch(0.60 0.18 145);
-  --chart-3: oklch(0.68 0.22 30);
-  --chart-4: oklch(0.65 0.20 300);
-  --chart-5: oklch(0.62 0.22 15);
-  --sidebar: oklch(0.17 0.022 262);
-  --sidebar-foreground: oklch(0.93 0.010 262);
-  --sidebar-primary: oklch(0.62 0.20 250);
-  --sidebar-primary-foreground: oklch(0.12 0.025 250);
-  --sidebar-accent: oklch(0.22 0.022 262);
-  --sidebar-accent-foreground: oklch(0.93 0.010 262);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.62 0.20 250);
+  /* ---------------------------------------------------------------------
+     The performance board — the register the analysis side speaks in, and
+     the dark theme for everything else. Ground is the navy of the mark
+     rather than a neutral grey, so the brand still holds the page when the
+     lights go out.
+     --------------------------------------------------------------------- */
+  --background: oklch(0.175 0.024 262);
+  --foreground: oklch(0.925 0.010 262);
+  --card: oklch(0.215 0.026 262);
+  --card-foreground: oklch(0.925 0.010 262);
+  --popover: oklch(0.215 0.026 262);
+  --popover-foreground: oklch(0.925 0.010 262);
+  --primary: oklch(0.695 0.091 262);
+  --primary-foreground: oklch(0.175 0.024 262);
+  --secondary: oklch(0.255 0.026 262);
+  --secondary-foreground: oklch(0.925 0.010 262);
+  --muted: oklch(0.255 0.026 262);
+  --muted-foreground: oklch(0.660 0.028 262);
+  /* On the dark ground the arrow yellow needs no darkening. */
+  --accent: oklch(0.834 0.141 85);
+  --accent-foreground: oklch(0.175 0.024 262);
+  --highlight: oklch(0.834 0.141 85);
+  --destructive: oklch(0.680 0.180 25);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.695 0.091 262);
+  --brand: oklch(0.861 0.031 261);
+  --brand-foreground: oklch(0.175 0.024 262);
+  --ffc: oklch(0.660 0.140 261);
+  --fsgt: oklch(0.700 0.120 152);
+  --ufolep: oklch(0.735 0.135 48);
+  --chart-1: oklch(0.695 0.091 262);
+  --chart-2: oklch(0.700 0.120 152);
+  --chart-3: oklch(0.735 0.135 48);
+  --chart-4: oklch(0.834 0.141 85);
+  --chart-5: oklch(0.861 0.031 261);
+  --surface-1: oklch(0.215 0.026 262);
+  --surface-2: oklch(0.248 0.026 262);
+  --surface-3: oklch(0.288 0.026 262);
+  --sidebar: oklch(0.198 0.025 262);
+  --sidebar-foreground: oklch(0.925 0.010 262);
+  --sidebar-primary: oklch(0.695 0.091 262);
+  --sidebar-primary-foreground: oklch(0.175 0.024 262);
+  --sidebar-accent: oklch(0.255 0.026 262);
+  --sidebar-accent-foreground: oklch(0.925 0.010 262);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.695 0.091 262);
 }
 
 @layer base {

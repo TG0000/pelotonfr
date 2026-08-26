@@ -63,12 +63,16 @@ export function DateBlock({
       <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {WEEKDAYS[d.getUTCDay()]}
       </div>
-      <div className="text-xl font-bold mt-1 tabular-nums">{d.getUTCDate()}</div>
+      {/* Measured things wear the mono face: a day number, a placing and a
+          time should all look like the same kind of fact. */}
+      <div className="mt-1 font-mono text-xl font-medium tabular-nums">
+        {d.getUTCDate()}
+      </div>
       <div className="text-[11px] text-muted-foreground mt-0.5">
         {MONTHS_SHORT[d.getUTCMonth()]}
       </div>
       {multiDay && (
-        <div className="text-[10px] text-muted-foreground mt-1 tabular-nums">
+        <div className="mt-1 font-mono text-[10px] tabular-nums text-muted-foreground">
           →&nbsp;{end!.getUTCDate()}&nbsp;{MONTHS_SHORT[end!.getUTCMonth()]}
         </div>
       )}
@@ -205,7 +209,7 @@ export function DisciplineTag({
 export function DistanceTag({ km }: { km?: number | null }) {
   if (km == null) return null;
   return (
-    <span className="text-xs font-medium text-primary tabular-nums shrink-0">
+    <span className="shrink-0 font-mono text-xs font-medium tabular-nums text-primary">
       {Math.round(km)} km
     </span>
   );

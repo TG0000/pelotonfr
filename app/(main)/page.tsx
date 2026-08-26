@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Map, List, Calendar, TrendingUp, Bike } from "lucide-react";
+import { ArrowRight, Map, List, Calendar, TrendingUp } from "lucide-react";
+import { Logo } from "@/components/brand/Logo";
 import { buttonVariants } from "@/lib/button-variants";
 import { RaceCard } from "@/components/races/RaceCard";
 import { HomeSearch } from "@/components/races/HomeSearch";
@@ -35,7 +36,7 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 py-16 sm:py-20">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-4 text-primary text-sm font-medium">
-              <Bike className="size-4" />
+              <Logo className="size-5" tile={false} />
               <span>Cyclisme amateur en France</span>
             </div>
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
@@ -182,7 +183,7 @@ export default async function HomePage() {
 
         {upcomingRaces.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
-            <Bike className="size-12 mx-auto mb-4 opacity-20" />
+            <Logo className="size-12 mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium mb-2">Base de données non configurée</p>
             <p className="text-sm">
               Configurez DATABASE_URL et lancez le scraper pour commencer.
