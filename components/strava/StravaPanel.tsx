@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Activity, RefreshCw, Unlink, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/lib/button-variants";
@@ -19,27 +19,57 @@ interface State {
   authorizeUrl: string | null;
 }
 
-export function StravaPanel({ initialStatus }: { initialStatus?: string }) {
-  const [state, setState] = useState<State | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+export type StravaPanelState = State;
 
+/**
+ * The banner Strava's callback asked us to show.
+ *
+ * `initialStatus` comes from the redirect's query string, so it is fixed for
+ * the life of the mount — reading it once at initialisation says that, where
+ * an effect syncing it into state suggested it could change and cost a second
+ * render pass on every visit.
+ */
+function statusMessage(status?: string): string | null {
+  switch (status) {
+    case undefined:
+    case "":
+      return null;
+    case "ok":
+      return "Compte Strava connecté.";
+    case "refus":
+      return "Connexion refusée sur Strava.";
+    case "session":
+      return "La session ne correspond pas — reconnectez-vous puis réessayez.";
+    default:
+      return "La connexion a échoué.";
+  }
+}
+
+/**
+ * The connection state is handed in already resolved.
+ *
+ * Fetching it from the browser on mount meant the panel rendered nothing at
+ * all until the round-trip came back — on a page whose whole content is this
+ * panel. It refetches only after it has changed something itself.
+ */
+export function StravaPanel({
+  initialState,
+  initialStatus,
+}: {
+  initialState: State;
+  initialStatus?: string;
+}) {
+  const [state, setState] = useState<State>(initialState);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(() =>
+    statusMessage(initialStatus)
+  );
+
+  /** Re-reads the connection after this panel has changed it. */
   const load = useCallback(async () => {
     const res = await fetch("/api/strava");
     if (res.ok) setState((await res.json()) as State);
   }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    if (initialStatus === "ok") setMessage("Compte Strava connecté.");
-    else if (initialStatus === "refus") setMessage("Connexion refusée sur Strava.");
-    else if (initialStatus === "session")
-      setMessage("La session ne correspond pas — reconnectez-vous puis réessayez.");
-    else if (initialStatus) setMessage("La connexion a échoué.");
-  }, [initialStatus]);
 
   async function sync() {
     setBusy(true);
@@ -70,8 +100,6 @@ export function StravaPanel({ initialStatus }: { initialStatus?: string }) {
     await load();
     setBusy(false);
   }
-
-  if (!state) return null;
 
   if (!state.configured) {
     return (

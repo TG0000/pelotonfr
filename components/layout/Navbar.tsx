@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
-import { Bike, Map, List, CalendarDays, Menu, Bell, UserRound } from "lucide-react";
+import { Bike, CalendarDays, Menu, Bell, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import {
@@ -16,9 +16,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const navLinks = [
-  { href: "/courses", label: "Courses", icon: List },
-  { href: "/carte", label: "Carte", icon: Map },
-  { href: "/calendrier", label: "Calendrier", icon: CalendarDays },
+  // One entry: the calendar carries the filters, and the list and the map are
+  // two of its views rather than two more places to set the same filters again.
+  { href: "/calendrier", label: "Courses", icon: CalendarDays },
   { href: "/alertes", label: "Alertes", icon: Bell },
   { href: "/profil", label: "Profil", icon: UserRound },
 ];

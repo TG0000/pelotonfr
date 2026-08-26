@@ -55,14 +55,14 @@ export default async function HomePage() {
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/carte"
+                href="/calendrier?vue=carte"
                 className={cn(buttonVariants({ size: "lg" }), "gap-2")}
               >
                 <Map className="size-4" />
                 Voir la carte
               </Link>
               <Link
-                href="/courses"
+                href="/calendrier?vue=liste"
                 className={cn(buttonVariants({ variant: "outline", size: "lg" }), "gap-2")}
               >
                 <List className="size-4" />
@@ -128,14 +128,14 @@ export default async function HomePage() {
               title: "Carte interactive",
               description:
                 "Visualisez toutes les courses sur une carte de France. Trouvez rapidement les épreuves près de chez vous avec le filtre par rayon.",
-              href: "/carte",
+              href: "/calendrier?vue=carte",
             },
             {
               icon: List,
               title: "Filtres avancés",
               description:
                 "Filtrez par fédération, discipline, catégorie, date et localisation. Exactement les courses qui vous correspondent.",
-              href: "/courses",
+              href: "/calendrier?vue=liste",
             },
             {
               icon: Calendar,
@@ -165,7 +165,7 @@ export default async function HomePage() {
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl font-bold">Prochaines courses</h2>
               <Link
-                href="/courses"
+                href="/calendrier?vue=liste"
                 className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5 text-muted-foreground")}
               >
                 Tout voir

@@ -3,40 +3,51 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 
+/** Shared so a signed-out render always returns the same reference. */
+const NONE: ReadonlySet<string> = new Set();
+
 export function useFavorites() {
   const { isSignedIn } = useAuth();
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!isSignedIn) {
-      setFavoriteIds(new Set());
-      return;
-    }
+    if (!isSignedIn) return;
+
+    // A response arriving after sign-out (or after the component is gone)
+    // must not be written back.
+    let live = true;
     fetch("/api/favorites")
       .then((r) => r.json())
       .then((data: { favoriteIds: string[] }) => {
-        setFavoriteIds(new Set(data.favoriteIds));
+        if (live) setSaved(new Set(data.favoriteIds));
       })
       .catch(() => {});
+
+    return () => {
+      live = false;
+    };
   }, [isSignedIn]);
+
+  /* Signing out empties the list by derivation rather than by clearing state
+     from an effect, which used to cost an extra render pass on every auth
+     change — and left the previous user's favourites on screen until it ran. */
+  const favoriteIds = isSignedIn ? saved : NONE;
 
   const toggle = useCallback(
     async (raceId: string) => {
       if (!isSignedIn) return;
 
-      const isFav = favoriteIds.has(raceId);
+      const wasFavorite = saved.has(raceId);
 
-      // Optimistic update
-      setFavoriteIds((prev) => {
+      setSaved((prev) => {
         const next = new Set(prev);
-        if (isFav) next.delete(raceId);
+        if (wasFavorite) next.delete(raceId);
         else next.add(raceId);
         return next;
       });
 
       try {
-        if (isFav) {
+        if (wasFavorite) {
           await fetch(`/api/favorites/${raceId}`, { method: "DELETE" });
         } else {
           await fetch("/api/favorites", {
@@ -46,17 +57,16 @@ export function useFavorites() {
           });
         }
       } catch {
-        // Rollback on error
-        setFavoriteIds((prev) => {
+        setSaved((prev) => {
           const next = new Set(prev);
-          if (isFav) next.add(raceId);
+          if (wasFavorite) next.add(raceId);
           else next.delete(raceId);
           return next;
         });
       }
     },
-    [isSignedIn, favoriteIds]
+    [isSignedIn, saved]
   );
 
-  return { favoriteIds, toggle, loading };
+  return { favoriteIds, toggle };
 }

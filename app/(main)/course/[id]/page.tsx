@@ -57,7 +57,7 @@ export default async function RaceDetailPage({ params }: PageProps) {
       {/* Navigation */}
       <div className="flex items-center justify-between mb-6">
         <Link
-          href="/courses"
+          href="/calendrier?vue=liste"
           className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "-ml-2 gap-1.5")}
         >
           <ArrowLeft className="size-4" />

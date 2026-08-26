@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getUserFavoriteIds, addFavorite, getOrCreateUser } from "@/lib/db/queries/favorites";
+import { getUserFavoriteIds, addFavorite } from "@/lib/db/queries/favorites";
 
 export async function GET() {
   const { userId } = await auth();

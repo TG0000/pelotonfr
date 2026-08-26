@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Bell, BellOff, Trash2, Plus, MapPin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,8 @@ interface Rule {
   leadTimeDays: number;
   matches: RuleMatch[];
 }
+
+export type AlertRuleView = Rule;
 
 /** Only the categories a rider actually enters; staff licences are not filters. */
 const SELECTABLE = CATEGORIES.filter(
@@ -72,9 +74,15 @@ function Pills({
   );
 }
 
-export function AlertManager() {
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [loading, setLoading] = useState(true);
+/**
+ * The rules are handed in already loaded.
+ *
+ * They used to be fetched from the browser on mount, which meant a spinner on
+ * every visit for data the server had already authenticated to read. It reloads
+ * itself only after a change it made.
+ */
+export function AlertManager({ initialRules }: { initialRules: Rule[] }) {
+  const [rules, setRules] = useState<Rule[]>(initialRules);
   const [creating, setCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,23 +95,17 @@ export function AlertManager() {
   const [disciplines, setDisciplines] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
 
+  /** Re-reads the list after this component has changed it. */
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch("/api/alerts");
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { rules: Rule[] };
       setRules(data.rules);
     } catch {
-      setError("Impossible de charger les alertes.");
-    } finally {
-      setLoading(false);
+      setError("Impossible de recharger les alertes.");
     }
   }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const toggle = (list: string[], set: (v: string[]) => void, value: string) =>
     set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -156,15 +158,6 @@ export function AlertManager() {
   async function remove(id: string) {
     await fetch(`/api/alerts/${id}`, { method: "DELETE" });
     await load();
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground text-sm py-8">
-        <Loader2 className="size-4 animate-spin" />
-        Chargement…
-      </div>
-    );
   }
 
   return (

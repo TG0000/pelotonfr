@@ -81,7 +81,7 @@ export default async function RiderPage({ params }: PageProps) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 w-full">
       <Link
-        href="/courses"
+        href="/calendrier?vue=liste"
         className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "-ml-2 gap-1.5 mb-6")}
       >
         <ArrowLeft className="size-4" />
