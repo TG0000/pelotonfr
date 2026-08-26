@@ -65,20 +65,61 @@ function slugify(text: string): string {
 }
 
 /**
- * Strips the parts of a race title that vary between editions so that
- * "12e GP de Dieulouard - Access 3-4" and "13e GP de Dieulouard - Access 3-4"
- * collapse onto one event.
+ * The name of the meeting, with everything that varies between its races
+ * stripped out.
+ *
+ * A meeting fields several races — the FFC publishes each category as its own
+ * competition — and each carries the category in its title. Stripping only
+ * "open", "access", "elite" and "uNN" left enough behind that they still
+ * differed: "FOUGERES - OPEN 2-3 + ACCESS 1 H/F" reduced to "fougeres h f" and
+ * "FOUGERES - U15 H/F + U17 F" to "fougeres h f f", so one meeting became two.
  */
-export function eventKey(name: string): string {
-  return normalizePlace(
-    name
-      // Leading edition ordinal: "12e", "3ème", "1er".
-      .replace(/^\s*\d{1,3}\s*(?:er|ere|ère|eme|ème|e)\b/i, "")
-      // Explicit years.
-      .replace(/\b(19|20)\d{2}\b/g, "")
-      // Category suffixes, which differ between the races of one event.
-      .replace(/\b(open|access|elite|u\d{2})\b[\s\d\-/+]*/gi, "")
-  ).slice(0, 380);
+export function meetingKey(name: string): string {
+  const stripped = name
+    // Leading edition ordinal: "12e", "3ème", "1er".
+    .replace(/^\s*\d{1,3}\s*(?:er|ere|ère|eme|ème|e)\b/i, "")
+    // Explicit years.
+    .replace(/\b(19|20)\d{2}\b/g, " ")
+    // The whole category vocabulary, in every wording the sources use.
+    .replace(
+      /\b(open|acc?e?ss?|élite|elite|elites|u\s?\d{1,2}\s?f?|cat|pass|espoirs?|masters?|s[ée]niors?|senios|juniors?|cadets?|minimes?|benjamins?|pupilles?|poussins?|dames?|femmes?|f[ée]minin(?:e|es|s)?|hommes?|toutes?\s+cat[ée]gories?|a[1-4])\b[\s\d\-–/+.&,]*/gi,
+      " "
+    )
+    // "Epreuve A", "Epreuve B" — the same afternoon's fields, lettered.
+    .replace(/\b[ée]preuve\s+[a-z]\b/gi, " ")
+    // Age bands written out: "40 ans et +", "17 ans et plus", "19-39".
+    .replace(/\b\d{1,2}\s*(?:[-–]\s*\d{1,2}\s*)?ans?\b(?:\s*et\s*(?:\+|plus))?/gi, " ")
+    .replace(/\bet\s*\+/gi, " ")
+    // The category strip runs first and eats the number, leaving a bare "ans".
+    .replace(/\bans?\b/gi, " ")
+    // What the category clause leaves behind: "H/F", "G+F", a lone "F".
+    .replace(/\b[hgf]\s*[/+&-]\s*[hgf]\b/gi, " ")
+    .replace(/\b[hgf]\b/gi, " ")
+    // Separators orphaned by the removals above.
+    .replace(/[-–/+&,.]+/g, " ")
+    .replace(/\(\s*\)/g, " ");
+
+  return normalizePlace(stripped).slice(0, 380);
+}
+
+/**
+ * Where a meeting is, for identity purposes.
+ *
+ * The department, not the commune. Two sources describe the same meeting at
+ * different resolutions — the calendar names the town, the results index knows
+ * only the department — and keying on the town made a 2025 edition known as
+ * "Côtes-d'Armor" a different rendez-vous from its 2026 edition at Tréguidel.
+ * The department is the resolution both always have.
+ *
+ * It is coarse on its own, which is why it is never used on its own: the
+ * meeting name almost always carries the town, and for the FSGT races named
+ * only by their town the name *is* the town.
+ */
+export function placeKey(
+  _normalizedCity: string | null | undefined,
+  departmentCode: string | null | undefined
+): string {
+  return departmentCode ? `d${departmentCode}` : "";
 }
 
 async function resolveVenue(
@@ -122,10 +163,23 @@ async function resolveEvent(
   venueId: string | null,
   cache: Map<string, string>
 ): Promise<string | null> {
-  const key = eventKey(race.name);
+  const key = meetingKey(race.name);
   if (!key) return null;
 
-  const cacheKey = `${federationId}:${key}`;
+  /**
+   * A meeting is a name, at a place, in a discipline.
+   *
+   * Name alone put a November cyclo-cross and a June road race at Le Creusot
+   * under one identity — 127 events mixed disciplines or seasons that way —
+   * while two towns sharing a generic race name collided just as easily.
+   */
+  const place = placeKey(
+    race.city ? normalizePlace(race.city) : null,
+    race.departmentCode
+  );
+  const identity = `${key}|${place}|${race.discipline}`.slice(0, 380);
+
+  const cacheKey = `${federationId}:${identity}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -140,7 +194,7 @@ async function resolveEvent(
        last_seen_year   = GREATEST(events.last_seen_year, EXCLUDED.last_seen_year),
        primary_venue_id = COALESCE(events.primary_venue_id, EXCLUDED.primary_venue_id)
      RETURNING id`,
-    [federationId, race.name, key, slugify(race.name), race.discipline, venueId, year]
+    [federationId, race.name, identity, slugify(race.name), race.discipline, venueId, year]
   );
 
   const id = rows[0].id as string;
