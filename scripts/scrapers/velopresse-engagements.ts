@@ -111,6 +111,28 @@ function splitPersonName(raw: string): { last: string; first: string | null } {
     // No capitalised block: assume the first word is the surname.
     return { last: words[0], first: words.slice(1).join(" ") || null };
   }
+
+  // "ABRAZARD RAPHAËL" — the whole cell is capitalised, so capitalisation
+  // separates nothing and the entrant used to be stored as one long surname
+  // with no given name, which no rider could then be matched to.
+  //
+  // The source writes surname first throughout, so the last word is the given
+  // name. Compound surnames survive it ("LE BORGNE NOAH", "JANSE VAN VUUREN
+  // DELSIA"); a compound given name does not, and is the price of reading the
+  // other several thousand correctly.
+  if (rest.length === 0 && upper.length > 1) {
+    const country = /^\(?[A-Z]{3}\)?$/;
+    const parts = country.test(upper[upper.length - 1])
+      ? upper.slice(0, -1)
+      : upper;
+    if (parts.length > 1) {
+      return {
+        last: parts.slice(0, -1).join(" "),
+        first: parts[parts.length - 1],
+      };
+    }
+  }
+
   return { last: upper.join(" "), first: rest.join(" ") || null };
 }
 
@@ -723,6 +745,11 @@ async function ingestArticle(path: string, dryRun: boolean): Promise<Ingested> {
     return { stored: raceIds.length, matched, race: target.name };
   }
 
+  // Marks this pass, so what the article no longer says can be removed below.
+  const [{ now: passStartedAt }] = (await sql(
+    `SELECT now() AS now`
+  )) as unknown as Array<{ now: string }>;
+
   await sql(
     `INSERT INTO engagements
        (race_id, rider_id, bib, last_name_raw, first_name_raw,
@@ -742,6 +769,20 @@ async function ingestArticle(path: string, dryRun: boolean): Promise<Ingested> {
       raceIds, riderIds, bibs, lastNames, firstNames,
       clubs, categories, methods, `${BASE_URL}${path}`,
     ]
+  );
+
+  // The published list is the truth about itself. An entrant this article no
+  // longer names is a row from an earlier, worse reading of the same page —
+  // which is how thousands of surnames with no given name survived a fixed
+  // parser: re-reading the article wrote correct rows beside the broken ones
+  // instead of replacing them.
+  //
+  // Scoped to this article, not to the race: two articles can cover the same
+  // race, one category each, and neither is entitled to delete the other.
+  await sql(
+    `DELETE FROM engagements
+      WHERE race_id = $1 AND source_url = $2 AND observed_at < $3`,
+    [target.id, `${BASE_URL}${path}`, passStartedAt]
   );
 
   return { stored: raceIds.length, matched, race: target.name };
