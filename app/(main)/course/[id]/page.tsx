@@ -1,20 +1,27 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Calendar, MapPin, Trophy, ExternalLink, Phone, Mail, Building2, Map } from "lucide-react";
+import {
+  ArrowLeft, Building2, Calendar, ExternalLink, Mail,
+  MapPin, Phone, Route, Trophy,
+} from "lucide-react";
 import { buttonVariants } from "@/lib/button-variants";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { RaceBadge } from "@/components/races/RaceBadge";
-import { RaceCompetitors } from "@/components/riders/RaceCompetitors";
-import { Suspense } from "react";
 import { getRaceById } from "@/lib/db/queries/races";
+import { RaceCompetitors } from "@/components/riders/RaceCompetitors";
+import { StartList, SectionHeading } from "@/components/races/StartList";
+import { PastEditions } from "@/components/races/PastEditions";
+import { SiblingRaces } from "@/components/races/SiblingRaces";
+import {
+  FederationMark, PlaceLabel, placeLabel,
+} from "@/components/races/RacePrimitives";
+import { categoryLabel } from "@/lib/categories";
+import { displayRaceName } from "@/lib/race-name";
 import { FEDERATIONS } from "@/lib/constants";
+import { todayISO } from "@/lib/date";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { cn } from "@/lib/utils";
-import { displayRaceName } from "@/lib/race-name";
-import { PlaceLabel, placeLabel } from "@/components/races/RacePrimitives";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -27,11 +34,39 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     if (!race) return { title: "Course introuvable" };
     return {
       title: displayRaceName(race.name),
-      description: `${displayRaceName(race.name)} — ${placeLabel(race).text} le ${format(new Date(race.raceDate + "T12:00:00Z"), "d MMMM yyyy", { locale: fr })}`,
+      description: `${displayRaceName(race.name)} — ${placeLabel(race).text} le ${format(
+        new Date(`${race.raceDate}T12:00:00Z`), "d MMMM yyyy", { locale: fr }
+      )}`,
     };
   } catch {
     return { title: "Course" };
   }
+}
+
+/** How long until the start, said the way a rider counts it down. */
+function countdown(raceDate: string, today: string): string | null {
+  const days = Math.round(
+    (new Date(`${raceDate}T12:00:00Z`).getTime() -
+      new Date(`${today}T12:00:00Z`).getTime()) / 86_400_000
+  );
+  if (days < 0) return null;
+  if (days === 0) return "aujourd'hui";
+  if (days === 1) return "demain";
+  if (days <= 21) return `dans ${days} jours`;
+  return null;
+}
+
+function Skeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="space-y-2">
+      <div className="h-4 w-32 animate-pulse rounded bg-surface-3" />
+      <div className="rounded-xl border border-border p-3">
+        {Array.from({ length: rows }, (_, i) => (
+          <div key={i} className="h-8 animate-pulse rounded bg-surface-3/60" style={{ marginBottom: 6 }} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default async function RaceDetailPage({ params }: PageProps) {
@@ -43,20 +78,18 @@ export default async function RaceDetailPage({ params }: PageProps) {
   } catch {
     // DB not configured
   }
-
   if (!race) notFound();
 
-  const date = new Date(race.raceDate + "T12:00:00Z");
-  const dateEnd = race.raceDateEnd ? new Date(race.raceDateEnd + "T12:00:00Z") : null;
+  const today = todayISO();
+  const date = new Date(`${race.raceDate}T12:00:00Z`);
+  const dateEnd = race.raceDateEnd ? new Date(`${race.raceDateEnd}T12:00:00Z`) : null;
   const fed = FEDERATIONS.find((f) => f.slug === race.federationSlug);
-
-  const formattedDate = format(date, "EEEE d MMMM yyyy", { locale: fr });
-  const formattedDateEnd = dateEnd ? format(dateEnd, "EEEE d MMMM yyyy", { locale: fr }) : null;
+  const soon = countdown(race.raceDate, today);
+  const isPast = race.raceDate < today;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 w-full">
-      {/* Navigation */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8">
+      <div className="mb-6 flex items-center justify-between">
         <Link
           href="/calendrier?vue=liste"
           className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "-ml-2 gap-1.5")}
@@ -66,128 +99,136 @@ export default async function RaceDetailPage({ params }: PageProps) {
         </Link>
         {race.lat && race.lng && (
           <Link
-            href={`/carte?lat=${race.lat}&lng=${race.lng}&radius=30`}
+            href={`/calendrier?vue=carte&lat=${race.lat}&lng=${race.lng}&radius=30`}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
           >
-            <Map className="size-3.5" />
-            Voir sur la carte
+            <MapPin className="size-3.5" />
+            Situer sur la carte
           </Link>
         )}
       </div>
 
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <RaceBadge type="federation" value={race.federationSlug} />
-          <RaceBadge type="discipline" value={race.discipline} />
-          {race.level && <RaceBadge type="level" value={race.level} />}
+      <header className="mb-8">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <FederationMark slug={race.federationSlug} withLabel />
           {race.isCancelled && (
-            <Badge variant="destructive">Annulée</Badge>
+            <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-destructive">
+              Annulée
+            </span>
+          )}
+          {soon && !race.isCancelled && (
+            <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
+              {soon}
+            </span>
           )}
         </div>
 
-        <h1 className="text-3xl font-bold mb-4">{displayRaceName(race.name)}</h1>
+        <h1 className="mb-4 text-3xl font-bold tracking-tight">
+          {displayRaceName(race.name)}
+        </h1>
 
-        <div className="flex flex-col sm:flex-row gap-4 text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Calendar className="size-4 text-primary" />
-            <span className="capitalize">{formattedDate}</span>
-            {formattedDateEnd && (
-              <span>→ {formattedDateEnd}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="size-4 text-primary" />
-            <span>
-              <PlaceLabel race={race} />
-              {placeLabel(race).approximate && (
-                <span className="ml-2 text-sm text-muted-foreground">
-                  commune non communiquée
-                </span>
-              )}
+        <div className="flex flex-col gap-2 text-muted-foreground sm:flex-row sm:gap-6">
+          <span className="flex items-center gap-2">
+            <Calendar className="size-4 shrink-0 text-primary" />
+            <span className="first-letter:uppercase">
+              {format(date, "EEEE d MMMM yyyy", { locale: fr })}
             </span>
-          </div>
+            {dateEnd && (
+              <span className="text-sm">
+                → {format(dateEnd, "d MMMM", { locale: fr })}
+              </span>
+            )}
+          </span>
+          <span className="flex items-center gap-2">
+            <MapPin className="size-4 shrink-0 text-primary" />
+            <PlaceLabel race={race} />
+          </span>
+          {race.distanceKm != null && (
+            <span className="flex items-center gap-2">
+              <Route className="size-4 shrink-0 text-primary" />
+              <span className="font-mono tabular-nums">{race.distanceKm} km</span>
+            </span>
+          )}
         </div>
-      </div>
+      </header>
 
-      <Separator className="mb-8" />
-
-      {/* Info grid */}
-      <div className="grid sm:grid-cols-2 gap-8 mb-8">
-        {/* Categories */}
-        {race.categories.length > 0 && (
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Trophy className="size-4 text-muted-foreground" />
-              <h2 className="font-semibold">Catégories</h2>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {race.categories.map((cat) => (
-                <RaceBadge key={cat} type="category" value={cat} />
-              ))}
-            </div>
+      {race.categories.length > 0 && (
+        <div className="mb-8 rounded-xl border border-border bg-surface-1 p-4">
+          <SectionHeading icon={Trophy}>Catégories admises</SectionHeading>
+          <div className="flex flex-wrap gap-1.5">
+            {race.categories.map((cat) => (
+              <span
+                key={cat}
+                className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs"
+              >
+                {categoryLabel(cat)}
+              </span>
+            ))}
           </div>
-        )}
-
-        {/* Organization */}
-        {(race.organizer || race.contactEmail || race.contactPhone) && (
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Building2 className="size-4 text-muted-foreground" />
-              <h2 className="font-semibold">Organisation</h2>
-            </div>
-            <div className="flex flex-col gap-1.5 text-sm">
-              {race.organizer && (
-                <span className="font-medium">{race.organizer}</span>
-              )}
-              {race.contactEmail && (
-                <a
-                  href={`mailto:${race.contactEmail}`}
-                  className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <Mail className="size-3.5" />
-                  {race.contactEmail}
-                </a>
-              )}
-              {race.contactPhone && (
-                <a
-                  href={`tel:${race.contactPhone}`}
-                  className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <Phone className="size-3.5" />
-                  {race.contactPhone}
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Notes */}
-      {race.notes && (
-        <div className="bg-muted/50 rounded-lg p-4 mb-8">
-          <p className="text-sm text-muted-foreground">{race.notes}</p>
         </div>
       )}
 
-      {/* Competitors */}
-      <div className="mb-8">
-        <Suspense
-          fallback={
-            <div className="h-24 rounded-lg bg-muted/40 animate-pulse" />
-          }
-        >
-          <RaceCompetitors raceId={race.id} />
+      {race.notes && (
+        <p className="mb-8 rounded-xl border border-border bg-surface-2 p-4 text-sm text-muted-foreground">
+          {race.notes}
+        </p>
+      )}
+
+      <div className="flex flex-col gap-8">
+        {!isPast && (
+          <Suspense fallback={<Skeleton rows={4} />}>
+            <StartList raceId={race.id} />
+          </Suspense>
+        )}
+
+        <Suspense fallback={<Skeleton rows={3} />}>
+          <SiblingRaces raceId={race.id} />
         </Suspense>
+
+        <Suspense fallback={<Skeleton rows={3} />}>
+          <PastEditions raceId={race.id} />
+        </Suspense>
+
+        {!isPast && (
+          <Suspense fallback={<Skeleton rows={5} />}>
+            <RaceCompetitors raceId={race.id} />
+          </Suspense>
+        )}
       </div>
 
-      {/* Source link */}
+      {(race.organizer || race.contactEmail || race.contactPhone) && (
+        <section className="mt-8">
+          <SectionHeading icon={Building2}>Organisation</SectionHeading>
+          <div className="flex flex-col gap-1.5 text-sm">
+            {race.organizer && <span className="font-medium">{race.organizer}</span>}
+            {race.contactEmail && (
+              <a
+                href={`mailto:${race.contactEmail}`}
+                className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-primary"
+              >
+                <Mail className="size-3.5" />
+                {race.contactEmail}
+              </a>
+            )}
+            {race.contactPhone && (
+              <a
+                href={`tel:${race.contactPhone}`}
+                className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-primary"
+              >
+                <Phone className="size-3.5" />
+                {race.contactPhone}
+              </a>
+            )}
+          </div>
+        </section>
+      )}
+
       {race.sourceUrl && (
         <a
           href={race.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-2")}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-8 gap-2")}
         >
           <ExternalLink className="size-4" />
           Voir sur le site {fed?.name ?? race.federationSlug}
