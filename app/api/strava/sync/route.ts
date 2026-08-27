@@ -9,9 +9,20 @@ import {
 } from "@/lib/db/queries/strava";
 import { listActivities, getAthleteSummary } from "@/lib/strava/client";
 import { matchRideToRace } from "@/lib/strava/match-races";
+import { saveRideTrace } from "@/lib/strava/ingest-trace";
 
 /** Rides older than this are not worth re-reading on every sync. */
 const SYNC_WINDOW_DAYS = 400;
+
+/**
+ * How many courses one synchronisation may bring back.
+ *
+ * A trace costs one Strava read, against a ceiling of a thousand a day shared
+ * with everything else we ask of them. A first sync can link forty rides at
+ * once, and reading all of them would spend the day's budget on one rider — so
+ * a pass takes the most recent handful and the next pass takes the next.
+ */
+const TRACES_PER_SYNC = 12;
 
 export async function POST() {
   const { userId } = await auth();
@@ -75,7 +86,40 @@ export async function POST() {
       linked++;
     }
 
-    return NextResponse.json({ synced: saved, linked });
+    // The link says which race the ride was; the ride says what the course is.
+    // Newest first, because a rider syncs after racing and the parcours they
+    // just rode is the one somebody is about to look up. Races already carrying
+    // a rider's trace are left alone.
+    const untraced = await sql(
+      `SELECT a.activity_id, a.race_id
+         FROM strava_activities a
+    LEFT JOIN race_traces t ON t.race_id = a.race_id
+        WHERE a.user_id = $1::uuid
+          AND a.race_id IS NOT NULL
+          AND (t.race_id IS NULL OR t.source = 'segment')
+        ORDER BY a.local_date DESC
+        LIMIT $2::int`,
+      [id, TRACES_PER_SYNC]
+    );
+
+    let traced = 0;
+    for (const row of untraced) {
+      const r = row as Record<string, unknown>;
+      try {
+        const outcome = await saveRideTrace(
+          sql,
+          token,
+          Number(r.activity_id),
+          r.race_id as string
+        );
+        if (outcome === "stored") traced++;
+      } catch {
+        // One unreadable activity must not cost the rider their whole sync.
+        break;
+      }
+    }
+
+    return NextResponse.json({ synced: saved, linked, traced });
   } catch (err) {
     console.error("Strava sync:", err);
     const message = err instanceof Error ? err.message : "Erreur de synchronisation";

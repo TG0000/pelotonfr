@@ -87,10 +87,14 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
-        # Two reads per race against Strava's 100-per-quarter-hour ceiling.
-        # Forty is about fifteen minutes of polite pacing, and the pass stops
-        # cleanly if it meets the limit anyway.
-        run: npm run scrape:segments -- --limit=40
+        # Two reads per race against Strava's two ceilings: 100 per quarter of
+        # an hour, which the script paces itself under, and 1 000 a day, which
+        # is the one that decides how much a nightly pass may take. Three
+        # hundred races is 600 reads — well inside the day and still leaving
+        # room for the riders' own syncs — and about an hour and a half of
+        # pacing. At forty it would have taken seven weeks to read the two
+        # thousand sectors waiting, by which time half of them are in the past.
+        run: npm run scrape:segments -- --limit=300
         continue-on-error: true
 
       # Categories for FSGT and UFOLEP, which their own calendar never states.

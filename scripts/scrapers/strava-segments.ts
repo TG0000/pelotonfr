@@ -160,9 +160,21 @@ async function main() {
         AND ($2::boolean
              OR segments_fetched_at IS NULL
              OR segments_fetched_at < now() - ($3::int * INTERVAL '1 day'))
-      -- Spread across the calendar rather than soonest-first: a run that
-      -- always starts at the same end re-reads the same sector every time.
-      ORDER BY random()
+      -- Whoever races first, first.
+      --
+      -- This used to be ORDER BY random(), on the reasoning that starting at
+      -- the same end would re-read the same sector every run — but the clause
+      -- above already excludes anything read, so there was nothing to re-read.
+      -- What random() actually did was give a race in March the same claim on a
+      -- rate-limited budget as the one somebody rides on Saturday. Strava allows
+      -- about fifty sectors a quarter of an hour and two thousand are waiting,
+      -- so the order is the whole of the policy.
+      --
+      -- A race somebody has put in their calendar comes first regardless: they
+      -- have said they are going, which is the strongest signal we ever get
+      -- about which parcours is worth knowing.
+      ORDER BY EXISTS (SELECT 1 FROM user_favorites f WHERE f.race_id = races.id) DESC,
+               COALESCE(race_date_end, race_date) ASC
       LIMIT $1::int`,
     [limit, force, REFRESH_DAYS]
   )) as Array<Record<string, unknown>>;
