@@ -36,15 +36,57 @@ const sql = createSql(requireEnv("DATABASE_URL"));
 /** About 5 km each way — the ground a village circuit covers. */
 const BOX_DEGREES = 0.045;
 
+/**
+ * How finely the sector is cut up when the first pass finds no circuit.
+ *
+ * Three by three: nine boxes over the same ground, so up to ninety segments
+ * where one box yields ten. Four by four would yield more and cost sixteen
+ * reads, which is a sixtieth of the day for one race.
+ */
+const GRID = 3;
+
+/** The same sector, as a grid of smaller boxes. */
+function subdivide(
+  box: { south: number; west: number; north: number; east: number },
+  cells: number
+): Array<{ south: number; west: number; north: number; east: number }> {
+  const dLat = (box.north - box.south) / cells;
+  const dLng = (box.east - box.west) / cells;
+  const out = [];
+  for (let i = 0; i < cells; i++) {
+    for (let j = 0; j < cells; j++) {
+      out.push({
+        south: box.south + i * dLat,
+        north: box.south + (i + 1) * dLat,
+        west: box.west + j * dLng,
+        east: box.west + (j + 1) * dLng,
+      });
+    }
+  }
+  return out;
+}
+
 /** Hills do not move; re-asking sooner than this buys nothing. */
 const REFRESH_DAYS = 120;
 
 /**
- * Strava allows 100 reads per fifteen minutes and 1 000 per day. Two reads per
- * race puts the ceiling at fifty races a quarter of an hour, so the pass waits
- * between races rather than being cut off part-way through.
+ * Strava allows 100 reads per fifteen minutes and 1 000 per day.
+ *
+ * Nine and a half seconds a read holds the quarter-hour ceiling whatever a race
+ * costs — and races no longer cost the same, since a sector that yields no
+ * circuit is asked again as nine smaller boxes. Pacing per read rather than per
+ * race is what keeps that honest.
  */
-const PACE_MS = 19_000;
+const PER_READ_MS = 9_500;
+
+/**
+ * The day's allowance, and the reason a pass stops early.
+ *
+ * Left to itself a pass of three hundred races could ask for two thousand reads
+ * and be cut off half way, with no way of knowing which halves were done. It
+ * stops when the budget is spent and says so.
+ */
+const DEFAULT_READ_BUDGET = 900;
 
 /**
  * A segment worth naming to a racer.
@@ -146,6 +188,10 @@ async function main() {
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : 60;
   const force = process.argv.includes("--force");
+  const readsArg = process.argv.find((a) => a.startsWith("--reads="));
+  const readBudget = readsArg
+    ? Number(readsArg.split("=")[1])
+    : DEFAULT_READ_BUDGET;
 
   const connections = (await sql(
     `SELECT user_id FROM strava_connections ORDER BY updated_at DESC LIMIT 1`
@@ -197,9 +243,11 @@ async function main() {
   let withClimbs = 0;
   let stored = 0;
   let circuitsFound = 0;
+  let deepened = 0;
   let read = 0;
 
   for (const race of races) {
+    if (read >= readBudget) break;
     const lat = Number(race.lat);
     const lng = Number(race.lng);
     const bounds = {
@@ -212,10 +260,14 @@ async function main() {
     try {
       // Asked twice: the explorer returns ten at a time, and the categorised
       // call surfaces climbs the unfiltered one ranks below local favourites.
+      const found = new Map<number, StravaSegment>();
       const [general, climbs] = await Promise.all([
         exploreSegments(token, bounds),
         exploreSegments(token, bounds, { minCategory: 1 }),
       ]);
+      for (const s of [...general, ...climbs]) found.set(s.id, s);
+      read += 2;
+      await new Promise((r) => setTimeout(r, PER_READ_MS * 2));
 
       /* The circuit first, because it is the thing a rider actually wants.
          Riders trace the race loop into Strava — it is the road they train on —
@@ -223,8 +275,30 @@ async function main() {
          separates it from every climb and descent in the sector is that it
          closes: the loops that turn out to be real circuits finish within a
          handful of metres of where they start. */
-      const circuits = findCircuits([...general, ...climbs], { lat, lng });
-      const circuit = circuits[0];
+      let circuit = findCircuits([...found.values()], { lat, lng })[0];
+
+      /* Nothing yet, so ask in smaller pieces.
+         The explorer answers with ten segments per box however large the box
+         is, ranked by its own idea of popularity — so a sector with two hundred
+         segments hands back the same ten every time, and the race loop is
+         simply not among them. Argentan returned one segment and no circuit;
+         asked as nine boxes it returned sixty-seven, including "circuit
+         Sarceaux" and "Fleure fsgt", which are the race.
+
+         Held back until the cheap question has failed, because it costs nine
+         reads against a thousand a day: most sectors answer on the first
+         attempt and only the stubborn ones are worth the budget. */
+      if (!circuit) {
+        for (const cell of subdivide(bounds, GRID)) {
+          if (read >= readBudget) break;
+          for (const s of await exploreSegments(token, cell)) found.set(s.id, s);
+          read++;
+          await new Promise((r) => setTimeout(r, PER_READ_MS));
+        }
+        circuit = findCircuits([...found.values()], { lat, lng })[0];
+        if (circuit) deepened++;
+      }
+
       if (circuit) {
         await storeCircuit(race.id as string, circuit);
         circuitsFound++;
@@ -235,7 +309,7 @@ async function main() {
       }
 
       const byId = new Map<number, StravaSegment>();
-      for (const s of [...general, ...climbs]) {
+      for (const s of found.values()) {
         if (isWorthShowing(s)) byId.set(s.id, s);
       }
       const keep = [...byId.values()]
@@ -297,21 +371,26 @@ async function main() {
       );
     }
 
-    read++;
-    // Two reads per race against a limit of 100 per fifteen minutes: this pace
-    // is what keeps a long pass inside it rather than being cut off mid-way.
-    await new Promise((r) => setTimeout(r, PACE_MS));
+    if (read >= readBudget) {
+      console.log(
+        `\nStopping at ${read} reads: the day's budget is spent. ` +
+          `The rest keep their turn — the order is by date, so tomorrow's pass ` +
+          `resumes where this one stopped.`
+      );
+      break;
+    }
   }
 
   console.log(
-    `\n${circuitsFound} circuits recognised, ` +
-      `${withClimbs} of ${races.length} sectors carry a climb worth naming ` +
-      `(${stored} segments stored).`
+    `\n${circuitsFound} circuits recognised` +
+      (deepened > 0 ? `, ${deepened} of them only once the sector was read in nine boxes` : "") +
+      `. ${withClimbs} of ${races.length} sectors carry a climb worth naming ` +
+      `(${stored} segments stored, ${read} reads spent).`
   );
   return {
     seen: races.length,
     written: withClimbs,
-    metadata: { circuits: circuitsFound, segments: stored },
+    metadata: { circuits: circuitsFound, segments: stored, deepened, reads: read },
   };
 }
 

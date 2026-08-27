@@ -87,14 +87,14 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
-        # Two reads per race against Strava's two ceilings: 100 per quarter of
-        # an hour, which the script paces itself under, and 1 000 a day, which
-        # is the one that decides how much a nightly pass may take. Three
-        # hundred races is 600 reads — well inside the day and still leaving
-        # room for the riders' own syncs — and about an hour and a half of
-        # pacing. At forty it would have taken seven weeks to read the two
-        # thousand sectors waiting, by which time half of them are in the past.
-        run: npm run scrape:segments -- --limit=300
+        # Strava's two ceilings: 100 reads a quarter of an hour, which the
+        # script paces itself under, and 1 000 a day, which is what decides how
+        # much a nightly pass may take. A sector costs two reads, or eleven when
+        # the first pair finds no circuit and it is asked again as nine smaller
+        # boxes — so the budget is stated in reads rather than races, and the
+        # pass stops cleanly when it is spent. The order is by date, so the next
+        # night resumes where this one stopped.
+        run: npm run scrape:segments -- --limit=300 --reads=900
         continue-on-error: true
 
       # Categories for FSGT and UFOLEP, which their own calendar never states.
