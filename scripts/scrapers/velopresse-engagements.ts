@@ -25,6 +25,7 @@ import * as cheerio from "cheerio";
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { fetchHtml, politeDelay } from "./utils/http";
 import { createSql } from "./utils/db";
+import { meetingKey } from "./utils/upsert-races";
 import { startRun } from "../lib/track-run";
 
 loadEnv();
@@ -329,50 +330,148 @@ function communeCandidates(prefix: string): string[] {
 }
 
 /**
+ * Sørensen–Dice on character bigrams.
+ *
+ * The same measure pg_trgm approximates, computed here so the comparison can
+ * run against a name this codebase has already stripped rather than against
+ * whatever is in the column.
+ */
+function similarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const grams = (v: string) => {
+    const out = new Map<string, number>();
+    for (let i = 0; i < v.length - 1; i++) {
+      const g = v.slice(i, i + 2);
+      out.set(g, (out.get(g) ?? 0) + 1);
+    }
+    return out;
+  };
+  const ga = grams(a);
+  const gb = grams(b);
+  if (ga.size === 0 || gb.size === 0) return 0;
+
+  let shared = 0;
+  for (const [g, n] of ga) shared += Math.min(n, gb.get(g) ?? 0);
+  const total = [...ga.values()].reduce((x, y) => x + y, 0) +
+                [...gb.values()].reduce((x, y) => x + y, 0);
+  return (2 * shared) / total;
+}
+
+/** Words that carry no identity: dropped before comparing places. */
+const PARTICLES = new Set([
+  "de","du","des","la","le","les","l","d","en","sur","sous","au","aux","et",
+  "a","the","prix","grand","gp","challenge","criterium","circuit","souvenir",
+  "trophee","coupe","tour","manche","edition","course","cycliste","cyclistes",
+]);
+
+/** Abbreviations the two sources disagree about. */
+function expand(token: string): string {
+  if (token === "st") return "saint";
+  if (token === "ste") return "sainte";
+  return token;
+}
+
+function placeTokens(value: string): string[] {
+  return value
+    .split(/\s+/)
+    .map(expand)
+    .filter((t) => t.length > 0 && !PARTICLES.has(t));
+}
+
+/**
+ * Does the shorter description sit inside the longer one?
+ *
+ * The press names a commune; the federation names the commune and then adds
+ * whatever the organiser calls the race. "Coutances" against "Coutances - U15 -
+ * challenge Savary" is the same place, but the extra words halve a similarity
+ * score. Containment reads it correctly, and requiring a token of real length
+ * keeps a stray "vay" from matching anything that happens to contain it.
+ */
+function containment(a: string, b: string): number {
+  const ta = placeTokens(a);
+  const tb = placeTokens(b);
+  if (ta.length === 0 || tb.length === 0) return 0;
+
+  const [small, large] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  if (!small.some((t) => t.length >= 3)) return 0;
+
+  const inLarge = new Set(large);
+  return small.every((t) => inLarge.has(t)) ? 0.95 : 0;
+}
+
+interface RaceLookup {
+  races: Array<{ id: string; name: string; categories: string[] }>;
+  /** How many races we hold on that date at all. */
+  sameDayCount: number;
+  bestName?: string;
+  bestScore?: number;
+}
+
+/**
  * Finds the race this start list belongs to.
  *
- * The date is exact, which narrows the field to a handful of races, so the
- * commune is compared by similarity rather than equality — the press spells
- * places its own way ("tremusson" for Trémuson) and an exact match throws away
- * most of the source.
+ * The date is exact, which narrows the field to a few dozen races, so the place
+ * is compared by similarity — the press spells communes its own way, writing
+ * "Trémusson" where the federation writes "Trémuson".
+ *
+ * The comparison is against the *meeting* name, not the race name. A race is
+ * published per category, so its title carries a clause the press article never
+ * has: "JAVENE - U15 H/F + U17 F" against "javene" scored 0.41 and "MESLAN -
+ * ACCESS 1-2-3-4 H/F" against "meslan" scored 0.27, both of them the same
+ * commune spelled identically. Stripping the clause with the function that
+ * defines meeting identity is what makes the two comparable — and keeps one
+ * definition of what a meeting is called.
  */
-async function findRaces(
-  prefix: string,
-  date: Date
-): Promise<Array<{ id: string; name: string; categories: string[] }>> {
+async function findRaces(prefix: string, date: Date): Promise<RaceLookup> {
   const iso = date.toISOString().split("T")[0];
   const candidates = communeCandidates(prefix);
 
-  const rows = await sql(
-    `WITH cand AS (SELECT unnest($3::text[]) AS c)
-     SELECT r.id, r.name, r.categories,
-            GREATEST(
-              COALESCE((SELECT MAX(similarity(v.normalized_city, cand.c)) FROM cand), 0),
-              COALESCE((SELECT MAX(similarity(lower(r.city), cand.c)) FROM cand), 0),
-              similarity(lower(r.name), $2)
-            ) AS score
+  const rows = (await sql(
+    `SELECT r.id, r.name, r.categories, lower(r.city) AS city,
+            v.normalized_city AS venue_city
        FROM races r
        LEFT JOIN venues v ON v.id = r.venue_id
-      WHERE r.race_date = $1::date
-      ORDER BY score DESC
-      LIMIT 12`,
-    [iso, prefix, candidates]
-  );
+                          AND v.geo_precision <> 'department'
+      WHERE r.race_date = $1::date`,
+    [iso]
+  )) as Array<Record<string, unknown>>;
+
+  const scored = rows
+    .map((row) => {
+      const name = row.name as string;
+      const haystacks = [
+        meetingKey(name),
+        (row.venue_city as string | null) ?? "",
+        (row.city as string | null) ?? "",
+      ].filter((h) => h && h !== "lieu à préciser");
+
+      let score = 0;
+      for (const cand of candidates) {
+        for (const hay of haystacks) {
+          score = Math.max(score, similarity(cand, hay), containment(cand, hay));
+        }
+      }
+      return {
+        id: row.id as string,
+        name,
+        categories: (row.categories as string[]) ?? [],
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
 
   // Below this the "match" is coincidence; a start list attached to the wrong
   // race is worse than none.
   const MIN_SCORE = 0.62;
+  const best = scored[0];
 
-  return rows
-    .filter((row) => Number((row as { score: unknown }).score) >= MIN_SCORE)
-    .map((row) => {
-      const r = row as Record<string, unknown>;
-      return {
-        id: r.id as string,
-        name: r.name as string,
-        categories: (r.categories as string[]) ?? [],
-      };
-    });
+  return {
+    races: scored.filter((r) => r.score >= MIN_SCORE),
+    sameDayCount: scored.length,
+    bestName: best?.name,
+    bestScore: best?.score,
+  };
 }
 
 /** Picks the race whose categories best fit the start-list section. */
@@ -483,23 +582,60 @@ async function matchRiders(
   return out;
 }
 
-async function ingestArticle(
-  path: string,
-  dryRun: boolean
-): Promise<{ stored: number; matched: number; race: string | null }> {
+/** Why a published start list could not be attached to a race we hold. */
+type Miss =
+  | "unreadable-slug"
+  | "no-race-that-day"
+  | "below-threshold"
+  | "no-entrants";
+
+interface Ingested {
+  stored: number;
+  matched: number;
+  race: string | null;
+  miss?: Miss;
+  /** What the source said, so an unattached list can still be reviewed. */
+  commune?: string;
+  date?: string;
+  bestCandidate?: string;
+  bestScore?: number;
+}
+
+async function ingestArticle(path: string, dryRun: boolean): Promise<Ingested> {
   const slug = path.split("/").pop() ?? "";
   const parsed = parseSlug(slug);
-  if (!parsed) return { stored: 0, matched: 0, race: null };
+  if (!parsed) return { stored: 0, matched: 0, race: null, miss: "unreadable-slug" };
 
-  const races = await findRaces(parsed.commune, parsed.date);
-  if (races.length === 0) return { stored: 0, matched: 0, race: null };
+  const iso = parsed.date.toISOString().split("T")[0];
+  const found = await findRaces(parsed.commune, parsed.date);
+
+  if (found.races.length === 0) {
+    return {
+      stored: 0,
+      matched: 0,
+      race: null,
+      // Distinguishing these two is the whole point: one means the race is
+      // outside our coverage, the other means our matching is too strict.
+      miss: found.sameDayCount === 0 ? "no-race-that-day" : "below-threshold",
+      commune: parsed.commune,
+      date: iso,
+      bestCandidate: found.bestName,
+      bestScore: found.bestScore,
+    };
+  }
+
+  const races = found.races;
 
   const html = await fetchHtml(`${BASE_URL}${path}`);
   const entrants = parseEntrants(html);
-  if (entrants.length === 0) return { stored: 0, matched: 0, race: null };
+  if (entrants.length === 0) {
+    return { stored: 0, matched: 0, race: null, miss: "no-entrants", commune: parsed.commune, date: iso };
+  }
 
   const target = pickRace(races, entrants[0].category);
-  if (!target) return { stored: 0, matched: 0, race: null };
+  if (!target) {
+    return { stored: 0, matched: 0, race: null, miss: "below-threshold", commune: parsed.commune, date: iso };
+  }
 
   const matches = await matchRiders(entrants);
 
@@ -614,6 +750,9 @@ async function main() {
   let matched = 0;
   let linkedRaces = 0;
   let unmatchedRaces = 0;
+  /** Why the rest could not be placed — a count that is actionable. */
+  const misses = new Map<string, number>();
+  const nearMisses: string[] = [];
 
   for (const path of links) {
     try {
@@ -629,6 +768,14 @@ async function main() {
         }
       } else {
         unmatchedRaces++;
+        const reason = result.miss ?? "below-threshold";
+        misses.set(reason, (misses.get(reason) ?? 0) + 1);
+        if (reason === "below-threshold" && nearMisses.length < 15) {
+          nearMisses.push(
+            `  ${result.date} ${(result.commune ?? "?").padEnd(24)} ` +
+              `best ${(result.bestScore ?? 0).toFixed(2)} — ${(result.bestCandidate ?? "").slice(0, 40)}`
+          );
+        }
       }
     } catch (err) {
       console.error(
@@ -643,6 +790,17 @@ async function main() {
     `\n${linkedRaces} start lists attached to a known race, ${unmatchedRaces} with no match.\n` +
       `${stored} entrants stored, ${matched} linked to a rider (${pct}%).`
   );
+
+  if (misses.size > 0) {
+    console.log("\nwhy the rest could not be placed:");
+    for (const [reason, n] of [...misses].sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${reason.padEnd(20)} ${n}`);
+    }
+  }
+  if (nearMisses.length > 0) {
+    console.log("\nnear misses — a race exists that day, the name did not agree:");
+    for (const line of nearMisses) console.log(line);
+  }
 
   // Counted in start lists rather than entrants: a run that finds 263 lists
   // and can place 30 of them is the failure worth seeing.
