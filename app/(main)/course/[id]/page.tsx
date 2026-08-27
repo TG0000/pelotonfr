@@ -211,7 +211,7 @@ export default async function RaceDetailPage({ params }: PageProps) {
 
       <div className="flex flex-col gap-8">
         {race.lat != null && race.lng != null && (
-          <div className="grid gap-8 sm:grid-cols-2">
+          <div className={cn("grid gap-8", !trace && "sm:grid-cols-2")}>
             {!isPast && (
               <Suspense fallback={<Skeleton rows={2} />}>
                 <RaceWeatherPanel
@@ -222,13 +222,19 @@ export default async function RaceDetailPage({ params }: PageProps) {
                 />
               </Suspense>
             )}
-            <Suspense fallback={<Skeleton rows={2} />}>
-              <RaceTerrain lat={race.lat} lng={race.lng} />
-            </Suspense>
+            {/* Only when the course itself is unknown. Reading the relief of
+                the surrounding countryside is a stand-in for the profile, and
+                keeping it beside an actual trace offers a worse answer next to
+                a better one. */}
+            {!trace && (
+              <Suspense fallback={<Skeleton rows={2} />}>
+                <RaceTerrain lat={race.lat} lng={race.lng} />
+              </Suspense>
+            )}
           </div>
         )}
 
-        {trace && <RaceCircuit trace={trace} />}
+        {trace && <RaceCircuit trace={trace} raceId={race.id} />}
 
         <Suspense fallback={<Skeleton rows={3} />}>
           <RaceClimbs raceId={race.id} hasTrace={trace !== null} />

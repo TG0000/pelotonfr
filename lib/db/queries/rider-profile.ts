@@ -1,4 +1,5 @@
 import { toDateOnly } from "@/lib/date";
+import { CATEGORIES, normalizeCategories } from "@/lib/categories";
 import { sql } from "../index";
 
 /**
@@ -497,6 +498,66 @@ function classify(row: {
  * enriched the same way, so the page reads identically either way — only
  * `confirmed` distinguishes a certainty from a prediction.
  */
+/**
+ * The licences that lost their name but not their riders.
+ *
+ * The Access ladder replaced the départementales and Open replaced the numbered
+ * catégories, but rankings still carry the old slug for riders who have not
+ * renewed since. A 3ème catégorie rider is an Open 3 rider, and reading their
+ * licence as unknown would let them into fields they cannot enter.
+ */
+const LEGACY_LICENCE: Record<string, string> = {
+  cat1: "open1",
+  cat2: "open2",
+  cat3: "open3",
+};
+
+/** Slugs that name a role rather than a field to line up in. */
+const NON_RACING = new Set(["staff"]);
+
+const KNOWN_SLUG = new Set(CATEGORIES.map((c) => c.value));
+
+/**
+ * Reads what a rider's stored licence says, as a set of categories.
+ *
+ * `riders.category` holds a slug, not the raw wording a race is written in, and
+ * putting it through the race-title parser returned nothing for the legacy
+ * slugs — which then passed the eligibility check as "unknown".
+ */
+function licenceCategories(raw: string | null): string[] {
+  if (!raw) return [];
+  const slug = raw.trim().toLowerCase();
+  if (NON_RACING.has(slug)) return ["__non-racing__"];
+  if (LEGACY_LICENCE[slug]) return [LEGACY_LICENCE[slug]];
+  if (KNOWN_SLUG.has(slug)) return [slug];
+  return normalizeCategories(raw);
+}
+
+/**
+ * Would this rider be allowed to line up?
+ *
+ * A race states the categories it is open to, and a licence belongs to exactly
+ * one of them, so eligibility is an intersection. Without it the regional field
+ * showed the department's Open 1 riders and its U17s beside an Open 2-3 race,
+ * which is worse than showing nothing: it names a peloton the reader will never
+ * meet.
+ *
+ * A licence we genuinely cannot read is kept rather than dropped — we know the
+ * rider races in the department at a comparable level, and silence about the
+ * category is not evidence against it.
+ */
+function eligibleFor(
+  raceCategories: string[]
+): (rider: { category: string | null }) => boolean {
+  if (raceCategories.length === 0) return () => true;
+  const admitted = new Set(raceCategories);
+  return (rider) => {
+    const own = licenceCategories(rider.category);
+    if (own.length === 0) return true;
+    return own.some((c) => admitted.has(c));
+  };
+}
+
 export async function getRaceCompetitors(
   raceId: string,
   limit = 40
@@ -504,12 +565,15 @@ export async function getRaceCompetitors(
   competitors: RaceCompetitor[];
   source: "startlist" | "history" | "regional";
 }> {
-  const [entered] = await sql(
-    `SELECT COUNT(*) AS n FROM engagements WHERE race_id = $1`,
-    [raceId]
-  );
+  const [[entered], [target]] = await Promise.all([
+    sql(`SELECT COUNT(*) AS n FROM engagements WHERE race_id = $1`, [raceId]),
+    sql(`SELECT categories FROM races WHERE id = $1`, [raceId]),
+  ]);
 
   const hasStartList = Number((entered as { n: string }).n) > 0;
+  const raceCategories =
+    (target as { categories: string[] } | undefined)?.categories ?? [];
+  const eligible = eligibleFor(raceCategories);
 
   const rows = hasStartList
     ? await sql(
@@ -612,16 +676,27 @@ export async function getRaceCompetitors(
     };
   });
 
-  if (competitors.length > 0) {
-    return { competitors, source: hasStartList ? "startlist" : "history" };
+  // A published start list is fact — a rider on it is riding, whatever we read
+  // into their licence. Only the inferred fields get the eligibility filter.
+  const shortlist = hasStartList ? competitors : competitors.filter(eligible);
+
+  if (shortlist.length > 0) {
+    return {
+      competitors: shortlist,
+      source: hasStartList ? "startlist" : "history",
+    };
   }
 
   // Nothing published and no edition on record — common for an event we are
   // seeing for the first time. The regional field is a weaker signal but a real
   // one: a local race draws the riders who race that level nearby, and showing
   // them beats showing an empty section.
+  // Over-fetch, because the department's best-ranked riders are the most likely
+  // to be the wrong category and the list should still come back full.
   return {
-    competitors: await getRegionalField(raceId, limit),
+    competitors: (await getRegionalField(raceId, limit * 4))
+      .filter(eligible)
+      .slice(0, limit),
     source: "regional",
   };
 }
@@ -656,8 +731,10 @@ async function getRegionalField(
         AND ra.department_code = t.department_code
         AND ra.race_date >= t.race_date - INTERVAL '150 days'
         AND ra.race_date < t.race_date
-        AND (t.categories = '{}' OR ra.categories = '{}'
-             OR ra.categories && t.categories)
+        -- A race that states no category is no evidence of level. Letting it
+        -- through put the Tour de Bretagne's professionals in the field of a
+        -- club Open 2-3 twenty kilometres away.
+        AND (t.categories = '{}' OR ra.categories && t.categories)
       GROUP BY r.id, r.last_name, r.first_name, c.name, r.category, r.uci_id,
                r.current_points, r.current_rank, r.best_points, r.best_season,
                r.win_count, r.podium_count, r.result_count

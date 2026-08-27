@@ -136,3 +136,106 @@ export function summariseTrace(
     },
   };
 }
+
+export interface LapAnalysis {
+  /** Where each lap starts, as indices into the track. */
+  boundaries: number[];
+  lapCount: number;
+  lapDistanceM: number;
+  /** One representative lap, or null when the course is not laps of a circuit. */
+  lap: Array<[number, number, number, number]> | null;
+}
+
+/**
+ * Finds the laps in a recorded course.
+ *
+ * An amateur road race is a village circuit ridden a dozen times, so a profile
+ * of the whole ride is the same hill drawn fourteen times — which tells a rider
+ * nothing they could not read from one, and hides the detail that matters by
+ * squeezing it. What they want to see is a lap.
+ *
+ * A lap is detected by the track coming back to where it started. The threshold
+ * has to be generous in space and strict in distance travelled: a circuit passes
+ * its own start line within a few tens of metres, but a rider weaving through a
+ * village also passes within a few tens of metres of a point they crossed
+ * moments ago, and only the first is a lap.
+ */
+export function detectLaps(
+  points: Array<[number, number, number, number]>
+): LapAnalysis {
+  const empty: LapAnalysis = {
+    boundaries: [],
+    lapCount: 1,
+    lapDistanceM: points.length ? points[points.length - 1][3] : 0,
+    lap: null,
+  };
+  if (points.length < 40) return empty;
+
+  const start: [number, number] = [points[0][1], points[0][0]];
+  const totalM = points[points.length - 1][3];
+
+  const RETURN_TOLERANCE_M = 120;
+  /** Below this a "lap" is the rider circling the start village, not a circuit. */
+  const MIN_LAP_M = 1_800;
+
+  const boundaries = [0];
+  let searching = true;
+
+  for (let i = 1; i < points.length; i++) {
+    const travelled = points[i][3] - points[boundaries[boundaries.length - 1]][3];
+    if (travelled < MIN_LAP_M) {
+      searching = true;
+      continue;
+    }
+
+    const away = metresFrom(start, [points[i][1], points[i][0]]);
+    if (searching && away < RETURN_TOLERANCE_M) {
+      boundaries.push(i);
+      // Do not mark again until the track has left the start behind, or one
+      // pass would register as several.
+      searching = false;
+    }
+  }
+
+  if (boundaries.length < 3) return empty;
+
+  const lapDistances: number[] = [];
+  for (let i = 1; i < boundaries.length; i++) {
+    lapDistances.push(points[boundaries[i]][3] - points[boundaries[i - 1]][3]);
+  }
+
+  // Laps of a circuit are all the same length. If they are not, this is a
+  // course that happens to cross its own start, not a lapped race.
+  const median = [...lapDistances].sort((a, b) => a - b)[
+    Math.floor(lapDistances.length / 2)
+  ];
+  const consistent = lapDistances.every(
+    (d) => Math.abs(d - median) < median * 0.2
+  );
+  if (!consistent || median < MIN_LAP_M) return empty;
+
+  /* The second lap, not the first: the opening one carries the neutralised
+     start and the roll-out to the circuit, which are not part of the loop. */
+  const pick = boundaries.length > 3 ? 1 : 0;
+  const from = boundaries[pick];
+  const to = boundaries[pick + 1];
+
+  const offsetM = points[from][3];
+  const lap = points
+    .slice(from, to + 1)
+    .map((p) => [p[0], p[1], p[2], p[3] - offsetM] as [number, number, number, number]);
+
+  return {
+    boundaries,
+    lapCount: Math.round(totalM / median),
+    lapDistanceM: median,
+    lap,
+  };
+}
+
+/** Metres between two [lat, lng] pairs. */
+function metresFrom(a: [number, number], b: [number, number]): number {
+  const dLat = (b[0] - a[0]) * 111_320;
+  const dLng = (b[1] - a[1]) * 111_320 * Math.cos((a[0] * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+}

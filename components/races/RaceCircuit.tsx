@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Route } from "lucide-react";
+import { Download, Route } from "lucide-react";
 import { ElevationProfile } from "./ElevationProfile";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
+import { detectLaps } from "@/lib/trace";
 
 const CircuitMap = dynamic(
   () => import("./CircuitMap").then((m) => ({ default: m.CircuitMap })),
@@ -49,33 +50,65 @@ function Figure({ label, value, unit }: { label: string; value: string; unit?: s
  * the profile marks the map. The two halves share one cursor for that reason
  * and no other.
  */
-export function RaceCircuit({ trace }: { trace: RaceTrace }) {
+export function RaceCircuit({
+  trace,
+  raceId,
+}: {
+  trace: RaceTrace;
+  raceId: string;
+}) {
   const [cursor, setCursor] = useState<number | null>(null);
+  const [whole, setWhole] = useState(false);
+
+  const laps = useMemo(() => detectLaps(trace.points), [trace.points]);
+
+  /* One lap by default when the race is laps of a circuit.
+     Drawing the same hill fourteen times says nothing a single lap does not,
+     and squeezes the detail that matters into a fifteenth of the width. */
+  const lapped = laps.lap !== null && laps.lapCount > 1;
+  const profilePoints = lapped && !whole ? laps.lap! : trace.points;
 
   const km = trace.distanceM / 1000;
   // Metres of climbing per kilometre — the number that says whether a course is
   // hard independently of how long it is.
   const density = km > 0 ? trace.elevationGainM / km : 0;
+  const lapGain = lapped ? Math.round(trace.elevationGainM / laps.lapCount) : null;
 
   return (
     <section>
-      <h2 className="mb-3 flex items-center gap-2 font-semibold">
+      <h2 className="mb-3 flex flex-wrap items-center gap-2 font-semibold">
         <Route className="size-4 text-muted-foreground" />
         Le parcours
-        <span className="ml-1 text-sm font-normal text-muted-foreground">
-          relevé par un coureur
-        </span>
+        {lapped && (
+          <span className="ml-1 text-sm font-normal text-muted-foreground">
+            {laps.lapCount} tours de {(laps.lapDistanceM / 1000).toFixed(1)} km
+          </span>
+        )}
+        {/* Downloads what is on screen: asking for one lap and getting fourteen
+            copies of it would be a different answer to the same question. */}
+        <a
+          href={`/api/course/${raceId}/gpx${lapped && !whole ? "?tour=1" : ""}`}
+          download
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs font-normal text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+        >
+          <Download className="size-3.5" />
+          GPX
+        </a>
       </h2>
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
         <div className="h-72 w-full sm:h-80">
-          <CircuitMap points={trace.points} bounds={trace.bounds} cursor={cursor} />
+          <CircuitMap points={profilePoints} bounds={trace.bounds} cursor={cursor} />
         </div>
 
         <div className="grid grid-cols-2 gap-4 border-t border-border px-4 py-3 sm:grid-cols-4">
           <Figure label="Distance" value={km.toFixed(1)} unit="km" />
           <Figure label="Dénivelé" value={String(trace.elevationGainM)} unit="m" />
-          <Figure label="Par km" value={density.toFixed(1)} unit="m" />
+          {lapped ? (
+            <Figure label="Par tour" value={String(lapGain)} unit="m" />
+          ) : (
+            <Figure label="Par km" value={density.toFixed(1)} unit="m" />
+          )}
           <Figure
             label="Altitude"
             value={`${trace.minElevationM}–${trace.maxElevationM}`}
@@ -84,8 +117,25 @@ export function RaceCircuit({ trace }: { trace: RaceTrace }) {
         </div>
 
         <div className="border-t border-border px-2 pb-1 pt-2">
+          {lapped && (
+            <div className="flex items-center justify-between px-2 pb-1">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {whole ? "Course entière" : "Un tour"}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setWhole((w) => !w);
+                  setCursor(null);
+                }}
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                {whole ? "Voir un tour" : "Voir la course entière"}
+              </button>
+            </div>
+          )}
           <ElevationProfile
-            points={trace.points}
+            points={profilePoints}
             minElevationM={trace.minElevationM}
             maxElevationM={trace.maxElevationM}
             onHover={setCursor}
