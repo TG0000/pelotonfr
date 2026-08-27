@@ -14,6 +14,7 @@ import { RaceWeatherPanel } from "@/components/races/RaceWeather";
 import { RaceTerrain } from "@/components/races/RaceTerrain";
 import { RaceCircuit } from "@/components/races/RaceCircuit";
 import { FieldLevel } from "@/components/races/FieldLevel";
+import { PlanButton } from "@/components/races/PlanButton";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
 import { estimateTiming, type RaceTiming } from "@/lib/race-timing";
 import { PastEditions } from "@/components/races/PastEditions";
@@ -127,15 +128,18 @@ export default async function RaceDetailPage({ params }: PageProps) {
           <ArrowLeft className="size-4" />
           Retour aux courses
         </Link>
-        {race.lat && race.lng && (
-          <Link
-            href={`/calendrier?vue=carte&lat=${race.lat}&lng=${race.lng}&radius=30`}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-          >
-            <MapPin className="size-3.5" />
-            Situer sur la carte
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          <PlanButton raceId={race.id} />
+          {race.lat && race.lng && (
+            <Link
+              href={`/calendrier?vue=carte&lat=${race.lat}&lng=${race.lng}&radius=30`}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+            >
+              <MapPin className="size-3.5" />
+              Situer sur la carte
+            </Link>
+          )}
+        </div>
       </div>
 
       <header className="mb-8">

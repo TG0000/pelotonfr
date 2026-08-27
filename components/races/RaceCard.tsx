@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronRight, MapPin } from "lucide-react";
 import type { Race } from "@/types";
 import { cn } from "@/lib/utils";
+import { PlanButton } from "./PlanButton";
 import { displayRaceName } from "@/lib/race-name";
 import {
   CategorySummary,
@@ -104,8 +105,9 @@ export function RaceCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex shrink-0 items-center gap-2">
         {showDistance && <DistanceTag km={race.distanceFromUserKm} />}
+        <PlanButton raceId={race.id} compact />
         <ChevronRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
       </div>
     </Link>

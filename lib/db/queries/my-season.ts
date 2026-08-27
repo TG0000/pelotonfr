@@ -102,6 +102,7 @@ export interface SeasonResult {
 }
 
 export interface UpcomingTarget {
+  intent: "envisagee" | "programmee";
   raceId: string;
   raceName: string;
   date: string;
@@ -193,7 +194,7 @@ export async function getMySeason(
 
   // The races the rider marked, which is the closest thing to a stated plan.
   const targets = ((await sql(
-    `SELECT ra.id, ra.name, ra.race_date::text AS race_date, ra.city,
+    `SELECT uf.intent, ra.id, ra.name, ra.race_date::text AS race_date, ra.city,
             ra.department_code, ra.categories, f.slug AS federation_slug,
             EXISTS (SELECT 1 FROM engagements e WHERE e.race_id = ra.id) AS has_start_list,
             CASE WHEN $2::float8 IS NULL OR ra.location IS NULL THEN NULL
@@ -205,10 +206,12 @@ export async function getMySeason(
        JOIN federations f ON f.id = ra.federation_id
       WHERE uf.user_id = $1::uuid
         AND COALESCE(ra.race_date_end, ra.race_date) >= CURRENT_DATE
-      ORDER BY ra.race_date ASC
-      LIMIT 20`,
+      -- Committed races first: that is the season, the rest is the shortlist.
+      ORDER BY (uf.intent = 'programmee') DESC, ra.race_date ASC
+      LIMIT 40`,
     [userId, row.home_lat ?? null, row.home_lng ?? null]
   )) as Array<Record<string, unknown>>).map((r) => ({
+    intent: r.intent as "envisagee" | "programmee",
     raceId: r.id as string,
     raceName: r.name as string,
     date: r.race_date as string,

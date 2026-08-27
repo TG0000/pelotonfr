@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { SignInButton } from "@clerk/nextjs";
-import { CalendarCheck, Flag, TrendingUp } from "lucide-react";
+import { Bookmark, CalendarCheck, Flag, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { getMySeason, type MySeason } from "@/lib/db/queries/my-season";
 import { RiderClaim } from "@/components/me/RiderClaim";
+import { PlanButton } from "@/components/races/PlanButton";
 import { EmptyState } from "@/components/common/States";
 import {
   CategorySummary, DateBlock, FederationMark, PlaceLabel,
@@ -49,6 +50,52 @@ function Stat({
       </div>
       <div className="mt-1 font-mono text-2xl font-medium tabular-nums">{value}</div>
       {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+    </div>
+  );
+}
+
+function TargetList({ targets }: { targets: MySeason["targets"] }) {
+  return (
+    <div className="divide-y divide-border/60 rounded-xl border border-border bg-surface-1">
+      {targets.map((t) => (
+        <Link
+          key={t.raceId}
+          href={`/course/${t.raceId}`}
+          className="group flex items-center gap-4 px-3 py-3"
+        >
+          <DateBlock date={t.date} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-medium group-hover:text-primary">
+              {displayRaceName(t.raceName)}
+            </div>
+            <PlaceLabel
+              race={{
+                city: t.city,
+                departmentCode: t.departmentCode,
+                departmentName: null,
+              }}
+              className="block text-sm text-muted-foreground"
+            />
+            <div className="mt-0.5 flex items-center gap-2">
+              <FederationMark slug={t.federationSlug} withLabel />
+              <CategorySummary categories={t.categories} />
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            {t.distanceKm != null && (
+              <span className="font-mono text-xs tabular-nums text-primary">
+                {Math.round(t.distanceKm)} km
+              </span>
+            )}
+            {t.hasStartList && (
+              <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
+                engagés publiés
+              </span>
+            )}
+          </div>
+          <PlanButton raceId={t.raceId} compact />
+        </Link>
+      ))}
     </div>
   );
 }
@@ -96,6 +143,11 @@ export default async function MaSaisonPage() {
   const results = data?.results ?? [];
   const targets = data?.targets ?? [];
 
+  // Two lists, because they answer different questions: what am I riding, and
+  // what am I still choosing between.
+  const programmed = targets.filter((t) => t.intent === "programmee");
+  const considered = targets.filter((t) => t.intent === "envisagee");
+
   const wins = results.filter((r) => r.rank === 1).length;
   const podiums = results.filter((r) => r.rank !== null && r.rank <= 3).length;
   const topTen = results.filter((r) => r.rank !== null && r.rank <= 10).length;
@@ -138,19 +190,19 @@ export default async function MaSaisonPage() {
 
           <section className="mb-8">
             <SectionHeading icon={CalendarCheck}>
-              Mes prochaines courses
-              {targets.length > 0 && (
+              Au programme
+              {programmed.length > 0 && (
                 <span className="ml-2 font-mono text-sm font-normal tabular-nums text-muted-foreground">
-                  {targets.length}
+                  {programmed.length}
                 </span>
               )}
             </SectionHeading>
 
-            {targets.length === 0 ? (
+            {programmed.length === 0 ? (
               <EmptyState
                 compact
-                title="Aucune course visée"
-                action="Ajoutez une course en favori depuis le calendrier pour la retrouver ici."
+                title="Aucune course au programme"
+                action="Depuis le calendrier, marquez une course « Envisagée » puis confirmez-la pour la faire entrer ici."
               >
                 <Link
                   href="/calendrier"
@@ -160,48 +212,21 @@ export default async function MaSaisonPage() {
                 </Link>
               </EmptyState>
             ) : (
-              <div className="divide-y divide-border/60 rounded-xl border border-border bg-surface-1">
-                {targets.map((t) => (
-                  <Link
-                    key={t.raceId}
-                    href={`/course/${t.raceId}`}
-                    className="group flex items-center gap-4 px-3 py-3"
-                  >
-                    <DateBlock date={t.date} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium group-hover:text-primary">
-                        {displayRaceName(t.raceName)}
-                      </div>
-                      <PlaceLabel
-                        race={{
-                          city: t.city,
-                          departmentCode: t.departmentCode,
-                          departmentName: null,
-                        }}
-                        className="block text-sm text-muted-foreground"
-                      />
-                      <div className="mt-0.5 flex items-center gap-2">
-                        <FederationMark slug={t.federationSlug} withLabel />
-                        <CategorySummary categories={t.categories} />
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      {t.distanceKm != null && (
-                        <span className="font-mono text-xs tabular-nums text-primary">
-                          {Math.round(t.distanceKm)} km
-                        </span>
-                      )}
-                      {t.hasStartList && (
-                        <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
-                          engagés publiés
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
+              <TargetList targets={programmed} />
             )}
           </section>
+
+          {considered.length > 0 && (
+            <section className="mb-8">
+              <SectionHeading icon={Bookmark}>
+                À l&apos;étude
+                <span className="ml-2 font-mono text-sm font-normal tabular-nums text-muted-foreground">
+                  {considered.length}
+                </span>
+              </SectionHeading>
+              <TargetList targets={considered} />
+            </section>
+          )}
 
           <section>
             <SectionHeading icon={Flag}>
