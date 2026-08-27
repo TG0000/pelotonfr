@@ -47,7 +47,7 @@ export interface RaceFilters {
   radius: number;
   q: string;
   page: number;
-  sortBy: "date_asc" | "date_desc";
+  sortBy: "date_asc" | "date_desc" | "distance";
 }
 
 export interface PaginatedRaces {

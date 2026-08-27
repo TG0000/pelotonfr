@@ -114,7 +114,10 @@ export async function getRaces(
       `r.location IS NOT NULL AND ST_DWithin(r.location, ${point}, ${bind(radius * 1000)})`
     );
     distanceSelect = `, ST_Distance(r.location, ${point}) / 1000 AS distance_from_user_km`;
-    distanceOrder = "distance_from_user_km,";
+    // Only when asked for. Choosing a town used to reorder the whole list by
+    // distance, silently overriding the date order the rider had picked — so a
+    // race in October appeared above one at the end of August.
+    if (sortBy === "distance") distanceOrder = "distance_from_user_km,";
   }
 
   const whereClause = where.join(" AND ");

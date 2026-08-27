@@ -8,6 +8,7 @@ import { MobileFilters } from "@/components/races/MobileFilters";
 import { ActiveFilters } from "@/components/races/ActiveFilters";
 import { RaceCard } from "@/components/races/RaceCard";
 import { Pagination } from "@/components/common/Pagination";
+import { SortSelect } from "@/components/races/SortSelect";
 import { EmptyState } from "@/components/common/States";
 import { MapClient } from "@/components/map/MapClient";
 import { ViewSwitcher, type RaceView } from "@/components/races/ViewSwitcher";
@@ -82,6 +83,10 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
     ? getString(params.dateTo)
     : "";
 
+  const sortParam = getString(params.sortBy);
+  const sortBy: "date_asc" | "date_desc" | "distance" =
+    sortParam === "date_desc" || sortParam === "distance" ? sortParam : "date_asc";
+
   const shared = {
     fed: getArray(params.fed) as FederationSlug[],
     disc: getArray(params.disc) as Discipline[],
@@ -124,7 +129,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
         lat: params.lat ? Number(params.lat) : null,
         lng: params.lng ? Number(params.lng) : null,
         radius: Number(getString(params.radius)) || 50,
-        sortBy: "date_asc",
+        sortBy: sortBy,
       });
     } else {
       mapRaces = await getRacesForMap({
@@ -230,6 +235,11 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
                 <ChevronRight className="size-4" />
               </Link>
             </div>
+          )}
+          {view === "liste" && (
+            <Suspense fallback={null}>
+              <SortSelect />
+            </Suspense>
           )}
           <Suspense fallback={null}>
             <ViewSwitcher current={view} />

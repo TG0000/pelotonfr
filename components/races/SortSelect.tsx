@@ -7,6 +7,9 @@ import { ArrowUpDown } from "lucide-react";
 const SORT_OPTIONS = [
   { value: "date_asc", label: "Date (croissante)" },
   { value: "date_desc", label: "Date (décroissante)" },
+  // Offered only once a location is set: there is nothing to measure from
+  // otherwise, and an option that silently does nothing is worse than none.
+  { value: "distance", label: "Distance", needsLocation: true },
 ] as const;
 
 export function SortSelect() {
@@ -15,6 +18,12 @@ export function SortSelect() {
   const searchParams = useSearchParams();
 
   const current = searchParams.get("sortBy") ?? "date_asc";
+  const hasLocation = Boolean(
+    searchParams.get("lat") && searchParams.get("lng")
+  );
+  const options = SORT_OPTIONS.filter(
+    (o) => !("needsLocation" in o && o.needsLocation) || hasLocation
+  );
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -38,7 +47,7 @@ export function SortSelect() {
         onChange={handleChange}
         className="text-sm bg-transparent border rounded-md px-2 py-1.5 pr-7 focus:outline-none focus:ring-1 focus:ring-primary text-foreground cursor-pointer"
       >
-        {SORT_OPTIONS.map((opt) => (
+        {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
