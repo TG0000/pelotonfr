@@ -26,7 +26,8 @@ import {
   interpolateElevations,
   type CircuitCandidate,
 } from "../../lib/circuit";
-import { distancesAlong } from "../../lib/polyline";
+import { distancesAlong, resample } from "../../lib/polyline";
+import { groundAlongLine } from "../../lib/elevation";
 import { startRun } from "../lib/track-run";
 
 loadEnv();
@@ -73,16 +74,28 @@ async function storeCircuit(
   raceId: string,
   circuit: CircuitCandidate
 ): Promise<void> {
-  const sampled = await elevationsFor(circuit.points);
-  const elevations = interpolateElevations(
-    circuit.points.length,
-    sampled ?? []
-  );
-  const distances = distancesAlong(circuit.points);
+  // Strava draws a straight kilometre with two points, which is honest about
+  // the shape and useless as a profile: the ground under that kilometre gets
+  // read once. The IGN resamples the line itself and hands back the points it
+  // measured, evenly spaced — so a point every twenty metres, each one a real
+  // measurement rather than a value interpolated between two distant ones.
+  const wanted = Math.min(2_000, Math.max(50, Math.round(circuit.lengthM / 20)));
+  const ground = await groundAlongLine(circuit.points, wanted);
 
-  const points = circuit.points.map((p, i) => [
-    p[1], // lng
-    p[0], // lat
+  const track: Array<[number, number]> = ground
+    ? ground.map((g) => [g[0], g[1]])
+    : resample(circuit.points, 20);
+  const elevations = ground
+    ? ground.map((g) => g[2])
+    : interpolateElevations(
+        track.length,
+        (await elevationsFor(track, circuit.lengthM)) ?? []
+      );
+  const distances = distancesAlong(track);
+
+  const points = track.map((p, i) => [
+    Number(p[1].toFixed(6)), // lng
+    Number(p[0].toFixed(6)), // lat
     Math.round(elevations[i] ?? 0),
     Math.round(distances[i]),
   ]);
@@ -98,8 +111,8 @@ async function storeCircuit(
     }
   }
 
-  const lats = circuit.points.map((p) => p[0]);
-  const lngs = circuit.points.map((p) => p[1]);
+  const lats = track.map((p) => p[0]);
+  const lngs = track.map((p) => p[1]);
   const alts = elevations.filter((e) => Number.isFinite(e));
 
   await sql(

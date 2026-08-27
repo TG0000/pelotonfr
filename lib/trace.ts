@@ -28,11 +28,45 @@ export interface TraceSummary {
 }
 
 /**
- * Ramer–Douglas–Peucker on the ground track.
+ * Ramer–Douglas–Peucker over the ground track *and* the profile.
  *
  * Keeps the points that carry the shape and discards the ones on a straight,
  * so a 12 000-point ride becomes a few hundred without losing a bend.
+ *
+ * The measure used to be the ground track alone, which is right for a map and
+ * wrong for a profile: a kilometre of straight road is one chord however much
+ * it climbs, so every rise along it collapsed to a single ramp. On a lapped
+ * race the damage compounded — a 72 km ride kept 500 points, so one 6.5 km lap
+ * was drawn from fifty, a point every 130 metres, and the profile read as a
+ * child's drawing of the course rather than the course.
+ *
+ * So a point is far from the chord if it is far *either* on the ground or in
+ * height. The two are in different units — degrees and metres — so height is
+ * converted at the latitude of the ride: roughly 111 km to the degree, and a
+ * metre of climb matters about as much as ten metres of ground, which is the
+ * ratio at which a profile stops looking angular.
  */
+const METRES_PER_DEGREE = 111_320;
+/**
+ * How much a metre of height counts against a metre of ground.
+ *
+ * Fifteen, chosen against a real 86 km ride: it keeps a point every twenty-odd
+ * metres where the ride itself recorded one every twelve, and spends those
+ * points on the pitches rather than on the bends.
+ */
+const HEIGHT_WEIGHT = 15;
+
+/**
+ * The most points a stored trace may carry.
+ *
+ * A profile a reader can trust costs bytes the reader has to download, and a
+ * long cyclosportive would otherwise arrive as half a megabyte of JSON. Above
+ * this the track is simplified again, more coarsely, rather than truncated —
+ * losing the far half of a course is worse than drawing all of it slightly
+ * plainer.
+ */
+const MAX_POINTS = 5_000;
+
 function simplify(
   points: Array<[number, number, number, number]>,
   toleranceDeg: number
@@ -50,16 +84,30 @@ function simplify(
     let maxDist = 0;
     let index = -1;
 
-    const [x1, y1] = points[first];
-    const [x2, y2] = points[last];
+    const [x1, y1, z1] = points[first];
+    const [x2, y2, z2] = points[last];
     const dx = x2 - x1;
     const dy = y2 - y1;
     const denom = Math.hypot(dx, dy) || 1e-12;
+    const dz = z2 - z1;
 
     for (let i = first + 1; i < last; i++) {
-      const [x0, y0] = points[i];
-      // Perpendicular distance from the point to the chord.
-      const dist = Math.abs(dy * x0 - dx * y0 + x2 * y1 - y2 * x1) / denom;
+      const [x0, y0, z0] = points[i];
+      // Perpendicular distance from the point to the chord, on the ground.
+      const ground =
+        Math.abs(dy * x0 - dx * y0 + x2 * y1 - y2 * x1) / denom;
+
+      // And how far the height strays from the chord's own straight line,
+      // measured where the point falls along it.
+      const along =
+        denom > 0
+          ? ((x0 - x1) * dx + (y0 - y1) * dy) / (denom * denom)
+          : 0;
+      const expected = z1 + dz * Math.min(1, Math.max(0, along));
+      const height =
+        (Math.abs(z0 - expected) * HEIGHT_WEIGHT) / METRES_PER_DEGREE;
+
+      const dist = Math.max(ground, height);
       if (dist > maxDist) {
         maxDist = dist;
         index = i;
@@ -112,9 +160,19 @@ export function summariseTrace(
     distance[i] ?? 0,
   ]);
 
-  // About 8 m at these latitudes: fine enough that a village circuit keeps its
-  // corners, coarse enough to leave a few hundred points.
-  const simplified = simplify(raw, 0.00008);
+  // About a metre at these latitudes. Eight metres was chosen to keep a village
+  // circuit's corners, which it did — but a circuit is not only read as a shape
+  // on a map, it is read as a profile, and a profile drawn every 130 metres is
+  // a rumour. On a lapped race the loss compounded: a 72 km ride kept 500
+  // points, so one 6.5 km lap was drawn from fifty.
+  let simplified = simplify(raw, 0.00001);
+  for (
+    let tolerance = 0.00002;
+    simplified.length > MAX_POINTS && tolerance < 0.001;
+    tolerance *= 2
+  ) {
+    simplified = simplify(raw, tolerance);
+  }
 
   const alts = raw.map((p) => p[2]).filter((a) => Number.isFinite(a));
   const distances = raw.map((p) => p[3]).filter((d) => Number.isFinite(d));

@@ -134,31 +134,97 @@ export function findCircuits(
  * Heights along a track, from the public elevation model.
  *
  * Strava's explorer gives the shape but not the ground, so the profile is read
- * separately. A hundred points is the service's limit per request and plenty
- * for a circuit: it puts a sample every eighty metres on an eight-kilometre lap.
+ * separately. A hundred coordinates is the service's limit *per request*, which
+ * was taken for the limit full stop — so an eight-kilometre lap was profiled
+ * every eighty metres, and the climb that decides the race became a smooth ramp
+ * with its steep pitch averaged away.
+ *
+ * The limit is per request, and the service is free and unmetered, so the track
+ * is read in as many requests as it takes to sample it every fifteen metres or
+ * so. Requests go one after another rather than at once: this is somebody
+ * else's server and we are asking a favour.
  */
-export async function elevationsFor(
-  points: Array<[number, number]>,
-  samples = 100
+const ELEVATION_BATCH = 100;
+/**
+ * How closely the ground is read, in metres along the track.
+ *
+ * Twenty rather than fifteen: the service's allowance is weighted by how many
+ * coordinates a request carries, so the spacing is what decides how long a
+ * circuit takes to profile. Twenty metres is four times finer than the eighty
+ * this used to manage and costs a quarter less waiting.
+ */
+const ELEVATION_SPACING_M = 20;
+/** Above this a track is sampled more coarsely rather than not at all. */
+const MAX_ELEVATION_SAMPLES = 1_200;
+
+/**
+ * One request, with the patience the service asks for.
+ *
+ * Open-Meteo answers 429 with "try again in one minute" when a burst crosses
+ * its minutely allowance — which reading fifty circuits back to back does
+ * comfortably. Treating that as a failure was worse than slow: the profile came
+ * back flat and nothing said why. It is a queue, not a refusal, so it is waited
+ * out.
+ */
+async function fetchElevations(
+  batch: Array<[number, number]>,
+  attempt = 0
 ): Promise<number[] | null> {
-  const step = Math.max(1, Math.floor(points.length / samples));
-  const sampled = points.filter((_, i) => i % step === 0).slice(0, samples);
-  if (sampled.length < 2) return null;
-
-  const lats = sampled.map((p) => p[0].toFixed(5)).join(",");
-  const lngs = sampled.map((p) => p[1].toFixed(5)).join(",");
-
+  const lats = batch.map((p) => p[0].toFixed(5)).join(",");
+  const lngs = batch.map((p) => p[1].toFixed(5)).join(",");
   try {
     const res = await fetch(
       `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lngs}`,
       { next: { revalidate: 86_400 } }
     );
+
+    // Their allowance is weighted by the number of coordinates asked for, so a
+    // hundred of them is most of a minute's budget and the wait they name is
+    // the wait they mean. Taken literally, with a little room.
+    if (res.status === 429 && attempt < 5) {
+      await new Promise((r) => setTimeout(r, 65_000));
+      return fetchElevations(batch, attempt + 1);
+    }
     if (!res.ok) return null;
+
     const data = (await res.json()) as { elevation?: number[] };
     return data.elevation ?? null;
   } catch {
     return null;
   }
+}
+
+export async function elevationsFor(
+  points: Array<[number, number]>,
+  lengthM?: number
+): Promise<number[] | null> {
+  if (points.length < 2) return null;
+
+  const wanted = lengthM
+    ? Math.ceil(lengthM / ELEVATION_SPACING_M)
+    : points.length;
+  const samples = Math.min(MAX_ELEVATION_SAMPLES, Math.max(2, wanted));
+
+  // Evenly spaced along the track, endpoints included, so the profile starts
+  // and finishes where the circuit does.
+  const sampled: Array<[number, number]> = [];
+  for (let i = 0; i < samples; i++) {
+    const at = Math.round((i / (samples - 1)) * (points.length - 1));
+    sampled.push(points[at]);
+  }
+
+  const heights: number[] = [];
+  for (let i = 0; i < sampled.length; i += ELEVATION_BATCH) {
+    const batch = await fetchElevations(sampled.slice(i, i + ELEVATION_BATCH));
+    // A track half read is a profile that lies about where the climbs are.
+    if (!batch) return heights.length >= 2 ? heights : null;
+    heights.push(...batch);
+    if (i + ELEVATION_BATCH < sampled.length) {
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+
+  return heights.length >= 2 ? heights : null;
 }
 
 /** Spreads sampled heights back across every point of the track. */
