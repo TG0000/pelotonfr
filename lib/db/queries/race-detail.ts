@@ -324,3 +324,40 @@ export async function getFieldLevel(raceId: string): Promise<FieldLevel | null> 
     fastestSpeedKmh: row.max_kmh === null ? null : Number(row.max_kmh),
   };
 }
+
+export interface RaceClimb {
+  segmentId: number;
+  name: string;
+  distanceM: number;
+  averageGrade: number;
+  elevationM: number | null;
+  climbCategory: number | null;
+}
+
+/**
+ * The climbs in the sector, as Strava's riders have named them.
+ *
+ * Not the course itself — these are the difficulties of the ground around the
+ * start, which is the best available answer where nobody has yet ridden the
+ * race with a computer running. Where a trace exists, it is the better source
+ * and this is context beside it.
+ */
+export async function getRaceClimbs(raceId: string): Promise<RaceClimb[]> {
+  const rows = (await sql(
+    `SELECT segment_id, name, distance_m, average_grade, elevation_m, climb_category
+       FROM race_segments
+      WHERE race_id = $1::uuid
+      ORDER BY elevation_m DESC NULLS LAST, average_grade DESC
+      LIMIT 6`,
+    [raceId]
+  )) as Array<Record<string, unknown>>;
+
+  return rows.map((r) => ({
+    segmentId: Number(r.segment_id),
+    name: r.name as string,
+    distanceM: Number(r.distance_m),
+    averageGrade: Number(r.average_grade),
+    elevationM: r.elevation_m === null ? null : Number(r.elevation_m),
+    climbCategory: r.climb_category === null ? null : Number(r.climb_category),
+  }));
+}

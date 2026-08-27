@@ -15,6 +15,7 @@ import { RaceTerrain } from "@/components/races/RaceTerrain";
 import { RaceCircuit } from "@/components/races/RaceCircuit";
 import { FieldLevel } from "@/components/races/FieldLevel";
 import { PlanButton } from "@/components/races/PlanButton";
+import { RaceClimbs } from "@/components/races/RaceClimbs";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
 import { estimateTiming, type RaceTiming } from "@/lib/race-timing";
 import { PastEditions } from "@/components/races/PastEditions";
@@ -228,6 +229,10 @@ export default async function RaceDetailPage({ params }: PageProps) {
         )}
 
         {trace && <RaceCircuit trace={trace} />}
+
+        <Suspense fallback={<Skeleton rows={3} />}>
+          <RaceClimbs raceId={race.id} hasTrace={trace !== null} />
+        </Suspense>
 
         <Suspense fallback={<Skeleton rows={2} />}>
           <FieldLevel raceId={race.id} />

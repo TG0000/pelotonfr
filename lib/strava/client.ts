@@ -198,6 +198,63 @@ export async function getActivityStreams(
   return { latlng, altitude, distance };
 }
 
+export interface StravaSegment {
+  id: number;
+  name: string;
+  distanceM: number;
+  averageGrade: number;
+  elevationM: number | null;
+  climbCategory: number | null;
+  startLat: number | null;
+  startLng: number | null;
+}
+
+/**
+ * The notable climbs inside a geographic box.
+ *
+ * Strava answers with at most ten segments per call, ranked by its own notion
+ * of interest, so a sector is asked twice: once without a category filter for
+ * whatever is locally ridden, and once restricted to categorised climbs, which
+ * surfaces the ones that actually decide a race.
+ */
+export async function exploreSegments(
+  token: string,
+  bounds: { south: number; west: number; north: number; east: number },
+  options: { minCategory?: number; maxCategory?: number } = {}
+): Promise<StravaSegment[]> {
+  const params = new URLSearchParams({
+    bounds: `${bounds.south},${bounds.west},${bounds.north},${bounds.east}`,
+    activity_type: "riding",
+  });
+  if (options.minCategory !== undefined) {
+    params.set("min_cat", String(options.minCategory));
+    params.set("max_cat", String(options.maxCategory ?? 5));
+  }
+
+  const res = await fetch(`${STRAVA_API}/segments/explore?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+
+  const body = (await res.json()) as {
+    segments?: Array<Record<string, unknown>>;
+  };
+
+  return (body.segments ?? []).map((s) => {
+    const start = (s.start_latlng as [number, number] | undefined) ?? undefined;
+    return {
+      id: Number(s.id),
+      name: String(s.name ?? "").slice(0, 160),
+      distanceM: Number(s.distance ?? 0),
+      averageGrade: Number(s.avg_grade ?? 0),
+      elevationM: s.elev_difference === undefined ? null : Number(s.elev_difference),
+      climbCategory: s.climb_category === undefined ? null : Number(s.climb_category),
+      startLat: start?.[0] ?? null,
+      startLng: start?.[1] ?? null,
+    };
+  });
+}
+
 export function authorizeUrl(redirectUri: string, state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.STRAVA_CLIENT_ID ?? "",

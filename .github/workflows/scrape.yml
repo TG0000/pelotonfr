@@ -78,6 +78,18 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run scrape:engagements -- --pages=4
 
+      # The climbs around each upcoming race. One connected Strava account
+      # answers for every reader, so this is worth running even though almost
+      # nobody will have connected one.
+      - name: Read the climbs around upcoming races
+        if: ${{ !inputs.federation }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+        run: npm run scrape:segments -- --limit=80
+        continue-on-error: true
+
       # Categories for FSGT and UFOLEP, which their own calendar never states.
       - name: Enrich categories
         if: ${{ !inputs.federation }}
