@@ -1,7 +1,7 @@
 /**
  * FFC results ingestion.
  *
- *   npx tsx scripts/scrapers/ffc-results.ts [--limit=300] [--force]
+ *   npx tsx scripts/scrapers/ffc-results.ts [--limit=300] [--force] [--max-age=600]
  *
  * The FFC renders its classifications client-side from a `resultatsJson` object
  * embedded in the results page. That object carries, per rider: rank, surname,
@@ -358,6 +358,14 @@ async function main() {
   const limit = limitArg ? Number(limitArg.split("=")[1]) : 300;
   const force = process.argv.includes("--force");
 
+  // The four-hundred-day guard is right for the nightly job and wrong for a
+  // backfill: the discovery walk had just brought back four thousand races from
+  // May 2025, and the results run answered "no races awaiting results" because
+  // every one of them was older than the guard. A deliberate reprise says how
+  // far it means to reach.
+  const maxAgeArg = process.argv.find((a) => a.startsWith("--max-age="));
+  const maxAgeDays = maxAgeArg ? Number(maxAgeArg.split("=")[1]) : MAX_AGE_DAYS;
+
   const races = (await sql(
     `SELECT id, competition_code, COALESCE(season, EXTRACT(YEAR FROM race_date)::int) AS season
        FROM races
@@ -375,7 +383,7 @@ async function main() {
              OR results_fetched_at < now() - ($5::int * INTERVAL '1 day'))
       ORDER BY race_date DESC
       LIMIT $2::int`,
-    [FFC_FEDERATION_ID, limit, MAX_AGE_DAYS, force, RETRY_AFTER_DAYS, CALENDAR_ONLY_GRACE_DAYS]
+    [FFC_FEDERATION_ID, limit, maxAgeDays, force, RETRY_AFTER_DAYS, CALENDAR_ONLY_GRACE_DAYS]
   )) as unknown as RaceRow[];
 
   if (races.length === 0) {

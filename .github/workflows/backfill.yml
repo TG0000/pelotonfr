@@ -4,7 +4,7 @@ name: Backfill past seasons
 #
 # HOW FAR THIS CAN GO. The FFC results index serves roughly the current season
 # and the one before it — measured by bisection, it answers for 01/05/2025 and
-# returns empty pages for 15/04/2025. The 2021 category reform is out of reach
+# returns empty pages for 15/04/2025. Verified again in August 2026: still true. The 2021 category reform is out of reach
 # from this source whatever `days` is set to, and the scraper clamps rather than
 # walking empty pages for hours. Deeper history needs the per-rider palmarès
 # route instead.
@@ -60,7 +60,10 @@ jobs:
       - name: Ingest their classifications
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npm run scrape:results -- --limit=${{ inputs.results_limit }}
+        # Same reach as the discovery walk, or the classifications step skips
+        # every race the walk just brought back: the nightly job's four-hundred
+        # day guard is right for a nightly job and wrong for a reprise.
+        run: npm run scrape:results -- --limit=${{ inputs.results_limit }} --max-age=${{ inputs.days }}
 
       # The whole point of reaching back is linking editions to each other, and
       # that link is only made when identities are recomputed over the new rows.
