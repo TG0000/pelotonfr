@@ -1,10 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="PelotonFR">
   <rect width="32" height="32" rx="7" fill="#18263F"/>
-  <g transform="translate(16 16) rotate(-18) scale(0.86)">
-    <rect x="-11.80" y="-11.10" width="5.6" height="11" rx="2.8" fill="#8C9EBE"/>
-    <rect x="-11.80" y="0.10"   width="5.6" height="11" rx="2.8" fill="#8C9EBE"/>
-    <rect x="-4.80"  y="-11.10" width="5.6" height="11" rx="2.8" fill="#C6D2E6"/>
-    <rect x="-4.80"  y="0.10"   width="5.6" height="11" rx="2.8" fill="#C6D2E6"/>
-    <rect x="3.70"   y="-5.50"  width="5.6" height="11" rx="2.8" fill="#F2C14E"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 9 5.5 L 24 7.5 L 26 15 L 16.5 16.5 L 21 24 L 8 26 L 5.5 14 Z" stroke="#7D8DAB" stroke-width="3.4"/>
+    <path d="M 9 5.5 L 24 7.5" stroke="#F2C14E" stroke-width="3.8"/>
   </g>
 </svg>

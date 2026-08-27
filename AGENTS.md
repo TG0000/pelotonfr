@@ -11,13 +11,19 @@ of an identity is that it holds when nobody is looking at it.
 
 ## The mark
 
-A peloton seen from above — two ranks of riders with one off the front, in
-`components/brand/Logo.tsx`. Five capsules, no more: it has to survive a 16px
-tab icon. Use `<Logo />` and `<Wordmark />`; never a bicycle icon from an icon
+A circuit with its decisive sector, in `components/brand/Logo.tsx`. French
+amateur racing is laps of a village loop, and this product exists to tell a
+rider what that loop will do to them before they start. So the mark is the
+circuit, traced the way a route is drawn on a map, with one stretch in the
+yellow of a course arrow: the place the race is won.
+
+Straights and corners, never a soft blob — a smooth loop reads as a pebble.
+Two paths, no more: at 16px it has to survive as a dark loop with a bright
+straight. Use `<Logo />` and `<Wordmark />`; never a bicycle icon from an icon
 set, which is what a thousand other apps already use.
 
-The rider off the front is always the accent yellow. That is the product's
-thesis — you are somewhere in this bunch, and the point is to know where.
+The yellow sector is the product's thesis. Anyone can tell you a race exists;
+this tells you where it is decided.
 
 ## Two registers
 
