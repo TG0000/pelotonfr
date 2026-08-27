@@ -87,6 +87,11 @@ export function meetingKey(name: string): string {
     )
     // "Epreuve A", "Epreuve B" — the same afternoon's fields, lettered.
     .replace(/\b[ée]preuve\s+[a-z]\b/gi, " ")
+    // Who may enter, not what the meeting is. "La Route du Roc sur invitation"
+    // and "La Route du Roc" are the same rendez-vous a year apart, and reading
+    // the restriction as part of the name cost the 2026 edition its 2025 one.
+    .replace(/\bsur\s+invitation\b/gi, " ")
+    .replace(/\b(?:course|[ée]preuve)\s+r[ée]serv[ée]e?s?\b/gi, " ")
     // Age bands written out: "40 ans et +", "17 ans et plus", "19-39".
     .replace(/\b\d{1,2}\s*(?:[-–]\s*\d{1,2}\s*)?ans?\b(?:\s*et\s*(?:\+|plus))?/gi, " ")
     .replace(/\bet\s*\+/gi, " ")

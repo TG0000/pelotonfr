@@ -37,6 +37,7 @@ import { fetchHtml, politeDelay } from "./utils/http";
 import { createSql } from "./utils/db";
 import { departmentCodeFromName } from "./utils/departments";
 import { upsertRaces } from "./utils/upsert-races";
+import { normalizeCategories } from "../../lib/categories";
 import type { ScrapedRace } from "../../lib/scraper-types";
 import type { Discipline, RaceLevel } from "../../lib/constants";
 import { startRun } from "../lib/track-run";
@@ -115,28 +116,21 @@ function formatDate(date: Date): string {
 }
 
 /** Categories encoded in the title, mirroring the calendar scraper. */
+/**
+ * The categories a race title states.
+ *
+ * A thin wrapper on the one vocabulary, in `lib/categories.ts`. Each scraper
+ * used to carry its own copy, and the copies drifted: these two wrote "Open2"
+ * and "Cadets" where the rest of the product writes "open2" and "u17". Postgres
+ * array overlap is case-sensitive, so a 2025 edition never matched its 2026 one
+ * and the race page fell back to the regional field with a previous edition
+ * sitting in the table. Three thousand races carried the divergent spelling.
+ *
+ * There is one home for this vocabulary. Anything else is a copy waiting to
+ * drift again.
+ */
 function extractCategories(title: string): string[] {
-  const found = new Set<string>();
-  const upper = title.toUpperCase();
-
-  const open = /OPEN\s*([1-3](?:\s*[-/ ]\s*[1-3])*)/.exec(upper);
-  if (open) for (const d of open[1].match(/[1-3]/g) ?? []) found.add(`Open${d}`);
-  else if (/\bOPEN\b/.test(upper)) ["1", "2", "3"].forEach((d) => found.add(`Open${d}`));
-
-  const access = /ACCESS\s*([1-4](?:\s*[-/ ]\s*[1-4])*)/.exec(upper);
-  if (access) for (const d of access[1].match(/[1-4]/g) ?? []) found.add(`Access${d}`);
-  else if (/\bACCESS\b/.test(upper)) ["1", "2", "3", "4"].forEach((d) => found.add(`Access${d}`));
-
-  if (/\bELITE?\b/.test(upper)) found.add("Elite");
-  for (const m of upper.matchAll(/\bU(\d{2})\b/g)) {
-    const n = Number(m[1]);
-    if (n === 19) found.add("Juniors");
-    else if (n === 17) found.add("Cadets");
-    else if (n === 15) found.add("Minimes");
-  }
-  if (/\bF[EÉ]MININ|DAMES\b/.test(upper)) found.add("Feminines");
-
-  return [...found];
+  return normalizeCategories(title);
 }
 
 interface IndexPage {

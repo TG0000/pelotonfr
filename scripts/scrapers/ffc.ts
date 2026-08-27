@@ -20,6 +20,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { normalizeCategories } from "../../lib/categories";
 import type {
   ScrapedRace,
   ScraperResult,
@@ -180,44 +181,21 @@ function parseCoordinate(value: string): number | null {
  *   "Alençon - Open 1-2-3 - Access 1-2-3-4"  → Open1..3, Access1..4
  *   "GP de Strasbourg M3 (U15 G+F)"          → U15
  */
+/**
+ * The categories a race title states.
+ *
+ * A thin wrapper on the one vocabulary, in `lib/categories.ts`. Each scraper
+ * used to carry its own copy, and the copies drifted: these two wrote "Open2"
+ * and "Cadets" where the rest of the product writes "open2" and "u17". Postgres
+ * array overlap is case-sensitive, so a 2025 edition never matched its 2026 one
+ * and the race page fell back to the regional field with a previous edition
+ * sitting in the table. Three thousand races carried the divergent spelling.
+ *
+ * There is one home for this vocabulary. Anything else is a copy waiting to
+ * drift again.
+ */
 function extractCategories(title: string): string[] {
-  const found = new Set<string>();
-  const upper = title.toUpperCase();
-
-  // "OPEN 1-2-3" / "OPEN 1 2 3" / "OPEN123"
-  const openMatch = /OPEN\s*([1-3](?:\s*[-/ ]\s*[1-3])*)/.exec(upper);
-  if (openMatch) {
-    for (const digit of openMatch[1].match(/[1-3]/g) ?? []) {
-      found.add(`Open${digit}`);
-    }
-  } else if (/\bOPEN\b/.test(upper)) {
-    found.add("Open1");
-    found.add("Open2");
-    found.add("Open3");
-  }
-
-  const accessMatch = /ACCESS\s*([1-4](?:\s*[-/ ]\s*[1-4])*)/.exec(upper);
-  if (accessMatch) {
-    for (const digit of accessMatch[1].match(/[1-4]/g) ?? []) {
-      found.add(`Access${digit}`);
-    }
-  } else if (/\bACCESS\b/.test(upper)) {
-    for (const digit of ["1", "2", "3", "4"]) found.add(`Access${digit}`);
-  }
-
-  if (/\bELITE?\b/.test(upper)) found.add("Elite");
-
-  // Youth categories are published as U-numbers.
-  for (const m of upper.matchAll(/\bU(\d{2})\b/g)) {
-    const n = Number(m[1]);
-    if (n === 19) found.add("Juniors");
-    else if (n === 17) found.add("Cadets");
-    else if (n === 15) found.add("Minimes");
-  }
-
-  if (/\bF[EÉ]MININ|DAMES\b/.test(upper)) found.add("Feminines");
-
-  return [...found];
+  return normalizeCategories(title);
 }
 
 /** Infers gender when the title says so explicitly. */
