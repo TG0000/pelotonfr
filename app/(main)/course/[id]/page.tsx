@@ -10,6 +10,8 @@ import { buttonVariants } from "@/lib/button-variants";
 import { getRaceById } from "@/lib/db/queries/races";
 import { RaceCompetitors } from "@/components/riders/RaceCompetitors";
 import { StartList, SectionHeading } from "@/components/races/StartList";
+import { RaceWeatherPanel } from "@/components/races/RaceWeather";
+import { RaceTerrain } from "@/components/races/RaceTerrain";
 import { PastEditions } from "@/components/races/PastEditions";
 import { SiblingRaces } from "@/components/races/SiblingRaces";
 import {
@@ -175,6 +177,19 @@ export default async function RaceDetailPage({ params }: PageProps) {
       )}
 
       <div className="flex flex-col gap-8">
+        {race.lat != null && race.lng != null && (
+          <div className="grid gap-8 sm:grid-cols-2">
+            {!isPast && (
+              <Suspense fallback={<Skeleton rows={2} />}>
+                <RaceWeatherPanel lat={race.lat} lng={race.lng} date={race.raceDate} />
+              </Suspense>
+            )}
+            <Suspense fallback={<Skeleton rows={2} />}>
+              <RaceTerrain lat={race.lat} lng={race.lng} />
+            </Suspense>
+          </div>
+        )}
+
         {!isPast && (
           <Suspense fallback={<Skeleton rows={4} />}>
             <StartList raceId={race.id} />
