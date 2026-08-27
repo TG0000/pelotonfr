@@ -2,21 +2,23 @@ name: Backfill past seasons
 
 # Manual only, and deliberately separate from the nightly job.
 #
-# Reaching back to the 2021 category reform means walking the results index
-# for well over a thousand days and then fetching a classification for each
-# race found. That is hours of polite requests — far too long to sit inside the
-# nightly run, and pointless to repeat once done.
+# HOW FAR THIS CAN GO. The FFC results index serves roughly the current season
+# and the one before it — measured by bisection, it answers for 01/05/2025 and
+# returns empty pages for 15/04/2025. The 2021 category reform is out of reach
+# from this source whatever `days` is set to, and the scraper clamps rather than
+# walking empty pages for hours. Deeper history needs the per-rider palmarès
+# route instead.
 #
-# Run it one slice at a time, oldest slice last: each run is resumable because
-# the index is walked backwards from today and races already held are skipped
-# by content hash.
+# What is reachable is still worth an hour: about sixteen months, which is what
+# lets a meeting see its previous edition. Races already held are skipped by
+# content hash, so a slice that times out is simply run again.
 on:
   workflow_dispatch:
     inputs:
       days:
-        description: 'How far back to walk the results index, in days (2021 reform ≈ 1900).'
+        description: 'How far back to walk, in days. The index reaches about 490; beyond that it is clamped.'
         required: true
-        default: '400'
+        default: '490'
         type: string
       results_limit:
         description: 'How many races to fetch classifications for in this run.'

@@ -16,6 +16,19 @@
  * Past entries carry no coordinates — only a department — which is fine: they
  * exist for history and rider records, not for "find a race near me". Where a
  * past race belongs to an event we already know, it inherits that event's venue.
+ *
+ * HOW FAR BACK THIS CAN REACH
+ *
+ * Not as far as one would like. The index serves roughly the current season and
+ * the one before it, and returns an empty page for anything older — measured by
+ * bisection: `avant=01/05/2025` still lists competitions, `avant=15/04/2025`
+ * lists none. Asking for 2021 does not fail, it simply walks empty pages for
+ * hours, which is why the horizon is asserted here rather than discovered again
+ * by whoever tries next.
+ *
+ * Reaching the 2021 category reform therefore needs a different route — a
+ * rider's own palmarès page yields the competition codes of races they rode,
+ * and those pages are not bounded the way this index is.
  */
 
 import * as cheerio from "cheerio";
@@ -33,6 +46,13 @@ const sql = createSql(requireEnv("DATABASE_URL"));
 
 const BASE_URL = "https://competitions.ffc.fr";
 const FEDERATION_ID = 1;
+
+/**
+ * The oldest date the results index still answers for, established by
+ * bisection in August 2026. It moves forward as seasons roll off, so it is
+ * checked rather than trusted: walking past it costs hours and yields nothing.
+ */
+const INDEX_HORIZON = "2025-05-01";
 
 const MONTHS: Record<string, number> = {
   janvier: 1, "février": 2, fevrier: 2, mars: 3, avril: 4, mai: 5, juin: 6,
@@ -189,16 +209,54 @@ async function fetchIndexPage(
 async function main() {
   const daysArg = process.argv.find((a) => a.startsWith("--days="));
   const pagesArg = process.argv.find((a) => a.startsWith("--max-pages="));
+  const fromArg = process.argv.find((a) => a.startsWith("--from="));
+  const untilArg = process.argv.find((a) => a.startsWith("--until="));
   const days = daysArg ? Number(daysArg.split("=")[1]) : 240;
   const maxPages = pagesArg ? Number(pagesArg.split("=")[1]) : 400;
 
-  const cutoff = new Date();
-  cutoff.setUTCHours(12, 0, 0, 0);
-  cutoff.setUTCDate(cutoff.getUTCDate() - days);
+  /**
+   * The window to walk, newest bound first.
+   *
+   * `--days` walks back from today, which is what the nightly job wants. An
+   * explicit `--from`/`--until` pair makes a slice that does not start at
+   * today, so several seasons can be reached at once instead of one long walk
+   * that has to reach 2021 through everything in between.
+   */
+  const parseDay = (value: string): Date => {
+    const d = new Date(`${value}T12:00:00Z`);
+    if (Number.isNaN(d.getTime())) {
+      console.error(`Unreadable date "${value}" — expected YYYY-MM-DD.`);
+      process.exit(1);
+    }
+    return d;
+  };
+
+  const start = fromArg ? parseDay(fromArg.split("=")[1]) : null;
+
+  const cutoff = untilArg
+    ? parseDay(untilArg.split("=")[1])
+    : (() => {
+        const d = start ? new Date(start) : new Date();
+        d.setUTCHours(12, 0, 0, 0);
+        d.setUTCDate(d.getUTCDate() - days);
+        return d;
+      })();
+
+  const horizon = new Date(`${INDEX_HORIZON}T12:00:00Z`);
+  if (cutoff < horizon) {
+    console.warn(
+      `The results index does not reach ${formatDate(cutoff)}. It serves back ` +
+        `to about ${formatDate(horizon)} and returns empty pages before that, ` +
+        `so the walk stops there rather than spending hours on nothing.\n` +
+        `Deeper history needs the per-rider palmarès route, not this index.\n`
+    );
+    cutoff.setTime(horizon.getTime());
+  }
 
   console.log(
-    `Walking the FFC results index back to ${formatDate(cutoff)} ` +
-      `(max ${maxPages} pages)...\n`
+    `Walking the FFC results index ` +
+      `${start ? `from ${formatDate(start)} ` : ""}` +
+      `back to ${formatDate(cutoff)} (max ${maxPages} pages)...\n`
   );
 
   const byId = new Map<string, ScrapedRace>();
@@ -208,7 +266,8 @@ async function main() {
   // page 1. Overlap between chunks is harmless — entries are deduplicated.
   const REANCHOR_EVERY = 25;
 
-  let anchor: Date | null = null;
+  // A slice that starts in the past anchors there rather than at today.
+  let anchor: Date | null = start;
   let page = 1;
   let pagesFetched = 0;
   let reachedCutoff = false;
