@@ -13,7 +13,8 @@ import { StartList, SectionHeading } from "@/components/races/StartList";
 import { RaceWeatherPanel } from "@/components/races/RaceWeather";
 import { RaceTerrain } from "@/components/races/RaceTerrain";
 import { RaceCircuit } from "@/components/races/RaceCircuit";
-import { getRaceTrace } from "@/lib/db/queries/race-detail";
+import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
+import { estimateTiming, type RaceTiming } from "@/lib/race-timing";
 import { PastEditions } from "@/components/races/PastEditions";
 import { SiblingRaces } from "@/components/races/SiblingRaces";
 import {
@@ -88,11 +89,25 @@ export default async function RaceDetailPage({ params }: PageProps) {
   // headline of the page when it exists, and a placeholder that resolves to
   // nothing on most races would be worse than its absence.
   let trace = null;
+  let measuredTiming = null;
   try {
-    trace = await getRaceTrace(race.id);
+    [trace, measuredTiming] = await Promise.all([
+      getRaceTrace(race.id),
+      getMeasuredTiming(race.id),
+    ]);
   } catch {
     // A missing trace is the normal case, not a fault.
   }
+
+  /* Measured beats estimated: there is no reason to guess a start time when
+     somebody has already ridden the race with a computer running. */
+  const timing: RaceTiming = measuredTiming
+    ? { ...measuredTiming, measured: true }
+    : estimateTiming(
+        race.categories,
+        race.discipline,
+        trace ? trace.distanceM / 1000 : (race.distanceKm ?? null)
+      );
 
   const today = todayISO();
   const date = new Date(`${race.raceDate}T12:00:00Z`);
@@ -193,7 +208,12 @@ export default async function RaceDetailPage({ params }: PageProps) {
           <div className="grid gap-8 sm:grid-cols-2">
             {!isPast && (
               <Suspense fallback={<Skeleton rows={2} />}>
-                <RaceWeatherPanel lat={race.lat} lng={race.lng} date={race.raceDate} />
+                <RaceWeatherPanel
+                  lat={race.lat}
+                  lng={race.lng}
+                  date={race.raceDate}
+                  timing={timing}
+                />
               </Suspense>
             )}
             <Suspense fallback={<Skeleton rows={2} />}>

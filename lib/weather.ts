@@ -13,12 +13,8 @@
 
 const API = "https://api.open-meteo.com/v1/forecast";
 
-/** The hours an amateur race is actually run. */
-const RACE_HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17];
-
-export interface RaceWeather {
-  date: string;
-  /** The hour the sample is taken from, in local time. */
+export interface WeatherSample {
+  /** Local hour of the sample. */
   hour: number;
   temperatureC: number;
   feelsLikeC: number;
@@ -27,8 +23,24 @@ export interface RaceWeather {
   gustKmh: number;
   windDirectionDeg: number;
   windCardinal: string;
+}
+
+export interface RaceWeather {
+  date: string;
+  /** The window the race is expected to occupy. */
+  startHour: number;
+  endHour: number;
+  /** Conditions at the start, and at the finish. */
+  atStart: WeatherSample;
+  atFinish: WeatherSample;
+  /** The worst gust anywhere in the window — what actually breaks a bunch. */
+  peakGustKmh: number;
+  /** The highest chance of rain across the window. */
+  peakRainProbability: number;
   /** Plain-French reading of what the wind will do to a bunch. */
   windVerdict: "calme" | "sensible" | "fort" | "décisif";
+  /** Whether the window came from a recorded ride or from an estimate. */
+  timingMeasured: boolean;
 }
 
 const CARDINALS = [
@@ -68,16 +80,19 @@ interface HourlyResponse {
 }
 
 /**
- * The forecast for one race, or null when it is out of range or unlocated.
+ * The forecast across the window the race actually occupies.
  *
- * Sampled at the middle of the racing afternoon rather than averaged across the
- * day: a rider starting at two o'clock is not helped by a figure that includes
- * dawn.
+ * A single reading at a fixed hour was already better than a daily average, but
+ * it still missed the thing that matters: a race that rolls off in still air at
+ * two and finishes into a headwind at four is a different race, and the number
+ * that decides it is the strongest gust anywhere in between — not the mean at
+ * any one moment.
  */
 export async function getRaceWeather(
   lat: number,
   lng: number,
-  date: string
+  date: string,
+  timing: { startHour: number; durationMinutes: number; measured: boolean }
 ): Promise<RaceWeather | null> {
   const params = new URLSearchParams({
     latitude: lat.toFixed(4),
@@ -102,30 +117,52 @@ export async function getRaceWeather(
     const h = data.hourly;
     if (!h?.time?.length) return null;
 
-    // Prefer mid-afternoon, fall back to whatever the day offers.
-    let index = h.time.findIndex((t) => Number(t.slice(11, 13)) === 14);
-    if (index < 0) {
-      index = h.time.findIndex((t) =>
-        RACE_HOURS.includes(Number(t.slice(11, 13)))
+    const sampleAt = (hour: number): WeatherSample | null => {
+      const clamped = Math.min(23, Math.max(0, Math.round(hour)));
+      const i = h.time.findIndex((t) => Number(t.slice(11, 13)) === clamped);
+      if (i < 0) return null;
+      return {
+        hour: clamped,
+        temperatureC: Math.round(h.temperature_2m[i]),
+        feelsLikeC: Math.round(h.apparent_temperature[i]),
+        precipitationProbability: Math.round(h.precipitation_probability[i]),
+        windKmh: Math.round(h.wind_speed_10m[i]),
+        gustKmh: Math.round(h.wind_gusts_10m[i]),
+        windDirectionDeg: h.wind_direction_10m[i],
+        windCardinal: cardinal(h.wind_direction_10m[i]),
+      };
+    };
+
+    const endHour = timing.startHour + timing.durationMinutes / 60;
+    const atStart = sampleAt(timing.startHour);
+    const atFinish = sampleAt(endHour) ?? atStart;
+    if (!atStart || !atFinish) return null;
+
+    // Everything the race is actually exposed to, not just its endpoints.
+    let peakGustKmh = 0;
+    let peakRainProbability = 0;
+    let peakWind = 0;
+    for (let i = 0; i < h.time.length; i++) {
+      const hour = Number(h.time[i].slice(11, 13));
+      if (hour < Math.floor(timing.startHour) || hour > Math.ceil(endHour)) continue;
+      peakGustKmh = Math.max(peakGustKmh, Math.round(h.wind_gusts_10m[i]));
+      peakWind = Math.max(peakWind, Math.round(h.wind_speed_10m[i]));
+      peakRainProbability = Math.max(
+        peakRainProbability,
+        Math.round(h.precipitation_probability[i])
       );
     }
-    if (index < 0) index = Math.min(12, h.time.length - 1);
-
-    const windKmh = Math.round(h.wind_speed_10m[index]);
-    const gustKmh = Math.round(h.wind_gusts_10m[index]);
-    const direction = h.wind_direction_10m[index];
 
     return {
       date,
-      hour: Number(h.time[index].slice(11, 13)),
-      temperatureC: Math.round(h.temperature_2m[index]),
-      feelsLikeC: Math.round(h.apparent_temperature[index]),
-      precipitationProbability: Math.round(h.precipitation_probability[index]),
-      windKmh,
-      gustKmh,
-      windDirectionDeg: direction,
-      windCardinal: cardinal(direction),
-      windVerdict: verdictFor(windKmh, gustKmh),
+      startHour: timing.startHour,
+      endHour,
+      atStart,
+      atFinish,
+      peakGustKmh,
+      peakRainProbability,
+      windVerdict: verdictFor(peakWind, peakGustKmh),
+      timingMeasured: timing.measured,
     };
   } catch {
     return null;

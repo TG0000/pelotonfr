@@ -210,3 +210,35 @@ export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
     source: String(row.source ?? "strava"),
   };
 }
+
+/**
+ * When this meeting has actually started and how long it took, from a ride
+ * recorded on it. Beats any estimate, and there is no reason to guess when
+ * somebody has already measured.
+ */
+export async function getMeasuredTiming(
+  raceId: string
+): Promise<{ startHour: number; durationMinutes: number } | null> {
+  const rows = (await sql(
+    `WITH me AS (SELECT event_id FROM races WHERE id = $1::uuid)
+     SELECT EXTRACT(HOUR FROM a.started_at AT TIME ZONE 'Europe/Paris')
+              + EXTRACT(MINUTE FROM a.started_at AT TIME ZONE 'Europe/Paris') / 60.0
+              AS start_hour,
+            a.moving_time_s
+       FROM strava_activities a
+       JOIN races r ON r.id = a.race_id
+       JOIN me ON r.event_id = me.event_id
+      WHERE a.moving_time_s > 1200
+      ORDER BY (r.id = $1::uuid) DESC, a.started_at DESC
+      LIMIT 1`,
+    [raceId]
+  )) as Array<Record<string, unknown>>;
+
+  const row = rows[0];
+  if (!row) return null;
+
+  return {
+    startHour: Number(row.start_hour),
+    durationMinutes: Math.round(Number(row.moving_time_s) / 60),
+  };
+}
