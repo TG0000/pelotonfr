@@ -65,8 +65,10 @@ export async function RaceTerrain({ lat, lng }: { lat: number; lng: number }) {
           </div>
 
           <div className="min-w-0">
-            <div className={cn("font-semibold capitalize", TONE[terrain.kind])}>
-              {terrain.kind}
+            {/* First letter only: a CSS `capitalize` title-cases every word
+                and made "Légèrement Vallonné" of a plain description. */}
+            <div className={cn("font-semibold", TONE[terrain.kind])}>
+              {terrain.kind.charAt(0).toUpperCase() + terrain.kind.slice(1)}
             </div>
             <div className="font-mono text-xs tabular-nums text-muted-foreground">
               {terrain.minM}–{terrain.maxM} m · {terrain.amplitudeM} m d&apos;amplitude
