@@ -325,6 +325,15 @@ async function main() {
         `toutes fédérations : ${after.all_ok}/${after.all_races}`
     );
   }
+
+  // Counted in listings offered against races enriched: a pass that reads a
+  // thousand announcements and places 391 is the shortfall worth seeing, and
+  // reporting nothing made a working collector look idle in /etat.
+  return {
+    seen: listings,
+    written: updated + fromDetail,
+    metadata: { unmatched, ambiguous, failed, fromDetail },
+  };
 }
 
 // Only run when invoked directly: this module also exports its parser, and
@@ -336,8 +345,8 @@ async function main() {
 async function tracked() {
   const run = await startRun(sql, "categories");
   try {
-    await main();
-    await run.finish(undefined);
+    const totals = await main();
+    await run.finish(totals);
   } catch (err) {
     await run.fail(err);
     throw err;

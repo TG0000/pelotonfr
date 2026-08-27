@@ -355,6 +355,15 @@ async function main() {
     `\n${summary.past_with_code} past FFC races now carry a competition code ` +
       `and are ready for results ingestion.`
   );
+
+  // What the index offered against what we kept. A walk that finds nothing new
+  // is a legitimate outcome, but it should say so rather than report silence.
+  return {
+    seen: byId.size,
+    // Unchanged rows are still held correctly — counting only writes reported
+    // a complete archive as a total loss.
+    written: stats.inserted + stats.updated + stats.skipped,
+  };
 }
 
 /**
@@ -364,8 +373,8 @@ async function main() {
 async function tracked() {
   const run = await startRun(sql, "ffc-history");
   try {
-    await main();
-    await run.finish(undefined);
+    const totals = await main();
+    await run.finish(totals);
   } catch (err) {
     await run.fail(err);
     throw err;
