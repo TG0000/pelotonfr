@@ -8,7 +8,7 @@ import {
   DateBlock,
   DisciplineTag,
   DistanceTag,
-  FEDERATION_COLOR,
+  FEDERATION_BG,
   FederationMark,
   parseRaceDate,
   PlaceLabel,
@@ -59,8 +59,10 @@ export function RaceCard({
           with the race name. */}
       <span
         aria-hidden
-        className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full opacity-70"
-        style={{ background: FEDERATION_COLOR[race.federationSlug] ?? "var(--primary)" }}
+        className={cn(
+          "absolute bottom-3 left-0 top-3 w-[3px] rounded-full opacity-70",
+          FEDERATION_BG[race.federationSlug] ?? "bg-primary"
+        )}
       />
 
       <DateBlock

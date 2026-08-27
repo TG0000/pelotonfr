@@ -9,7 +9,7 @@ import { FilterDrawer } from "./FilterDrawer";
 import {
   CategorySummary,
   DateBlock,
-  FEDERATION_COLOR,
+  FEDERATION_BORDER,
   FederationMark,
   parseRaceDate,
   PlaceLabel,
@@ -58,9 +58,10 @@ function ResultRow({
       onMouseEnter={onSelect}
       className={cn(
         "relative cursor-pointer border-l-[3px] px-3 py-2.5 transition-colors",
-        selected ? "bg-surface-2" : "border-l-transparent hover:bg-surface-2/60"
+        selected
+          ? cn("bg-surface-2", FEDERATION_BORDER[race.federationSlug] ?? "border-l-primary")
+          : "border-l-transparent hover:bg-surface-2/60"
       )}
-      style={selected ? { borderLeftColor: FEDERATION_COLOR[race.federationSlug] } : undefined}
     >
       <Link href={`/course/${race.id}`} className="flex items-center gap-3 group">
         <DateBlock date={race.raceDate} dateEnd={race.raceDateEnd} />

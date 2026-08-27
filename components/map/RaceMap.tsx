@@ -34,16 +34,44 @@ const FALLBACK: Record<string, string> = {
 /**
  * Resolves a theme token to a colour MapLibre accepts.
  *
- * The palette is authored in OKLCH, which MapLibre's style parser rejects:
- * `addLayer` threw inside the load handler, so every layer after the first was
- * skipped and the map showed a basemap with no races on it at all. Converting
- * here keeps the stylesheet the single source of truth rather than adding a
- * second hard-coded palette for the map to drift from.
+ * The palette is authored in OKLCH, which MapLibre's style parser rejects
+ * outright — `addLayer` threw inside the load handler and every layer after it
+ * was skipped, so the map had a basemap and no races on it whatever the filters
+ * said. Converting here keeps the stylesheet the single source of truth rather
+ * than adding a second hard-coded palette for the map to drift from.
+ *
+ * The conversion goes through a canvas rather than parsing the notation,
+ * because the notation is not ours to predict: the production build transpiles
+ * OKLCH to `lab()` behind an `@supports` guard, and a parser written for
+ * `oklch(...)` silently fell back to its defaults on the deployed site while
+ * working in development. Reading a painted pixel returns sRGB bytes whatever
+ * the browser was given.
  */
 function resolveColor(value: string, fallback: string): string {
   const trimmed = value.trim();
   if (!trimmed) return fallback;
-  if (/^(#|rgb|hsl)/i.test(trimmed)) return trimmed;
+  if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed;
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (ctx) {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = trimmed;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      // A fully transparent pixel means the browser refused the value.
+      if (a > 0) {
+        const hex = (n: number) => n.toString(16).padStart(2, "0");
+        return `#${hex(r)}${hex(g)}${hex(b)}`;
+      }
+    }
+  } catch {
+    // Fall through to the notation parser below.
+  }
+
   return oklchToHex(trimmed) ?? fallback;
 }
 

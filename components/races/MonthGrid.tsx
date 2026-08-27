@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { Race } from "@/types";
 import {
   CategorySummary,
-  FEDERATION_COLOR,
+  FEDERATION_BG,
   FederationMark,
   PlaceLabel,
   placeLabel,
@@ -167,11 +167,10 @@ export function MonthGrid({
                     >
                       <span
                         aria-hidden
-                        className="size-1.5 shrink-0 rounded-full"
-                        style={{
-                          background:
-                            FEDERATION_COLOR[race.federationSlug] ?? "var(--primary)",
-                        }}
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          FEDERATION_BG[race.federationSlug] ?? "bg-primary"
+                        )}
                       />
                       <span className="truncate">{displayRaceName(race.name)}</span>
                     </Link>
@@ -256,11 +255,10 @@ export function MonthGrid({
                   >
                     <span
                       aria-hidden
-                      className="h-8 w-[3px] shrink-0 rounded-full"
-                      style={{
-                        background:
-                          FEDERATION_COLOR[race.federationSlug] ?? "var(--primary)",
-                      }}
+                      className={cn(
+                        "h-8 w-[3px] shrink-0 rounded-full",
+                        FEDERATION_BG[race.federationSlug] ?? "bg-primary"
+                      )}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">

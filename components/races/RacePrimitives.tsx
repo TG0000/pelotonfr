@@ -10,10 +10,32 @@ import { cn } from "@/lib/utils";
  * fixed anchor on the left, and everything else recedes to a supporting line.
  */
 
-export const FEDERATION_COLOR: Record<string, string> = {
-  ffc: "var(--ffc)",
-  fsgt: "var(--fsgt)",
-  ufolep: "var(--ufolep)",
+/**
+ * Federation colour, as utility classes rather than an inline `var(--ffc)`.
+ *
+ * The build transpiles the OKLCH palette to `lab()` behind an `@supports`
+ * guard and registers the tokens as typed custom properties. A `style={{
+ * color: "var(--ffc)" }}` then resolved to nothing at all, so every federation
+ * rendered in plain foreground on the deployed site while looking right in
+ * development. Classes are resolved by Tailwind at build time and cannot fail
+ * that way.
+ */
+export const FEDERATION_TEXT: Record<string, string> = {
+  ffc: "text-ffc",
+  fsgt: "text-fsgt",
+  ufolep: "text-ufolep",
+};
+
+export const FEDERATION_BORDER: Record<string, string> = {
+  ffc: "border-l-ffc",
+  fsgt: "border-l-fsgt",
+  ufolep: "border-l-ufolep",
+};
+
+export const FEDERATION_BG: Record<string, string> = {
+  ffc: "bg-ffc",
+  fsgt: "bg-fsgt",
+  ufolep: "bg-ufolep",
 };
 
 const FEDERATION_LABEL: Record<string, string> = {
@@ -90,12 +112,13 @@ export function FederationMark({
   withLabel?: boolean;
   className?: string;
 }) {
-  const color = FEDERATION_COLOR[slug] ?? "var(--primary)";
+  const bg = FEDERATION_BG[slug] ?? "bg-primary";
+  const text = FEDERATION_TEXT[slug] ?? "text-primary";
+
   if (!withLabel) {
     return (
       <span
-        className={cn("inline-block size-2 rounded-full shrink-0", className)}
-        style={{ background: color }}
+        className={cn("inline-block size-2 shrink-0 rounded-full", bg, className)}
         aria-label={FEDERATION_LABEL[slug] ?? slug}
       />
     );
@@ -104,11 +127,11 @@ export function FederationMark({
     <span
       className={cn(
         "inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide",
+        text,
         className
       )}
-      style={{ color }}
     >
-      <span className="size-1.5 rounded-full" style={{ background: color }} />
+      <span className={cn("size-1.5 rounded-full", bg)} />
       {FEDERATION_LABEL[slug] ?? slug}
     </span>
   );
