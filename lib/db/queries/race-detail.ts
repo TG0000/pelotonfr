@@ -242,3 +242,85 @@ export async function getMeasuredTiming(
     durationMinutes: Math.round(Number(row.moving_time_s) / 60),
   };
 }
+
+export interface FieldLevel {
+  /** Editions the reading is based on. */
+  editions: number;
+  /** Typical number of riders classified. */
+  medianClassified: number;
+  /** National standing of the strongest rider who has raced it. */
+  bestRank: number | null;
+  /** Median standing of the ranked riders — the level of the bunch itself. */
+  medianRank: number | null;
+  /** How many of the field carry a national ranking at all. */
+  rankedShare: number;
+  /** Average speed, where a ride recorded on the course tells us. */
+  averageSpeedKmh: number | null;
+  fastestSpeedKmh: number | null;
+}
+
+/**
+ * How hard this race has actually been.
+ *
+ * A start list says who is coming; this says what turning up has meant. The
+ * median national ranking of the bunch is the honest measure of level — an
+ * average is dragged around by one ex-professional in a field of clubmen — and
+ * the field size is what tells a rider whether they will be racing or riding.
+ *
+ * Speed comes from rides recorded on the course, so it is real rather than
+ * modelled, and absent until somebody has ridden it.
+ */
+export async function getFieldLevel(raceId: string): Promise<FieldLevel | null> {
+  const rows = (await sql(
+    `WITH me AS (SELECT event_id, race_date FROM races WHERE id = $1::uuid),
+     past AS (
+       SELECT r.id
+         FROM races r JOIN me ON r.event_id = me.event_id
+        WHERE r.race_date <= me.race_date AND r.event_id IS NOT NULL
+     ),
+     per_edition AS (
+       SELECT rr.race_id, count(*)::int AS classified
+         FROM race_results rr WHERE rr.race_id IN (SELECT id FROM past)
+        GROUP BY rr.race_id
+     ),
+     ranked AS (
+       SELECT ri.current_rank
+         FROM race_results rr
+         JOIN riders ri ON ri.id = rr.rider_id
+        WHERE rr.race_id IN (SELECT id FROM past) AND ri.current_rank IS NOT NULL
+     ),
+     rides AS (
+       SELECT (a.distance_m / NULLIF(a.moving_time_s, 0)) * 3.6 AS kmh
+         FROM strava_activities a
+        WHERE a.race_id IN (SELECT id FROM past) AND a.moving_time_s > 1200
+     )
+     SELECT
+       (SELECT count(*)::int FROM per_edition) AS editions,
+       (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY classified)
+          FROM per_edition) AS median_classified,
+       (SELECT min(current_rank)::int FROM ranked) AS best_rank,
+       (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY current_rank)
+          FROM ranked) AS median_rank,
+       (SELECT count(*)::int FROM ranked) AS ranked_count,
+       (SELECT COALESCE(sum(classified), 0)::int FROM per_edition) AS total_classified,
+       (SELECT round(avg(kmh)::numeric, 1) FROM rides) AS avg_kmh,
+       (SELECT round(max(kmh)::numeric, 1) FROM rides) AS max_kmh`,
+    [raceId]
+  )) as Array<Record<string, unknown>>;
+
+  const row = rows[0];
+  if (!row || Number(row.editions ?? 0) === 0) return null;
+
+  const totalClassified = Number(row.total_classified ?? 0);
+  const rankedCount = Number(row.ranked_count ?? 0);
+
+  return {
+    editions: Number(row.editions),
+    medianClassified: Math.round(Number(row.median_classified ?? 0)),
+    bestRank: row.best_rank === null ? null : Number(row.best_rank),
+    medianRank: row.median_rank === null ? null : Math.round(Number(row.median_rank)),
+    rankedShare: totalClassified > 0 ? rankedCount / totalClassified : 0,
+    averageSpeedKmh: row.avg_kmh === null ? null : Number(row.avg_kmh),
+    fastestSpeedKmh: row.max_kmh === null ? null : Number(row.max_kmh),
+  };
+}
