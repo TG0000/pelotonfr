@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, SearchX, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, SearchX } from "lucide-react";
 import { getRacesForCalendar, getRaces, getRacesForMap } from "@/lib/db/queries/races";
-import { RaceFilters } from "@/components/races/RaceFilters";
+import { FilterPanel } from "@/components/races/FilterPanel";
 import { MobileFilters } from "@/components/races/MobileFilters";
 import { ActiveFilters } from "@/components/races/ActiveFilters";
 import { RaceCard } from "@/components/races/RaceCard";
@@ -255,12 +255,8 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
         <div className="flex gap-8">
           <div className="hidden w-64 shrink-0 lg:block">
             <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
-              <div className="mb-4 flex items-center gap-2">
-                <SlidersHorizontal className="size-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Filtres</h2>
-              </div>
               <Suspense fallback={null}>
-                <RaceFilters />
+                <FilterPanel />
               </Suspense>
             </div>
           </div>
