@@ -48,19 +48,6 @@ export const CATEGORIES: CategoryDef[] = [
   { value: "access4", label: "Access 4", group: "ffc" },
 
   // The FFC's pre-2021 ladder, still used by its own ranking export.
-  /**
-   * The Pays de la Loire and Bretagne committees group their road races A1 to
-   * A4 rather than by the national ladder. 134 upcoming races are labelled
-   * this way and carried no category at all, so they answered no filter. They
-   * are kept as their own values: the committees' own documents would settle
-   * how each maps onto Open and Access, and inventing that mapping here would
-   * put riders on start lines they are not entitled to.
-   */
-  { value: "a1", label: "A1 (Grand Ouest)", group: "ffc" },
-  { value: "a2", label: "A2 (Grand Ouest)", group: "ffc" },
-  { value: "a3", label: "A3 (Grand Ouest)", group: "ffc" },
-  { value: "a4", label: "A4 (Grand Ouest)", group: "ffc" },
-
   { value: "cat1", label: "1ère catégorie", group: "ffc" },
   { value: "cat2", label: "2ème catégorie", group: "ffc" },
   { value: "cat3", label: "3ème catégorie", group: "ffc" },
@@ -264,14 +251,12 @@ export function normalizeCategories(
     else ["1", "2", "3", "4"].forEach((d) => found.add(`access${d}`));
   }
 
-  // "(A3-A4)", "(A1.A2)", "(A2-A3-A4)" — the Grand Ouest committees' own
-  // grouping, always parenthesised and always adjacent to the town name.
+  // "(A3-A4)", "(A1.A2)", "(A2-A3-A4)" — the Access ladder under the name it
+  // had when these were the départementales. A1 is Access 1, and so on; the
+  // Grand Ouest committees still publish their road races this way.
   for (const m of text.matchAll(/\ba([1-4])(?:\s*[-–./]\s*a?([1-4]))?/g)) {
-    found.add(`a${m[1]}`);
-    if (m[2]) {
-      const [lo, hi] = [Number(m[1]), Number(m[2])].sort();
-      for (let i = lo; i <= hi; i++) found.add(`a${i}`);
-    }
+    found.add(`access${m[1]}`);
+    if (m[2]) found.add(`access${m[2]}`);
   }
 
   // "1ère catégorie", "3eme cat"
