@@ -312,7 +312,10 @@ export interface CalendarDay {
 export async function getRacesForCalendar(
   filters: Partial<RaceFilters> = {}
 ): Promise<CalendarDay[]> {
-  const { fed = [], disc = [], cat = [], dateFrom, dateTo } = filters;
+  const {
+    fed = [], disc = [], cat = [], dateFrom, dateTo,
+    lat, lng, radius = 50, q = "",
+  } = filters;
   const today = todayISO();
   const threeMonths = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
     .toISOString()
@@ -345,6 +348,22 @@ export async function getRacesForCalendar(
     conditions.push(`r.categories && $${mi}`);
     params.push(cat);
     mi++;
+  }
+  if (q.trim()) {
+    conditions.push(
+      `(r.name ILIKE $${mi} OR r.city ILIKE $${mi} OR r.organizer ILIKE $${mi})`
+    );
+    params.push(`%${q.trim()}%`);
+    mi++;
+  }
+  // Distance is a filter like any other. Leaving it out of the calendar meant
+  // "près de moi" quietly stopped applying the moment a rider switched view.
+  if (lat != null && lng != null) {
+    conditions.push(
+      `r.location IS NOT NULL AND ST_DWithin(r.location, ST_MakePoint($${mi}, $${mi + 1})::geography, $${mi + 2})`
+    );
+    params.push(lng, lat, radius * 1000);
+    mi += 3;
   }
 
   const rows = await sql(

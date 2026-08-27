@@ -92,6 +92,11 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
     disc: getArray(params.disc) as Discipline[],
     cat: getArray(params.cat),
     q: getString(params.q),
+    // Carried into all three views: a distance the rider set on one of them
+    // used to be silently dropped by the others.
+    lat: params.lat ? Number(params.lat) : null,
+    lng: params.lng ? Number(params.lng) : null,
+    radius: Number(getString(params.radius)) || 50,
   };
 
   /* The month on screen follows the period, so switching views never loses
@@ -126,20 +131,10 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
         dateFrom,
         dateTo,
         page: Number(getString(params.page)) || 1,
-        lat: params.lat ? Number(params.lat) : null,
-        lng: params.lng ? Number(params.lng) : null,
-        radius: Number(getString(params.radius)) || 50,
-        sortBy: sortBy,
+        sortBy,
       });
     } else {
-      mapRaces = await getRacesForMap({
-        ...shared,
-        dateFrom,
-        dateTo,
-        lat: params.lat ? Number(params.lat) : null,
-        lng: params.lng ? Number(params.lng) : null,
-        radius: Number(getString(params.radius)) || 50,
-      });
+      mapRaces = await getRacesForMap({ ...shared, dateFrom, dateTo });
     }
   } catch {
     // DB not configured
@@ -246,7 +241,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
           </Suspense>
           <div className="lg:hidden">
             <Suspense fallback={null}>
-              <MobileFilters showLocation={view !== "calendrier"} />
+              <MobileFilters />
             </Suspense>
           </div>
         </div>
@@ -265,7 +260,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
                 <h2 className="text-sm font-semibold">Filtres</h2>
               </div>
               <Suspense fallback={null}>
-                <RaceFilters showLocation={view === "liste"} />
+                <RaceFilters />
               </Suspense>
             </div>
           </div>

@@ -43,13 +43,15 @@ export function ActiveFilters() {
   const lng = searchParams.get("lng");
   const radius = searchParams.get("radius") ?? "50";
   if (lat && lng) {
+    const place = searchParams.get("lieu");
     chips.push({
-      label: `Rayon ${radius} km`,
+      label: place ? `${place} · ${radius} km` : `Rayon ${radius} km`,
       onRemove: () => {
         const params = new URLSearchParams(searchParams.toString());
         params.delete("lat");
         params.delete("lng");
         params.delete("radius");
+        params.delete("lieu");
         params.delete("page");
         router.push(`${pathname}?${params.toString()}`, { scroll: false });
       },

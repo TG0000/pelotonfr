@@ -13,9 +13,7 @@ import { toDateOnly } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import type { GeocodingResult } from "@/types";
 
-interface RaceFiltersProps {
-  showLocation?: boolean;
-}
+
 
 /**
  * Categories, as a rider thinks of them.
@@ -146,7 +144,15 @@ function Collapsible({
   );
 }
 
-export function RaceFilters({ showLocation = false }: RaceFiltersProps) {
+/**
+ * Every filter, in one place.
+ *
+ * "Près de moi" used to be offered only on the list, so switching to the
+ * calendar silently dropped a distance the rider had set — the filter was
+ * still in the URL, still applied by some queries and not others. One surface
+ * means one set of filters, always the same ones.
+ */
+export function RaceFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -191,6 +197,7 @@ export function RaceFilters({ showLocation = false }: RaceFiltersProps) {
   const dateTo = searchParams.get("dateTo") ?? "";
   const lat = searchParams.get("lat");
   const lng = searchParams.get("lng");
+  const place = searchParams.get("lieu") ?? "";
   const radius = Number(searchParams.get("radius") ?? DEFAULT_RADIUS_KM);
 
   /* Search: typed locally, pushed on a pause.
@@ -225,10 +232,15 @@ export function RaceFilters({ showLocation = false }: RaceFiltersProps) {
       setParams({
         lat: String(result.lat),
         lng: String(result.lng),
+        // The name travels with the coordinates. Without it the field came
+        // back empty on every reload, so an active distance filter looked
+        // like no filter at all — and a rider reasonably concluded the
+        // control had disappeared.
+        lieu: result.label,
         radius: searchParams.get("radius") ?? String(DEFAULT_RADIUS_KM),
       });
     } else {
-      setParams({ lat: "", lng: "" });
+      setParams({ lat: "", lng: "", lieu: "" });
     }
   }
 
@@ -291,10 +303,12 @@ export function RaceFilters({ showLocation = false }: RaceFiltersProps) {
         )}
       </div>
 
-      {showLocation && (
+      {(
         <div className="flex flex-col gap-2">
           <SectionTitle>Près de moi</SectionTitle>
           <LocationSearch
+            key={place}
+            defaultValue={place}
             onSelect={handleLocationSelect}
             placeholder="Ville ou code postal…"
           />

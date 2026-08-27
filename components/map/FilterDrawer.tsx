@@ -46,7 +46,7 @@ export function FilterDrawer() {
 
       {open && (
         <div className="max-h-[55vh] overflow-y-auto px-4 pb-4">
-          <RaceFilters key={searchParams.toString()} showLocation />
+          <RaceFilters key={searchParams.toString()} />
         </div>
       )}
     </div>

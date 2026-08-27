@@ -22,11 +22,7 @@ function FilterBadge() {
   );
 }
 
-interface MobileFiltersProps {
-  showLocation?: boolean;
-}
-
-export function MobileFilters({ showLocation = false }: MobileFiltersProps) {
+export function MobileFilters() {
   return (
     <Sheet>
       <SheetTrigger
@@ -46,7 +42,7 @@ export function MobileFilters({ showLocation = false }: MobileFiltersProps) {
         </SheetHeader>
         <div className="px-4 pb-6">
           <Suspense fallback={null}>
-            <RaceFilters showLocation={showLocation} />
+            <RaceFilters />
           </Suspense>
         </div>
       </SheetContent>
