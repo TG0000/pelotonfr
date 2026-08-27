@@ -205,14 +205,25 @@ function inferColumns(rows: string[][]): ColumnRoles {
     .map((_, i) => i)
     .filter((i) => !taken.has(i));
 
-  // A surname column is written in capitals; the given name beside it is not.
+  // Two text columns side by side, once the bib, the category and the club are
+  // spoken for, are a surname and a given name.
+  //
+  // This used to require the given name NOT to be capitalised — "CÉLIANE" beside
+  // "DAHIREL" therefore failed the test, the pair was never formed, and the
+  // given-name column was then swept up by the club fallback further down:
+  // 7 590 entrants stored with a null given name and a club reading "Yann". The
+  // case is not rare, it is one of the source's ordinary layouts.
+  //
+  // What actually distinguishes a given name is that it is one or two words and
+  // says nothing about a club — capitalisation says only how the page was typed.
   for (let k = 0; k < remaining.length - 1; k++) {
     const a = columns[remaining[k]];
     const b = columns[remaining[k + 1]];
     const aCaps = share(a, (v) => ALL_CAPS_RE.test(v));
-    const bCaps = share(b, (v) => ALL_CAPS_RE.test(v));
     const bSingleWord = share(b, (v) => v.split(" ").length <= 2);
-    if (aCaps > 0.8 && bCaps < 0.4 && bSingleWord > 0.6) {
+    const bClubbish = share(b, (v) => CLUB_RE.test(v));
+    const bCategory = share(b, (v) => CATEGORY_RE.test(v));
+    if (aCaps > 0.8 && bSingleWord > 0.6 && bClubbish < 0.2 && bCategory < 0.2) {
       roles.lastName = remaining[k];
       roles.firstName = remaining[k + 1];
       taken.add(remaining[k]);
@@ -231,10 +242,19 @@ function inferColumns(rows: string[][]): ColumnRoles {
     }
   }
 
+  // Last resort for the club, and deliberately narrow: "any leftover column of
+  // words longer than three letters" was what turned a column of given names
+  // into a column of clubs. A club has to look like one.
   if (roles.club === undefined) {
     const clubCol = columns
       .map((_, i) => i)
-      .find((i) => !taken.has(i) && share(columns[i], (v) => v.length > 3) > 0.6);
+      .find(
+        (i) =>
+          !taken.has(i) &&
+          share(columns[i], (v) => v.length > 3) > 0.6 &&
+          (share(columns[i], (v) => CLUB_RE.test(v)) > 0.3 ||
+            share(columns[i], (v) => v.split(" ").length >= 2) > 0.5)
+      );
     if (clubCol !== undefined) roles.club = clubCol;
   }
 
@@ -406,6 +426,8 @@ interface RaceLookup {
   sameDayCount: number;
   bestName?: string;
   bestScore?: number;
+  /** Carried so an unplaced list can propose the race it nearly matched. */
+  bestRaceId?: string;
 }
 
 /**
@@ -471,6 +493,7 @@ async function findRaces(prefix: string, date: Date): Promise<RaceLookup> {
     sameDayCount: scored.length,
     bestName: best?.name,
     bestScore: best?.score,
+    bestRaceId: best?.id,
   };
 }
 
@@ -599,6 +622,7 @@ interface Ingested {
   date?: string;
   bestCandidate?: string;
   bestScore?: number;
+  bestRaceId?: string;
 }
 
 async function ingestArticle(path: string, dryRun: boolean): Promise<Ingested> {
@@ -607,7 +631,29 @@ async function ingestArticle(path: string, dryRun: boolean): Promise<Ingested> {
   if (!parsed) return { stored: 0, matched: 0, race: null, miss: "unreadable-slug" };
 
   const iso = parsed.date.toISOString().split("T")[0];
-  const found = await findRaces(parsed.commune, parsed.date);
+
+  // A correction made once from /etat is obeyed from then on. This is what
+  // makes the queue a queue: each arbitration removes a list from it for good
+  // rather than for one night.
+  const [override] = await sql(
+    `SELECT r.id, r.name, r.categories
+       FROM startlist_misses m JOIN races r ON r.id = m.resolved_race_id
+      WHERE m.source_path = $1 AND m.resolved_race_id IS NOT NULL`,
+    [path]
+  );
+
+  const found: RaceLookup = override
+    ? {
+        races: [
+          {
+            id: override.id as string,
+            name: override.name as string,
+            categories: (override.categories as string[]) ?? [],
+          },
+        ],
+        sameDayCount: 1,
+      }
+    : await findRaces(parsed.commune, parsed.date);
 
   if (found.races.length === 0) {
     return {
@@ -621,6 +667,7 @@ async function ingestArticle(path: string, dryRun: boolean): Promise<Ingested> {
       date: iso,
       bestCandidate: found.bestName,
       bestScore: found.bestScore,
+      bestRaceId: found.bestRaceId,
     };
   }
 
@@ -737,6 +784,49 @@ async function collectArticleLinks(pages: number): Promise<string[]> {
   return [...links];
 }
 
+/**
+ * Records a start list we could not place, so it can be arbitrated later.
+ *
+ * Keyed on the article path rather than on the date and commune: the same
+ * article is re-read every night, and the queue should hold one row per list,
+ * not one per attempt. `last_seen_at` says whether the source still publishes
+ * it — a list that stops appearing is no longer worth anyone's time.
+ */
+async function queueMiss(
+  path: string,
+  result: Ingested,
+  reason: string
+): Promise<void> {
+  await sql(
+    `INSERT INTO startlist_misses
+       (source_path, race_date, commune, miss_reason, best_race_id, best_score)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (source_path) DO UPDATE
+        SET last_seen_at = now(),
+            miss_reason  = EXCLUDED.miss_reason,
+            best_race_id = EXCLUDED.best_race_id,
+            best_score   = EXCLUDED.best_score`,
+    [
+      path,
+      result.date ?? null,
+      result.commune ?? null,
+      reason,
+      result.bestRaceId ?? null,
+      result.bestScore ?? null,
+    ]
+  );
+}
+
+/** The list found its race — by our matching or by an arbitration. */
+async function closeMiss(path: string): Promise<void> {
+  await sql(
+    `UPDATE startlist_misses
+        SET resolved_at = COALESCE(resolved_at, now()), last_seen_at = now()
+      WHERE source_path = $1 AND resolved_at IS NULL`,
+    [path]
+  );
+}
+
 async function main() {
   const pagesArg = process.argv.find((a) => a.startsWith("--pages="));
   const pages = pagesArg ? Number(pagesArg.split("=")[1]) : 6;
@@ -759,6 +849,7 @@ async function main() {
       const result = await ingestArticle(path, dryRun);
       if (result.race) {
         linkedRaces++;
+        if (!dryRun) await closeMiss(path);
         stored += result.stored;
         matched += result.matched;
         if (linkedRaces <= 12) {
@@ -770,6 +861,7 @@ async function main() {
         unmatchedRaces++;
         const reason = result.miss ?? "below-threshold";
         misses.set(reason, (misses.get(reason) ?? 0) + 1);
+        if (!dryRun) await queueMiss(path, result, reason);
         if (reason === "below-threshold" && nearMisses.length < 15) {
           nearMisses.push(
             `  ${result.date} ${(result.commune ?? "?").padEnd(24)} ` +
@@ -826,7 +918,11 @@ async function tracked() {
   }
 }
 
-tracked().catch((err) => {
-  console.error("Fatal:", err);
-  process.exit(1);
-});
+// Only when run as the script. `parseEntrants` is exported so a table layout can
+// be checked against a real article without setting the whole collector going.
+if (process.argv[1]?.includes("velopresse-engagements")) {
+  tracked().catch((err) => {
+    console.error("Fatal:", err);
+    process.exit(1);
+  });
+}

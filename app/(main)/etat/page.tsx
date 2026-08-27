@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
 import { Activity } from "lucide-react";
 import { getCollectorHealth } from "@/lib/db/queries/collectors";
+import {
+  getQueueSummary,
+  getStartlistQueue,
+  type QueuedMiss,
+} from "@/lib/db/queries/startlist-queue";
+import { StartlistQueue } from "@/components/ops/StartlistQueue";
+import { isOperator } from "@/lib/admin";
 import { describeAge, type CollectorHealth } from "@/lib/collectors";
 import { cn } from "@/lib/utils";
 
@@ -24,11 +31,19 @@ const VERDICT: Record<
 
 export default async function EtatPage() {
   let health: CollectorHealth[] = [];
+  let misses: QueuedMiss[] = [];
+  let summary = { open: 0, arbitrable: 0, resolved: 0 };
   try {
-    health = await getCollectorHealth();
+    [health, misses, summary] = await Promise.all([
+      getCollectorHealth(),
+      getStartlistQueue(),
+      getQueueSummary(),
+    ]);
   } catch {
     // DB not configured
   }
+
+  const canArbitrate = await isOperator();
 
   const broken = health.filter(
     (h) => h.verdict === "overdue" || h.verdict === "never"
@@ -104,7 +119,22 @@ export default async function EtatPage() {
         })}
       </div>
 
-      <p className="mt-4 text-xs text-muted-foreground">
+      <section className="mt-10">
+        <h2 className="mb-1 text-lg font-bold">Listes d&apos;engagés en attente</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          La presse régionale publie une liste par course. La rattacher est un
+          jugement : même jour, même commune, catégories compatibles. Au-dessus
+          du seuil on l&apos;applique ; en dessous, la liste attend ici plutôt
+          que d&apos;être rattachée au hasard.
+        </p>
+        <StartlistQueue
+          misses={misses}
+          summary={summary}
+          canArbitrate={canArbitrate}
+        />
+      </section>
+
+      <p className="mt-10 text-xs text-muted-foreground">
         Un contrôle indépendant passe chaque matin et prévient par email quand
         une source dépasse son délai. Il tourne chez Vercel plutôt que dans le
         collecteur lui-même : une alarme installée dans la chose qu&apos;elle
