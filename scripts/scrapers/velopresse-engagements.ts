@@ -346,7 +346,11 @@ export function parseEntrants(html: string): Entrant[] {
         firstName: first,
         club: at(roles.club),
         category: categoryParts || currentCategory,
-        bib: at(roles.bib),
+        // A dossard is a small number. The column is chosen because most of it
+        // looks like one, so the odd cell that does not — a time, a note — must
+        // not be stored as a bib: it is too long for the column and takes the
+        // whole article's list down with it.
+        bib: /^\d{1,4}$/.test(at(roles.bib) ?? "") ? at(roles.bib) : null,
       });
     }
   });

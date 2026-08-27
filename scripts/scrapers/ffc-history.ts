@@ -321,16 +321,25 @@ async function main() {
     if (fresh === 0 && result.races.length > 0) noFreshStreak++;
     else noFreshStreak = 0;
 
-    if (noFreshStreak >= 8) break;
+    // Long enough to sit out a single busy date. A Sunday in October fills more
+    // than twenty pages on its own, and a chunk that re-anchors onto that date
+    // re-reads every one of them before it sees anything new. At eight pages the
+    // walk called that "the index has run dry" and stopped five months short of
+    // the horizon it was asked for.
+    if (noFreshStreak >= 40) break;
 
     if (page >= REANCHOR_EVERY && result.oldestDate) {
       const next = result.oldestDate;
-      // If re-anchoring would not move us backwards, the index has run out.
-      if (anchor && next >= anchor) break;
-      anchor = next;
-      page = 1;
-      await politeDelay(250);
-      continue;
+      // Re-anchoring onto the same date would restart the same chunk. That is
+      // not the end of the index, only a date with more entries than a chunk
+      // holds — so keep paging rather than stopping.
+      if (!anchor || next < anchor) {
+        anchor = next;
+        page = 1;
+        noFreshStreak = 0;
+        await politeDelay(250);
+        continue;
+      }
     }
 
     page++;
