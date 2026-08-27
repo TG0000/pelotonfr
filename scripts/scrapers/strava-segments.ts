@@ -105,8 +105,9 @@ async function storeCircuit(
   await sql(
     `INSERT INTO race_traces (race_id, source, points, distance_m,
                               elevation_gain_m, min_elevation_m, max_elevation_m,
-                              bounds)
-     VALUES ($1::uuid, 'segment', $2::jsonb, $3, $4, $5, $6, $7::jsonb)
+                              bounds, centre)
+     VALUES ($1::uuid, 'segment', $2::jsonb, $3, $4, $5, $6, $7::jsonb,
+             ST_MakePoint($8::float8, $9::float8)::geography)
      -- A trace a rider actually recorded is the better source and stands.
      ON CONFLICT (race_id) DO NOTHING`,
     [
@@ -122,6 +123,8 @@ async function storeCircuit(
         east: Math.max(...lngs),
         north: Math.max(...lats),
       }),
+      (Math.min(...lngs) + Math.max(...lngs)) / 2,
+      (Math.min(...lats) + Math.max(...lats)) / 2,
     ]
   );
 }

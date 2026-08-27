@@ -174,6 +174,10 @@ export interface RaceTrace {
   maxElevationM: number;
   bounds: { west: number; south: number; east: number; north: number };
   source: string;
+  /** The date of the edition the trace was recorded on. */
+  tracedOn: string | null;
+  /** False when it comes from another edition of the same meeting. */
+  sameDay: boolean;
 }
 
 /**
@@ -185,14 +189,38 @@ export interface RaceTrace {
  */
 export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
   const rows = (await sql(
-    `WITH me AS (SELECT event_id, race_date FROM races WHERE id = $1::uuid)
+    `WITH me AS (
+       SELECT event_id, race_date, discipline, location
+         FROM races WHERE id = $1::uuid
+     )
      SELECT t.points, t.distance_m, t.elevation_gain_m,
-            t.min_elevation_m, t.max_elevation_m, t.bounds, t.source
+            t.min_elevation_m, t.max_elevation_m, t.bounds, t.source,
+            r.race_date::text AS traced_on,
+            (r.race_date = me.race_date) AS same_day
        FROM race_traces t
        JOIN races r ON r.id = t.race_id
-       JOIN me ON (r.id = $1::uuid
-                   OR (r.event_id = me.event_id AND r.race_date = me.race_date))
-      ORDER BY (r.id = $1::uuid) DESC, t.distance_m DESC
+       CROSS JOIN me
+      -- Widening outwards: this race, then any edition of the same meeting,
+      -- then any race run from the same place in the same discipline.
+      --
+      -- The last step matters more than it looks. Meeting identity is built on
+      -- the published name, and an organiser who adds "La Route du Roc" one
+      -- year splits the meeting in two — while the circuit at Louvigné-du-
+      -- Désert is still the circuit at Louvigné-du-Désert. A trace is far more
+      -- forgiving than an identity: it describes a road, not an event.
+      WHERE r.id = $1::uuid
+         OR r.event_id = me.event_id
+         OR (r.discipline = me.discipline
+             AND me.location IS NOT NULL
+             -- Compared against the trace's own centre, not the race row's
+             -- location: a race found through the results index has no
+             -- coordinates, while the track hanging off it plainly does.
+             AND t.centre IS NOT NULL
+             AND ST_DWithin(t.centre, me.location, 5000))
+      ORDER BY (r.id = $1::uuid) DESC,
+               (r.event_id = me.event_id) DESC,
+               (r.race_date = me.race_date) DESC,
+               r.race_date DESC
       LIMIT 1`,
     [raceId]
   )) as Array<Record<string, unknown>>;
@@ -208,6 +236,8 @@ export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
     maxElevationM: Number(row.max_elevation_m ?? 0),
     bounds: row.bounds as RaceTrace["bounds"],
     source: String(row.source ?? "strava"),
+    tracedOn: (row.traced_on as string | null) ?? null,
+    sameDay: Boolean(row.same_day),
   };
 }
 

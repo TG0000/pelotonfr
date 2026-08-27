@@ -18,6 +18,16 @@ const CircuitMap = dynamic(
   }
 );
 
+const MONTHS = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+
+function formatEditionDate(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
 function Figure({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
     <div>
@@ -84,8 +94,14 @@ export function RaceCircuit({ trace }: { trace: RaceTrace }) {
       </div>
 
       <p className="mt-2 text-xs text-muted-foreground">
-        Tracé relevé par un coureur ayant disputé l&apos;épreuve. Il peut
-        différer du parcours officiel si l&apos;organisateur l&apos;a modifié.
+        {trace.source === "segment"
+          ? "Circuit reconnu parmi les segments Strava du secteur, altitudes lues sur le relief public."
+          : "Tracé relevé par un coureur ayant disputé l'épreuve."}
+        {!trace.sameDay && trace.tracedOn && (
+          <> Relevé sur l&apos;édition du {formatEditionDate(trace.tracedOn)}.</>
+        )}{" "}
+        Il peut différer du parcours officiel si l&apos;organisateur l&apos;a
+        modifié.
       </p>
     </section>
   );
