@@ -63,139 +63,73 @@ export async function getRaces(
   } = filters;
 
   const offset = (page - 1) * PAGE_SIZE;
-  const radiusMeters = radius * 1000;
   const today = todayISO();
 
-  // Build dynamic WHERE clauses
-  const conditions: string[] = [
-    "r.is_cancelled = false",
-    "r.is_active = true",
-  ];
+  /**
+   * One list of parameters, appended to as clauses are added.
+   *
+   * This function used to build its conditions twice — once for the count and
+   * once for the page — and then slice the shared array back to what it guessed
+   * the count needed. The arithmetic was wrong the moment a location was
+   * involved: the WHERE clause referenced four parameters and the count was
+   * handed two, so every search with a location threw and the page, catching
+   * it, reported "aucune course ne correspond" over a database full of them.
+   *
+   * Now the filters are built once and both queries share them, with the
+   * paging parameters appended only to the one that pages.
+   */
   const params: unknown[] = [];
-  let paramIdx = 1;
+  const where: string[] = ["r.is_cancelled = false", "r.is_active = true"];
 
-  if (fed.length > 0) {
-    conditions.push(`f.slug = ANY($${paramIdx}::text[])`);
-    params.push(fed);
-    paramIdx++;
-  }
+  /** Adds a value and returns its placeholder, so no index is ever computed. */
+  const bind = (value: unknown): string => {
+    params.push(value);
+    return `$${params.length}`;
+  };
 
-  if (disc.length > 0) {
-    conditions.push(`r.discipline = ANY($${paramIdx}::text[])`);
-    params.push(disc);
-    paramIdx++;
-  }
+  if (fed.length > 0) where.push(`f.slug = ANY(${bind(fed)}::text[])`);
+  if (disc.length > 0) where.push(`r.discipline = ANY(${bind(disc)}::text[])`);
+  if (cat.length > 0) where.push(`r.categories && ${bind(cat)}::text[]`);
 
-  if (cat.length > 0) {
-    conditions.push(`r.categories && $${paramIdx}::text[]`);
-    params.push(cat);
-    paramIdx++;
-  }
-
-  const from = dateFrom || today;
-  conditions.push(`COALESCE(r.race_date_end, r.race_date) >= $${paramIdx}::date`);
-  params.push(from);
-  paramIdx++;
-
-  if (dateTo) {
-    conditions.push(`r.race_date <= $${paramIdx}::date`);
-    params.push(dateTo);
-    paramIdx++;
-  }
+  where.push(
+    `COALESCE(r.race_date_end, r.race_date) >= ${bind(dateFrom || today)}::date`
+  );
+  if (dateTo) where.push(`r.race_date <= ${bind(dateTo)}::date`);
 
   if (q.trim()) {
-    conditions.push(
-      `(r.name ILIKE $${paramIdx} OR r.city ILIKE $${paramIdx} OR r.organizer ILIKE $${paramIdx})`
+    const like = bind(`%${q.trim()}%`);
+    where.push(
+      `(r.name ILIKE ${like} OR r.city ILIKE ${like} OR r.organizer ILIKE ${like})`
     );
-    params.push(`%${q.trim()}%`);
-    paramIdx++;
   }
 
   let distanceSelect = "";
   let distanceOrder = "";
   if (lat != null && lng != null) {
-    conditions.push(
-      `r.location IS NOT NULL AND ST_DWithin(r.location, ST_MakePoint($${paramIdx}, $${paramIdx + 1})::geography, $${paramIdx + 2})`
+    // Bound once and referenced twice: the same point filters and measures.
+    const lngParam = bind(lng);
+    const latParam = bind(lat);
+    const point = `ST_MakePoint(${lngParam}, ${latParam})::geography`;
+    where.push(
+      `r.location IS NOT NULL AND ST_DWithin(r.location, ${point}, ${bind(radius * 1000)})`
     );
-    params.push(lng, lat, radiusMeters);
-    paramIdx += 3;
-
-    distanceSelect = `, ST_Distance(r.location, ST_MakePoint($${paramIdx}, $${paramIdx + 1})::geography) / 1000 AS distance_from_user_km`;
-    params.push(lng, lat);
-    paramIdx += 2;
+    distanceSelect = `, ST_Distance(r.location, ${point}) / 1000 AS distance_from_user_km`;
     distanceOrder = "distance_from_user_km,";
   }
 
-  const dateOrder = sortBy === "date_desc" ? "DESC" : "ASC";
-
-  const whereClause = conditions.join(" AND ");
-
-  const countParams = [...params];
-  // remove distance select params for count query (they're appended after)
-  const countParamIdx = distanceSelect ? paramIdx - 2 : paramIdx;
+  const whereClause = where.join(" AND ");
 
   const countRows = await sql(
     `SELECT COUNT(*) AS total
-     FROM races r
-     JOIN federations f ON f.id = r.federation_id
-     WHERE ${whereClause}`,
-    countParams.slice(0, countParamIdx - (distanceSelect ? 2 : 0) - 1)
+       FROM races r
+       JOIN federations f ON f.id = r.federation_id
+      WHERE ${whereClause}`,
+    params
   );
 
-  // Re-build params cleanly for main query
-  const mainParams: unknown[] = [];
-  const mainConditions: string[] = [
-    "r.is_cancelled = false",
-    "r.is_active = true",
-  ];
-  let mi = 1;
-
-  if (fed.length > 0) {
-    mainConditions.push(`f.slug = ANY($${mi}::text[])`);
-    mainParams.push(fed);
-    mi++;
-  }
-  if (disc.length > 0) {
-    mainConditions.push(`r.discipline = ANY($${mi}::text[])`);
-    mainParams.push(disc);
-    mi++;
-  }
-  if (cat.length > 0) {
-    mainConditions.push(`r.categories && $${mi}::text[]`);
-    mainParams.push(cat);
-    mi++;
-  }
-  mainConditions.push(`COALESCE(r.race_date_end, r.race_date) >= $${mi}::date`);
-  mainParams.push(dateFrom || today);
-  mi++;
-  if (dateTo) {
-    mainConditions.push(`r.race_date <= $${mi}::date`);
-    mainParams.push(dateTo);
-    mi++;
-  }
-  if (q.trim()) {
-    mainConditions.push(
-      `(r.name ILIKE $${mi} OR r.city ILIKE $${mi} OR r.organizer ILIKE $${mi})`
-    );
-    mainParams.push(`%${q.trim()}%`);
-    mi++;
-  }
-
-  let geoSelectExpr = "";
-  if (lat != null && lng != null) {
-    mainConditions.push(
-      `r.location IS NOT NULL AND ST_DWithin(r.location, ST_MakePoint($${mi}, $${mi + 1})::geography, $${mi + 2})`
-    );
-    mainParams.push(lng, lat, radiusMeters);
-    mi += 3;
-    geoSelectExpr = `, ST_Distance(r.location, ST_MakePoint($${mi}, $${mi + 1})::geography) / 1000 AS distance_from_user_km`;
-    mainParams.push(lng, lat);
-    mi += 2;
-  }
-
-  mainParams.push(PAGE_SIZE, offset);
-  const limitParam = mi;
-  const offsetParam = mi + 1;
+  const pageParams = [...params, PAGE_SIZE, offset];
+  const limitParam = `$${pageParams.length - 1}`;
+  const offsetParam = `$${pageParams.length}`;
 
   const rows = await sql(
     `SELECT
@@ -203,13 +137,13 @@ export async function getRaces(
        f.slug AS federation_slug,
        ST_X(r.location::geometry) AS lng,
        ST_Y(r.location::geometry) AS lat
-       ${geoSelectExpr}
+       ${distanceSelect}
      FROM races r
      JOIN federations f ON f.id = r.federation_id
-     WHERE ${mainConditions.join(" AND ")}
-     ORDER BY ${distanceOrder} r.race_date ${dateOrder}
-     LIMIT $${limitParam} OFFSET $${offsetParam}`,
-    mainParams
+     WHERE ${whereClause}
+     ORDER BY ${distanceOrder} r.race_date ${sortBy === "date_desc" ? "DESC" : "ASC"}
+     LIMIT ${limitParam} OFFSET ${offsetParam}`,
+    pageParams
   );
 
   const total = Number((countRows[0] as { total: string }).total);

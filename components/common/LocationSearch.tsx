@@ -17,6 +17,8 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
   const [results, setResults] = useState<GeocodingResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -62,13 +64,44 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
     onSelect(result);
   }
 
+  /**
+   * "Use my position".
+   *
+   * The failure was silent: an empty error callback, no pending state. A rider
+   * who had once refused the permission clicked and nothing whatever happened,
+   * which is indistinguishable from a dead button — and that is exactly how it
+   * was reported. Every outcome now says something.
+   */
   function handleGeolocate() {
+    setGeoError(null);
+
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      setGeoError("Votre navigateur ne sait pas donner votre position.");
+      return;
+    }
+
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        onSelect({ lat: pos.coords.latitude, lng: pos.coords.longitude, label: "Ma position" });
+        setLocating(false);
+        onSelect({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          label: "Ma position",
+        });
         setQuery("Ma position");
       },
-      () => {}
+      (err) => {
+        setLocating(false);
+        setGeoError(
+          err.code === err.PERMISSION_DENIED
+            ? "Position refusée. Autorisez la localisation dans votre navigateur, ou tapez une ville."
+            : err.code === err.TIMEOUT
+              ? "La localisation a été trop longue. Réessayez ou tapez une ville."
+              : "Position indisponible. Tapez une ville."
+        );
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 }
     );
   }
 
@@ -87,17 +120,31 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 animate-spin text-muted-foreground" />
           )}
         </div>
-        {"geolocation" in navigator && (
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleGeolocate}
-            title="Utiliser ma position"
-          >
+        {/* Rendered unconditionally. Testing `navigator` here made the server
+            and the client disagree about whether the button exists at all,
+            which is the kind of mismatch that leaves a control inert. */}
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={handleGeolocate}
+          disabled={locating}
+          title="Utiliser ma position"
+          aria-label="Utiliser ma position"
+        >
+          {locating ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
             <Navigation className="size-4" />
-          </Button>
-        )}
+          )}
+        </Button>
       </div>
+
+      {geoError && (
+        <p role="alert" className="mt-1.5 text-xs text-destructive">
+          {geoError}
+        </p>
+      )}
 
       {open && results.length > 0 && (
         <ul className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-md overflow-hidden">
