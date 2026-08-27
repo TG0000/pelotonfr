@@ -138,7 +138,7 @@ async function storeCircuit(
   const points = track.map((p, i) => [
     Number(p[1].toFixed(6)), // lng
     Number(p[0].toFixed(6)), // lat
-    Math.round(elevations[i] ?? 0),
+    Number((elevations[i] ?? 0).toFixed(2)),
     Math.round(distances[i]),
   ]);
 
@@ -209,7 +209,7 @@ async function main() {
   }
 
   const races = (await sql(
-    `SELECT id, name,
+    `SELECT id, name, city,
             ST_Y(location::geometry) AS lat,
             ST_X(location::geometry) AS lng
        FROM races
@@ -275,7 +275,11 @@ async function main() {
          separates it from every climb and descent in the sector is that it
          closes: the loops that turn out to be real circuits finish within a
          handful of metres of where they start. */
-      let circuit = findCircuits([...found.values()], { lat, lng })[0];
+      let circuit = findCircuits([...found.values()], {
+        lat,
+        lng,
+        city: (race.city as string) ?? null,
+      })[0];
 
       /* Nothing yet, so ask in smaller pieces.
          The explorer answers with ten segments per box however large the box
@@ -295,7 +299,11 @@ async function main() {
           read++;
           await new Promise((r) => setTimeout(r, PER_READ_MS));
         }
-        circuit = findCircuits([...found.values()], { lat, lng })[0];
+        circuit = findCircuits([...found.values()], {
+          lat,
+          lng,
+          city: (race.city as string) ?? null,
+        })[0];
         if (circuit) deepened++;
       }
 

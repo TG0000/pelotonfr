@@ -72,9 +72,37 @@ function nameSuggestsRace(name: string): boolean {
 /** Beyond this the loop is somewhere else entirely, not this race's circuit. */
 const MAX_PROXIMITY_M = 6_000;
 
+/**
+ * How far the middle of a loop may sit from the commune the race is held in.
+ *
+ * A race circuit starts and finishes in the village whose name it carries. The
+ * scoring used to weigh proximity against a good name and let a name win: for
+ * Argentan it chose "circuit Sarceaux", a real circuit in the neighbouring
+ * commune, centred three and a half kilometres away. A circuit belonging to
+ * somebody else's race is worse than no circuit, because the reader has no way
+ * of telling.
+ */
+const MAX_CENTRE_M = 2_500;
+
+/** Strips accents and punctuation so "Bagnoles-de-l'Orne" can meet "bagnoles". */
+function placeTokens(value: string): string[] {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 3);
+}
+
 export function findCircuits(
   segments: ExploreSegment[],
-  race: { lat: number; lng: number; expectedLapM?: number | null }
+  race: {
+    lat: number;
+    lng: number;
+    expectedLapM?: number | null;
+    /** The commune, when we know it: a circuit is named after where it is. */
+    city?: string | null;
+  }
 ): CircuitCandidate[] {
   const candidates: CircuitCandidate[] = [];
 
@@ -98,13 +126,37 @@ export function findCircuits(
     }
     if (proximityM > MAX_PROXIMITY_M) continue;
 
+    // Passing near the village is not the same as being its circuit: a loop in
+    // the next commune brushes past too. The middle of the loop is what says
+    // whose circuit it is.
+    const centreM = metresBetween(
+      [
+        (Math.min(...points.map((p) => p[0])) + Math.max(...points.map((p) => p[0]))) / 2,
+        (Math.min(...points.map((p) => p[1])) + Math.max(...points.map((p) => p[1]))) / 2,
+      ],
+      [race.lat, race.lng]
+    );
+    if (centreM > MAX_CENTRE_M) continue;
+
     /* Closing tightly, passing close to the published start, named like a
        race, and — when the organiser tells us how long a lap is — matching
        that length. */
     const named = nameSuggestsRace(segment.name);
     let score = named ? 6 : 0;
+
+    /* A circuit carries the name of the place it is in. When the segment names
+       the race's own commune that is the strongest signal there is; when it
+       names a *different* commune, the name that looked like evidence is
+       evidence against. */
+    if (race.city) {
+      const town = new Set(placeTokens(race.city));
+      const words = placeTokens(segment.name);
+      if (words.some((w) => town.has(w))) score += 5;
+      else if (named) score -= 2;
+    }
     score += Math.max(0, 1 - closureM / closureToleranceFor(lengthM)) * 3;
     score += Math.max(0, 1 - proximityM / MAX_PROXIMITY_M) * 4;
+    score += Math.max(0, 1 - centreM / MAX_CENTRE_M) * 4;
     if (race.expectedLapM) {
       const ratio = lengthM / race.expectedLapM;
       score += Math.max(0, 1 - Math.abs(1 - ratio)) * 5;

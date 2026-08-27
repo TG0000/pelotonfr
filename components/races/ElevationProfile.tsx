@@ -67,7 +67,32 @@ export function ElevationProfile({
     [minElevationM, span]
   );
 
-  /** One path per gradient band, so the colour changes along the line. */
+  /**
+   * One path per gradient band, so the colour changes along the line.
+   *
+   * The gradient is read over a hundred metres rather than between two adjacent
+   * points. At a point every twenty metres, a point-to-point reading is mostly
+   * measurement noise: a road at a steady one per cent came out as a stutter of
+   * flat and five per cent, and the colour flickered green-orange-green down a
+   * straight where nothing was happening. A hundred metres is also about the
+   * shortest stretch a rider would describe as having a gradient at all.
+   */
+  const gradients = useMemo(() => {
+    const BASELINE_M = 100;
+    const out = new Array<number>(points.length).fill(0);
+    let low = 0;
+    let high = 0;
+
+    for (let i = 0; i < points.length; i++) {
+      const here = points[i][3];
+      while (low < i && here - points[low][3] > BASELINE_M / 2) low++;
+      while (high < points.length - 1 && points[high][3] - here < BASELINE_M / 2) high++;
+      const run = points[high][3] - points[low][3];
+      out[i] = run > 1 ? ((points[high][2] - points[low][2]) / run) * 100 : 0;
+    }
+    return out;
+  }, [points]);
+
   const segments = useMemo(() => {
     const out: Array<{ d: string; color: string }> = [];
     let current: { d: string; color: string } | null = null;
@@ -75,9 +100,7 @@ export function ElevationProfile({
     for (let i = 1; i < points.length; i++) {
       const [, , a0, d0] = points[i - 1];
       const [, , a1, d1] = points[i];
-      const run = d1 - d0;
-      const gradient = run > 1 ? ((a1 - a0) / run) * 100 : 0;
-      const color = bandFor(gradient);
+      const color = bandFor(gradients[i]);
 
       if (!current || current.color !== color) {
         if (current) out.push(current);
@@ -87,7 +110,7 @@ export function ElevationProfile({
     }
     if (current) out.push(current);
     return out;
-  }, [points, x, y]);
+  }, [points, gradients, x, y]);
 
   const areaPath = useMemo(() => {
     if (points.length < 2) return "";

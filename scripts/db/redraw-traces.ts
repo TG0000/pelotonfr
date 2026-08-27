@@ -122,7 +122,7 @@ async function redrawSegment(row: Row, dryRun: boolean): Promise<number> {
   const points: Stored = track.map((p, i) => [
     Number(p[1].toFixed(6)),
     Number(p[0].toFixed(6)),
-    Math.round(elevations[i] ?? 0),
+    Number((elevations[i] ?? 0).toFixed(2)),
     Math.round(distances[i]),
   ]);
 
@@ -146,7 +146,7 @@ async function redrawRide(
   const points: Stored = trace.points.map((p) => [
     Number(p[0].toFixed(6)),
     Number(p[1].toFixed(6)),
-    Math.round(p[2]),
+    Number(p[2].toFixed(2)),
     Math.round(p[3]),
   ]);
 
