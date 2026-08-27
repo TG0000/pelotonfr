@@ -161,6 +161,43 @@ export async function getAthleteSummary(
   };
 }
 
+export interface ActivityStreams {
+  latlng: Array<[number, number]>;
+  altitude: number[];
+  distance: number[];
+}
+
+/**
+ * The shape of a ride: where it went and how high it was.
+ *
+ * This is what turns a race from a name and a date into a course. Organisers
+ * publish a trace roughly never, so the only reliable source is a rider who
+ * rode it — and one rider's ride documents the circuit for everyone.
+ */
+export async function getActivityStreams(
+  token: string,
+  activityId: number
+): Promise<ActivityStreams | null> {
+  const res = await fetch(
+    `${STRAVA_API}/activities/${activityId}/streams` +
+      `?keys=latlng,altitude,distance&key_by_type=true`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as Record<
+    string,
+    { data?: unknown[] } | undefined
+  >;
+
+  const latlng = (data.latlng?.data ?? []) as Array<[number, number]>;
+  const altitude = (data.altitude?.data ?? []) as number[];
+  const distance = (data.distance?.data ?? []) as number[];
+
+  if (latlng.length < 2) return null;
+  return { latlng, altitude, distance };
+}
+
 export function authorizeUrl(redirectUri: string, state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.STRAVA_CLIENT_ID ?? "",

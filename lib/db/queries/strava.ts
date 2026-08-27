@@ -199,7 +199,14 @@ export async function saveActivities(
         distance_m, moving_time_s, elevation_gain_m, average_watts, weighted_watts,
         max_watts, average_heartrate, max_heartrate, relative_effort, calories,
         start_location)
-     SELECT $1::uuid, d.*,
+     -- Columns are named rather than expanded with d.*: the row carries lat
+     -- and lng so the point can be built, and those two are not target
+     -- columns, so the wildcard produced twenty expressions for eighteen
+     -- columns and every sync failed before writing a single ride.
+     SELECT $1::uuid, d.activity_id, d.name, d.description, d.sport_type,
+            d.started_at, d.local_date, d.distance_m, d.moving_time_s,
+            d.elevation_gain_m, d.average_watts, d.weighted_watts, d.max_watts,
+            d.average_heartrate, d.max_heartrate, d.relative_effort, d.calories,
             CASE WHEN d.lat IS NULL OR d.lng IS NULL THEN NULL
                  ELSE ST_MakePoint(d.lng, d.lat)::geography END
        FROM UNNEST($2::bigint[], $3::varchar[], $4::text[], $5::varchar[],

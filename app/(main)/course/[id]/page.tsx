@@ -12,6 +12,8 @@ import { RaceCompetitors } from "@/components/riders/RaceCompetitors";
 import { StartList, SectionHeading } from "@/components/races/StartList";
 import { RaceWeatherPanel } from "@/components/races/RaceWeather";
 import { RaceTerrain } from "@/components/races/RaceTerrain";
+import { RaceCircuit } from "@/components/races/RaceCircuit";
+import { getRaceTrace } from "@/lib/db/queries/race-detail";
 import { PastEditions } from "@/components/races/PastEditions";
 import { SiblingRaces } from "@/components/races/SiblingRaces";
 import {
@@ -81,6 +83,16 @@ export default async function RaceDetailPage({ params }: PageProps) {
     // DB not configured
   }
   if (!race) notFound();
+
+  // Fetched here rather than in a Suspense boundary: the circuit is the
+  // headline of the page when it exists, and a placeholder that resolves to
+  // nothing on most races would be worse than its absence.
+  let trace = null;
+  try {
+    trace = await getRaceTrace(race.id);
+  } catch {
+    // A missing trace is the normal case, not a fault.
+  }
 
   const today = todayISO();
   const date = new Date(`${race.raceDate}T12:00:00Z`);
@@ -189,6 +201,8 @@ export default async function RaceDetailPage({ params }: PageProps) {
             </Suspense>
           </div>
         )}
+
+        {trace && <RaceCircuit trace={trace} />}
 
         {!isPast && (
           <Suspense fallback={<Skeleton rows={4} />}>

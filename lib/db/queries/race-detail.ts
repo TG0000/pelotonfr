@@ -164,3 +164,49 @@ export async function getSiblingRaces(
     categories: (row.categories as string[]) ?? [],
   }));
 }
+
+export interface RaceTrace {
+  /** [lng, lat, altitude, distanceFromStart] */
+  points: Array<[number, number, number, number]>;
+  distanceM: number;
+  elevationGainM: number;
+  minElevationM: number;
+  maxElevationM: number;
+  bounds: { west: number; south: number; east: number; north: number };
+  source: string;
+}
+
+/**
+ * The course, when a rider has ridden it.
+ *
+ * Attached to the meeting rather than the single race: the categories of one
+ * afternoon almost always share a circuit, so a trace contributed by whoever
+ * rode the Open race documents the Access race too.
+ */
+export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
+  const rows = (await sql(
+    `WITH me AS (SELECT event_id, race_date FROM races WHERE id = $1::uuid)
+     SELECT t.points, t.distance_m, t.elevation_gain_m,
+            t.min_elevation_m, t.max_elevation_m, t.bounds, t.source
+       FROM race_traces t
+       JOIN races r ON r.id = t.race_id
+       JOIN me ON (r.id = $1::uuid
+                   OR (r.event_id = me.event_id AND r.race_date = me.race_date))
+      ORDER BY (r.id = $1::uuid) DESC, t.distance_m DESC
+      LIMIT 1`,
+    [raceId]
+  )) as Array<Record<string, unknown>>;
+
+  const row = rows[0];
+  if (!row) return null;
+
+  return {
+    points: row.points as Array<[number, number, number, number]>,
+    distanceM: Number(row.distance_m ?? 0),
+    elevationGainM: Number(row.elevation_gain_m ?? 0),
+    minElevationM: Number(row.min_elevation_m ?? 0),
+    maxElevationM: Number(row.max_elevation_m ?? 0),
+    bounds: row.bounds as RaceTrace["bounds"],
+    source: String(row.source ?? "strava"),
+  };
+}
