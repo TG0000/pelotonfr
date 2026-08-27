@@ -198,6 +198,11 @@ export async function getActivityStreams(
   return { latlng, altitude, distance };
 }
 
+/** Thrown rather than swallowed: see exploreSegments. */
+export class StravaRateLimitError extends Error {
+  readonly name = "StravaRateLimitError";
+}
+
 export interface StravaSegment {
   id: number;
   name: string;
@@ -207,6 +212,10 @@ export interface StravaSegment {
   climbCategory: number | null;
   startLat: number | null;
   startLng: number | null;
+  /** The full shape, encoded — the explorer already carries it. */
+  points: string | null;
+  endLat: number | null;
+  endLng: number | null;
 }
 
 /**
@@ -234,6 +243,19 @@ export async function exploreSegments(
   const res = await fetch(`${STRAVA_API}/segments/explore?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+
+  /* A refusal is not an empty sector.
+     Returning [] on any failure made a rate limit indistinguishable from
+     "there is nothing here", so a caller marked races as read that had never
+     been looked at. Strava allows 100 reads per fifteen minutes and 1 000 per
+     day, and says so in these headers. */
+  if (res.status === 429) {
+    const usage = res.headers.get("x-readratelimit-usage") ?? "?";
+    const limit = res.headers.get("x-readratelimit-limit") ?? "?";
+    throw new StravaRateLimitError(
+      `Strava read limit reached (${usage} of ${limit}).`
+    );
+  }
   if (!res.ok) return [];
 
   const body = (await res.json()) as {
@@ -242,6 +264,7 @@ export async function exploreSegments(
 
   return (body.segments ?? []).map((s) => {
     const start = (s.start_latlng as [number, number] | undefined) ?? undefined;
+    const end = (s.end_latlng as [number, number] | undefined) ?? undefined;
     return {
       id: Number(s.id),
       name: String(s.name ?? "").slice(0, 160),
@@ -251,6 +274,11 @@ export async function exploreSegments(
       climbCategory: s.climb_category === undefined ? null : Number(s.climb_category),
       startLat: start?.[0] ?? null,
       startLng: start?.[1] ?? null,
+      // The explorer already carries the shape, so recognising a circuit costs
+      // no extra request at all.
+      points: (s.points as string | undefined) ?? null,
+      endLat: end?.[0] ?? null,
+      endLng: end?.[1] ?? null,
     };
   });
 }

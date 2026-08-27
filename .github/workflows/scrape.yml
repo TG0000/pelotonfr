@@ -87,7 +87,10 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
-        run: npm run scrape:segments -- --limit=80
+        # Two reads per race against Strava's 100-per-quarter-hour ceiling.
+        # Forty is about fifteen minutes of polite pacing, and the pass stops
+        # cleanly if it meets the limit anyway.
+        run: npm run scrape:segments -- --limit=40
         continue-on-error: true
 
       # Categories for FSGT and UFOLEP, which their own calendar never states.
