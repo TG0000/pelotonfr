@@ -1,0 +1,73 @@
+name: Backfill past seasons
+
+# Manual only, and deliberately separate from the nightly job.
+#
+# Reaching back to the 2021 category reform means walking the results index
+# for well over a thousand days and then fetching a classification for each
+# race found. That is hours of polite requests — far too long to sit inside the
+# nightly run, and pointless to repeat once done.
+#
+# Run it one slice at a time, oldest slice last: each run is resumable because
+# the index is walked backwards from today and races already held are skipped
+# by content hash.
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'How far back to walk the results index, in days (2021 reform ≈ 1900).'
+        required: true
+        default: '400'
+        type: string
+      results_limit:
+        description: 'How many races to fetch classifications for in this run.'
+        required: true
+        default: '800'
+        type: string
+
+# One at a time: two runs walking the same index would fight over the same rows.
+concurrency:
+  group: backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply pending migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:migrate
+
+      - name: Discover past races
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run scrape:history -- --days=${{ inputs.days }} --max-pages=4000
+
+      - name: Ingest their classifications
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run scrape:results -- --limit=${{ inputs.results_limit }}
+
+      # The whole point of reaching back is linking editions to each other, and
+      # that link is only made when identities are recomputed over the new rows.
+      - name: Rebuild meeting identities
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:reidentify
+
+      - name: Report what the archive now holds
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:archive-report

@@ -12,6 +12,7 @@
     "scrape:results": "tsx scripts/scrapers/ffc-results.ts",
     "geocode": "tsx scripts/scrapers/geocode-only.ts",
     "db:reidentify": "tsx scripts/db/reidentify-events.ts",
+    "db:archive-report": "tsx scripts/db/archive-report.ts",
     "db:migrate": "tsx scripts/db/migrate.ts",
     "db:migrate:dry": "tsx scripts/db/migrate.ts --dry-run",
     "scrape:rankings": "tsx scripts/scrapers/ffc-rankings.ts",
