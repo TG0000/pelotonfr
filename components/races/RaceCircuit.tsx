@@ -174,6 +174,7 @@ export function RaceCircuit({
           )}
           <ElevationProfile
             points={profilePoints}
+            windFromDeg={windFromDeg}
             minElevationM={trace.minElevationM}
             maxElevationM={trace.maxElevationM}
             onHover={setCursor}

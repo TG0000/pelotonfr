@@ -17,16 +17,32 @@ export interface ProfilePoint {
   altitudeM: number;
 }
 
-const GRADIENT_BANDS = [
+/**
+ * What a gradient costs, which is not the same as how steep it is.
+ *
+ * The bands used to be read from the absolute value, so a descent at eight per
+ * cent was painted the same red as the climb it came off — the profile marked
+ * the easiest fifty seconds of the lap as its hardest. A rider reads a profile
+ * to find where the race is decided, and a descent decides nothing by being
+ * steep.
+ *
+ * So the sign carries: climbs are graded by severity, and everything downhill
+ * is one quiet colour. It is not that a descent is uninteresting, it is that
+ * its difficulty is technical and a colour ramp cannot say that.
+ */
+const CLIMB_BANDS = [
   { max: 3, color: "var(--color-fsgt)" },
   { max: 6, color: "var(--color-accent)" },
   { max: 9, color: "var(--color-ufolep)" },
   { max: Infinity, color: "var(--color-destructive)" },
 ];
 
+/** Downhill, and flat enough not to be a climb. */
+const DESCENT = "var(--color-chart-5)";
+
 function bandFor(gradient: number): string {
-  const g = Math.abs(gradient);
-  return (GRADIENT_BANDS.find((b) => g < b.max) ?? GRADIENT_BANDS[0]).color;
+  if (gradient < -1) return DESCENT;
+  return (CLIMB_BANDS.find((b) => gradient < b.max) ?? CLIMB_BANDS[0]).color;
 }
 
 interface Props {
@@ -35,11 +51,15 @@ interface Props {
   maxElevationM: number;
   /** Told which point the cursor is over, so a map can follow. */
   onHover?: (index: number | null) => void;
+  /** Where the wind comes from on the day, when the forecast reaches. */
+  windFromDeg?: number | null;
   className?: string;
 }
 
 const W = 1000;
 const H = 220;
+/** The strip along the foot of the profile that carries the wind. */
+const WIND_H = 9;
 const PAD_BOTTOM = 22;
 const PAD_TOP = 12;
 
@@ -48,6 +68,7 @@ export function ElevationProfile({
   minElevationM,
   maxElevationM,
   onHover,
+  windFromDeg,
   className,
 }: Props) {
   const ref = useRef<SVGSVGElement>(null);
@@ -143,6 +164,45 @@ export function ElevationProfile({
     onHover?.(null);
   }
 
+  /**
+   * The wind, as a strip under the profile rather than a repaint of the line.
+   *
+   * Colouring the profile itself by wind meant losing the gradient to say it,
+   * and the gradient is what a rider looks for first. Two informations, two
+   * bands: the climb above, and along the foot of it, which way the wind will
+   * be meeting them at that point of the lap.
+   */
+  const windBands = useMemo(() => {
+    if (windFromDeg == null || points.length < 3) return [];
+    const towards = ((windFromDeg + 180) * Math.PI) / 180;
+
+    const out: Array<{ from: number; to: number; fill: string }> = [];
+    let current: { from: number; to: number; fill: string } | null = null;
+
+    for (let i = 1; i < points.length; i++) {
+      const a = points[Math.max(0, i - 2)];
+      const b = points[Math.min(points.length - 1, i + 2)];
+      const dLng = (b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180);
+      const travel = Math.atan2(dLng, b[1] - a[1]);
+      const alignment = -Math.cos(towards - travel);
+
+      const fill =
+        alignment > 0.4
+          ? "var(--color-destructive)"
+          : alignment < -0.4
+            ? "var(--color-fsgt)"
+            : "var(--color-accent)";
+
+      if (current && current.fill === fill) current.to = points[i][3];
+      else {
+        if (current) out.push(current);
+        current = { from: points[i - 1][3], to: points[i][3], fill };
+      }
+    }
+    if (current) out.push(current);
+    return out;
+  }, [points, windFromDeg]);
+
   const active = cursor !== null ? points[cursor] : null;
 
   return (
@@ -157,6 +217,19 @@ export function ElevationProfile({
         aria-label={`Profil du parcours, ${Math.round(totalM / 1000)} kilomètres`}
       >
         <path d={areaPath} fill="var(--color-primary)" opacity="0.08" />
+
+        {/* The wind along the foot: face, travers, dos. */}
+        {windBands.map((b, i) => (
+          <rect
+            key={i}
+            x={x(b.from)}
+            y={H - PAD_BOTTOM - WIND_H}
+            width={Math.max(0.5, x(b.to) - x(b.from))}
+            height={WIND_H}
+            fill={b.fill}
+            opacity="0.72"
+          />
+        ))}
         {segments.map((s, i) => (
           <path
             key={i}
