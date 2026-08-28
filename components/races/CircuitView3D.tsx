@@ -114,6 +114,7 @@ export function CircuitView3D({
     const scene = new THREE.Scene();
     const sky = dark ? 0x11141a : 0xeef0ea;
     scene.background = new THREE.Color(sky);
+    // Only to soften the cut edge of the grid, never to darken the course.
     scene.fog = new THREE.Fog(sky, 1, 1);
 
     /* ---- the land -------------------------------------------------------- */
@@ -144,8 +145,8 @@ export function CircuitView3D({
       side: THREE.FrontSide,
     });
     const landColours = new Float32Array(n * n * 3);
-    const low = new THREE.Color(dark ? 0x1b2a22 : 0xb6c39c);
-    const high = new THREE.Color(dark ? 0x4a4638 : 0xdfd6bd);
+    const low = new THREE.Color(dark ? 0x33493a : 0xb6c39c);
+    const high = new THREE.Color(dark ? 0x6d6551 : 0xdfd6bd);
     for (let i = 0; i < n * n; i++) {
       const t = (ground.z[i] - ground.minZ) / range;
       const c = low.clone().lerp(high, t);
@@ -214,7 +215,7 @@ export function CircuitView3D({
     scene.add(road);
 
     /* ---- light ----------------------------------------------------------- */
-    const sun = new THREE.DirectionalLight(0xfff4e0, dark ? 1.4 : 2.0);
+    const sun = new THREE.DirectionalLight(0xfff2dc, dark ? 2.6 : 3.0);
     sun.position.set(-spanX * 0.6, -spanY * 0.8, range * exaggeration + spanX);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -225,7 +226,13 @@ export function CircuitView3D({
     sun.shadow.camera.bottom = -shadowSpan;
     sun.shadow.camera.far = shadowSpan * 6;
     scene.add(sun);
-    scene.add(new THREE.HemisphereLight(dark ? 0x2a3340 : 0xbcd0e8, dark ? 0x14181d : 0x8a7f68, dark ? 0.7 : 1.0));
+    scene.add(
+      new THREE.HemisphereLight(
+        dark ? 0x4a5a72 : 0xbcd0e8,
+        dark ? 0x22282c : 0x8a7f68,
+        dark ? 1.6 : 1.4
+      )
+    );
 
     /* ---- the wind, as weather over the land ------------------------------ */
     let wind: THREE.Points | null = null;
@@ -274,12 +281,12 @@ export function CircuitView3D({
       range * exaggeration * 0.4
     );
     camera.position.set(
-      centre.x - circuitSpan * 0.75,
-      centre.y - circuitSpan * 1.05,
-      centre.z + circuitSpan * 0.62
+      centre.x - circuitSpan * 0.55,
+      centre.y - circuitSpan * 0.8,
+      centre.z + circuitSpan * 0.5
     );
-    scene.fog.near = circuitSpan * 1.4;
-    scene.fog.far = Math.max(spanX, spanY) * 2.6;
+    scene.fog.near = Math.max(spanX, spanY) * 1.1;
+    scene.fog.far = Math.max(spanX, spanY) * 3.2;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.copy(centre);
