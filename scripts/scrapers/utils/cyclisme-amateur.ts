@@ -284,7 +284,19 @@ export async function scrapeCyclismeAmateur(
       const idMatch = /\/course-(\d+)-/.exec(href);
       if (!idMatch) return;
 
-      const externalId = `${idPrefix}-${idMatch[1]}`;
+      /* The date belongs in the identity.
+         `/course-228043-` identifies the *épreuve*, not the edition: the same
+         number comes back every season with a new date. Keyed on the number
+         alone, an upsert moved the existing row forward instead of creating a
+         new one — so "Maintenon", written in April 2026, ended up dated April
+         2027 and its 2026 running vanished. Every past FSGT and UFOLEP race had
+         been quietly rewritten into the future, which is why the archive held
+         none: not one had been deleted, each had been overwritten.
+
+         With the date in the key a new season is a new race, and the seasons
+         accumulate the way the FFC's already do. */
+      const day = currentDate.toISOString().slice(0, 10);
+      const externalId = `${idPrefix}-${idMatch[1]}-${day}`;
       if (byId.has(externalId)) return;
 
       // The cell title holds the complete commune name; the anchor text is

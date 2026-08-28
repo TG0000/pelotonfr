@@ -5,6 +5,22 @@ import type { Race, PaginatedRaces, RaceFilters } from "@/types";
 const PAGE_SIZE = 24;
 
 
+/**
+ * What makes two rows the same thing to a reader.
+ *
+ * A meeting that runs five fields is five competitions to the federation and
+ * five rows here — which is right when the fields are named ("U17", "Access
+ * 3-4") and wrong when they are not. A cyclo-cross meeting publishes five
+ * identically-named races stating no category at all, and a reader is offered
+ * five cards they cannot choose between.
+ *
+ * Same rendez-vous, same day, same name, same categories, same discipline: one
+ * card, carrying how many it stands for.
+ */
+const SIBLING_KEY =
+  "COALESCE(r.event_id::text, r.id::text), r.race_date, r.name, " +
+  "r.categories::text, r.discipline";
+
 function buildRaceFromRow(row: Record<string, unknown>): Race {
   return {
     id: row.id as string,
@@ -66,7 +82,6 @@ export async function getRaces(
     sortBy = "date_asc",
   } = filters;
 
-  const offset = (page - 1) * PAGE_SIZE;
   const today = todayISO();
 
   /**
@@ -126,41 +141,59 @@ export async function getRaces(
 
   const whereClause = where.join(" AND ");
 
+  /* Counted the way the list is drawn.
+     The FFC publishes one competition per field, and for a cyclo-cross meeting
+     the five fields often share one name and state no category — five rows a
+     reader cannot tell apart or choose between. They are collapsed below, so
+     the total has to count the groups rather than the rows or the last page
+     comes back short. */
   const countRows = await sql(
-    `SELECT COUNT(*) AS total
+    `SELECT COUNT(DISTINCT (${SIBLING_KEY})) AS total
        FROM races r
        JOIN federations f ON f.id = r.federation_id
       WHERE ${whereClause}`,
     params
   );
 
+  const total = Number((countRows[0] as { total: string }).total);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  /* A page past the end used to return an empty list with no explanation —
+     a void where a reader expects either races or a reason. Asking for the
+     hundredth page of eighty-two gives the eighty-second. */
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const offset = (safePage - 1) * PAGE_SIZE;
+
   const pageParams = [...params, PAGE_SIZE, offset];
   const limitParam = `$${pageParams.length - 1}`;
   const offsetParam = `$${pageParams.length}`;
 
   const rows = await sql(
-    `SELECT
-       r.*,
-       f.slug AS federation_slug,
-       ST_X(r.location::geometry) AS lng,
-       ST_Y(r.location::geometry) AS lat
-       ${distanceSelect}
-     FROM races r
-     JOIN federations f ON f.id = r.federation_id
-     WHERE ${whereClause}
-     ORDER BY ${distanceOrder} r.race_date ${sortBy === "date_desc" ? "DESC" : "ASC"}
+    `SELECT * FROM (
+       SELECT
+         r.*,
+         f.slug AS federation_slug,
+         ST_X(r.location::geometry) AS lng,
+         ST_Y(r.location::geometry) AS lat,
+         ROW_NUMBER() OVER (PARTITION BY ${SIBLING_KEY} ORDER BY r.id) AS sibling_rank,
+         COUNT(*)     OVER (PARTITION BY ${SIBLING_KEY})               AS sibling_count
+         ${distanceSelect}
+       FROM races r
+       JOIN federations f ON f.id = r.federation_id
+       WHERE ${whereClause}
+     ) g
+     WHERE g.sibling_rank = 1
+     ORDER BY ${distanceOrder} g.race_date ${sortBy === "date_desc" ? "DESC" : "ASC"}
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
     pageParams
   );
 
-  const total = Number((countRows[0] as { total: string }).total);
-
   return {
     races: rows.map((r) => buildRaceFromRow(r as Record<string, unknown>)),
     total,
-    page,
+    page: safePage,
     pageSize: PAGE_SIZE,
-    totalPages: Math.ceil(total / PAGE_SIZE),
+    totalPages,
   };
 }
 
