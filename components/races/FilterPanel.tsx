@@ -2,9 +2,13 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, RotateCcw, SlidersHorizontal } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+  SlidersHorizontal,
+} from "lucide-react";
 import { RaceFilters, useActiveFilterCount } from "./RaceFilters";
-import { cn } from "@/lib/utils";
 
 /**
  * The filter panel, folded away and remembered.
@@ -21,6 +25,7 @@ import { cn } from "@/lib/utils";
  */
 
 const STORAGE_KEY = "pelotonfr.filters";
+const FOLD_KEY = "pelotonfr.filters.folded";
 
 /** Only what describes a search. Paging and the chosen view are not filters. */
 const REMEMBERED = [
@@ -44,11 +49,40 @@ export function FilterPanel() {
   const searchParams = useSearchParams();
   const activeCount = useActiveFilterCount();
 
-  /* Open unless the rider has already narrowed something down — derived
-     rather than synchronised, so no render is spent correcting a first guess.
-     `override` records a deliberate fold or unfold and wins from then on. */
+  /* Ouvert jusqu'à ce qu'on demande le contraire.
+     Il se repliait dès le premier filtre coché, ce qui est le mauvais moment :
+     on en coche plusieurs jusqu'à décrire ce qu'on cherche, et c'est seulement
+     après qu'on veut la place. Le repli est donc une décision — le bouton
+     « Voir les courses », ou la flèche — et elle se garde d'une visite à
+     l'autre comme les filtres eux-mêmes. */
+  /* Le pli retenu de la dernière visite, lu à la source plutôt que recopié
+     dans un état par un effet — React 19 interdit le second, et à raison :
+     c'était une valeur en double dont l'une corrigeait l'autre après coup. */
+  const persistedFold = useSyncExternalStore(
+    () => () => {},
+    () => {
+      try {
+        return localStorage.getItem(FOLD_KEY) !== null;
+      } catch {
+        return false;
+      }
+    },
+    () => false
+  );
+
+  /** Le choix fait dans cette visite, qui l'emporte sur ce qui était retenu. */
   const [override, setOverride] = useState<boolean | null>(null);
-  const open = override ?? activeCount === 0;
+  const open = !(override ?? persistedFold);
+
+  function fold(value: boolean) {
+    setOverride(value);
+    try {
+      if (value) localStorage.setItem(FOLD_KEY, "1");
+      else localStorage.removeItem(FOLD_KEY);
+    } catch {
+      // Le pli marche quand même, il ne sera juste pas retenu.
+    }
+  }
 
   /* Whether we are past hydration, without an effect that sets state to say so. */
   const hydrated = useSyncExternalStore(
@@ -104,49 +138,79 @@ export function FilterPanel() {
     router.push(pathname, { scroll: false });
   }
 
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOverride(!open)}
-          aria-expanded={open}
-          className="flex flex-1 items-center gap-2 text-left text-sm font-semibold"
-        >
-          <SlidersHorizontal className="size-4 text-muted-foreground" />
-          Filtres
-          {activeCount > 0 && (
-            <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-              {activeCount}
-            </span>
-          )}
-          <ChevronDown
-            className={cn(
-              "ml-auto size-4 text-muted-foreground transition-transform",
-              open && "rotate-180"
-            )}
-          />
-        </button>
-        {activeCount > 0 && (
+  /* Replié, la colonne s'efface au lieu de garder ses 256 pixels : replier vers
+     le haut ne rendait aucune place au calendrier, qui est ce qu'on est venu
+     lire. */
+  if (!open) {
+    return (
+      <aside className="hidden shrink-0 lg:block">
+        <div className="sticky top-20 flex flex-col items-center gap-2">
           <button
             type="button"
-            onClick={forget}
-            title="Oublier ces filtres"
-            aria-label="Oublier ces filtres"
+            onClick={() => fold(false)}
+            aria-expanded={false}
+            title="Afficher les filtres"
+            className="flex flex-col items-center gap-2 rounded-lg border border-border bg-surface-1 px-2 py-3 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            <ChevronRight className="size-4" />
+            <SlidersHorizontal className="size-4" />
+            {activeCount > 0 && (
+              <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                {activeCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="hidden w-64 shrink-0 lg:block">
+      <div className="sticky top-20 flex max-h-[calc(100vh-6rem)] flex-col gap-3 overflow-y-auto pr-1">
+        <div className="flex items-center gap-2">
+          <span className="flex flex-1 items-center gap-2 text-sm font-semibold">
+            <SlidersHorizontal className="size-4 text-muted-foreground" />
+            Filtres
+            {activeCount > 0 && (
+              <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                {activeCount}
+              </span>
+            )}
+          </span>
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={forget}
+              title="Oublier ces filtres"
+              aria-label="Oublier ces filtres"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+            >
+              <RotateCcw className="size-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => fold(true)}
+            aria-expanded
+            title="Replier les filtres"
+            aria-label="Replier les filtres"
             className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground"
           >
-            <RotateCcw className="size-3.5" />
+            <ChevronLeft className="size-4" />
           </button>
-        )}
+        </div>
+
+        <RaceFilters />
+
+        <button
+          type="button"
+          onClick={() => fold(true)}
+          className="sticky bottom-0 mt-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          Voir les courses
+        </button>
       </div>
-
-      {open && <RaceFilters />}
-
-      {!open && activeCount > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Vos filtres sont conservés d&apos;une visite à l&apos;autre.
-        </p>
-      )}
-    </div>
+    </aside>
   );
 }

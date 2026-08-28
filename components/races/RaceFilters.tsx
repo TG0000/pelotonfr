@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
+import { RadiusSlider } from "./RadiusSlider";
 import { LocationSearch } from "@/components/common/LocationSearch";
 import { FEDERATIONS, DISCIPLINES, DEFAULT_RADIUS_KM } from "@/lib/constants";
 import { CATEGORIES as CATEGORY_DEFS } from "@/lib/categories";
@@ -219,14 +219,6 @@ export function RaceFilters() {
     return () => clearTimeout(id);
   }, [query, urlQuery, setParams]);
 
-  /* The radius slider behaves the same way: dragging it fired a navigation per
-     step, which made the whole page feel like it was fighting the cursor.
-     `null` means nobody is dragging, so the URL is the truth — which is also
-     how the slider picks up a radius set from somewhere else, with no effect
-     syncing one piece of state to another. */
-  const [drag, setDrag] = useState<number | null>(null);
-  const radiusDraft = drag ?? radius;
-
   function handleLocationSelect(result: GeocodingResult | null) {
     if (result) {
       setParams({
@@ -313,28 +305,10 @@ export function RaceFilters() {
             placeholder="Ville ou code postal…"
           />
           {lat && lng && (
-            <div className="flex flex-col gap-1.5 pt-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Rayon</span>
-                <span className="font-medium tabular-nums">{radiusDraft} km</span>
-              </div>
-              <Slider
-                min={10}
-                max={300}
-                step={10}
-                value={[radiusDraft]}
-                onValueChange={(v) =>
-                  setDrag(Array.isArray(v) ? v[0] : (v as number))
-                }
-                onValueCommitted={(v: number | readonly number[]) => {
-                  setDrag(null);
-                  setParams({
-                    radius: String(Array.isArray(v) ? v[0] : (v as number)),
-                  });
-                }}
-                className="w-full"
-              />
-            </div>
+            <RadiusSlider
+              value={radius}
+              onCommit={(km) => setParams({ radius: String(km) })}
+            />
           )}
         </div>
       )}

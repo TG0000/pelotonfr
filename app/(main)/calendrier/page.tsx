@@ -253,13 +253,11 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
         </div>
       ) : (
         <div className="flex gap-8">
-          <div className="hidden w-64 shrink-0 lg:block">
-            <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1">
-              <Suspense fallback={null}>
-                <FilterPanel />
-              </Suspense>
-            </div>
-          </div>
+          {/* Le panneau porte sa propre largeur : replié, il rend la colonne
+              au calendrier au lieu de garder ses 256 pixels vides. */}
+          <Suspense fallback={null}>
+            <FilterPanel />
+          </Suspense>
 
           <div className="min-w-0 flex-1">
             <div className="mb-4">
