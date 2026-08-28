@@ -286,26 +286,36 @@ export function CircuitView3D({
         });
       }
 
-      /* One arrow drawn once, tinted per feature. An SVG would be sharper but
-         MapLibre wants a raster for an icon, and at this size the difference
-         is invisible while the code is half as long. */
-      if (!m.hasImage("fleche-vent")) {
-        const size = 48;
+      /* Three arrows, one per verdict, rather than one arrow tinted.
+         MapLibre will recolour an icon, but only if it is registered as a
+         signed distance field — and a hard-edged triangle makes a degenerate
+         one, which is why the first attempt drew nothing at all. Three small
+         images cost nothing and always render. */
+      const ARROWS: Array<[string, string]> = [
+        ["vent-face", "#e04a3c"],
+        ["vent-travers", "#e8b73f"],
+        ["vent-dos", "#4fb87a"],
+      ];
+      for (const [name, colour] of ARROWS) {
+        if (m.hasImage(name)) continue;
+        const size = 56;
         const c = document.createElement("canvas");
         c.width = size;
         c.height = size;
         const g = c.getContext("2d")!;
-        g.fillStyle = "#ffffff";
         g.beginPath();
-        g.moveTo(24, 4);
-        g.lineTo(38, 30);
-        g.lineTo(24, 23);
-        g.lineTo(10, 30);
+        g.moveTo(28, 6);
+        g.lineTo(45, 40);
+        g.lineTo(28, 31);
+        g.lineTo(11, 40);
         g.closePath();
+        g.fillStyle = colour;
         g.fill();
-        m.addImage("fleche-vent", g.getImageData(0, 0, size, size), {
-          sdf: true,
-        });
+        // A dark rim so a red arrow still reads over a ploughed field.
+        g.strokeStyle = "rgba(10,14,20,0.85)";
+        g.lineWidth = 3;
+        g.stroke();
+        m.addImage(name, g.getImageData(0, 0, size, size));
       }
 
       if (!m.getSource("vent")) {
@@ -317,25 +327,20 @@ export function CircuitView3D({
           type: "symbol",
           source: "vent",
           layout: {
-            "icon-image": "fleche-vent",
-            "icon-size": ["interpolate", ["linear"], ["zoom"], 11, 0.28, 16, 0.6],
+            "icon-image": [
+              "match",
+              ["get", "effect"],
+              "face", "vent-face",
+              "dos", "vent-dos",
+              "vent-travers",
+            ],
+            "icon-size": ["interpolate", ["linear"], ["zoom"], 11, 0.35, 16, 0.75],
             "icon-rotate": ["get", "rotation"],
             "icon-rotation-alignment": "map",
+            "icon-pitch-alignment": "map",
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
             visibility: "none",
-          },
-          paint: {
-            "icon-color": [
-              "match",
-              ["get", "effect"],
-              "face", "#d95347",
-              "dos", "#5cb87f",
-              "#e5b84c",
-            ],
-            "icon-halo-color": "#0d1117",
-            "icon-halo-width": 1.4,
-            "icon-opacity": 0.95,
           },
         });
       }
