@@ -113,10 +113,15 @@ export function CircuitView3D({
    * which is about as often as a village circuit changes its mind.
    */
   const windArrows = useMemo<GeoJSON.FeatureCollection>(() => {
-    if (windFromDeg == null) {
+    /* Coerced, not trusted. A direction that arrives as a string makes
+       `windFromDeg + 180` a concatenation, the modulo NaN, and GeoJSON turns
+       NaN into null — at which point MapLibre rejects the rotation and the
+       whole layer draws nothing, warning about a number it found null. */
+    const from = Number(windFromDeg);
+    if (windFromDeg == null || !Number.isFinite(from)) {
       return { type: "FeatureCollection", features: [] };
     }
-    const towards = (windFromDeg + 180) % 360;
+    const towards = (from + 180) % 360;
     const bear = bearings(points);
     const features: GeoJSON.Feature[] = [];
     let nextAt = 0;
@@ -420,9 +425,10 @@ export function CircuitView3D({
 
   /** Where the wind bites, said in words rather than painted over the road. */
   const windReading = useMemo(() => {
-    if (windFromDeg == null) return null;
+    const from = Number(windFromDeg);
+    if (windFromDeg == null || !Number.isFinite(from)) return null;
     const bear = bearings(points);
-    const towards = ((windFromDeg + 180) * Math.PI) / 180;
+    const towards = ((from + 180) * Math.PI) / 180;
     let intoM = 0;
     for (let i = 1; i < points.length; i++) {
       const alignment = -Math.cos(towards - (bear[i] * Math.PI) / 180);
