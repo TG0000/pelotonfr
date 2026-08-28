@@ -331,12 +331,20 @@ async function refreshRiderStandings(): Promise<void> {
   const [latest] = await sql(`SELECT MAX(season) AS s FROM rider_rankings`);
   const currentSeason = Number(latest.s);
 
+  /* Le club de la saison en cours, pas celui de la dernière écriture.
+     Les saisons sont parcourues de la plus récente à la plus ancienne et
+     l'upsert garde ce qu'il vient d'écrire : `current_club_id` finissait donc
+     sur le club de 2021. Rien n'échouait — un coureur passé de Ferté-Macé à
+     l'ES Caen en 2025 était simplement présenté sous son ancien maillot, et la
+     page club lui proposait de rejoindre le mauvais. C'est ici que « courant »
+     se décide, avec les points et le rang, et le club n'y était pas. */
   await sql(
     `UPDATE riders r
-        SET current_points = c.points,
-            current_rank   = c.rank,
-            current_season = c.season,
-            category       = COALESCE(c.category, r.category)
+        SET current_points  = c.points,
+            current_rank    = c.rank,
+            current_season  = c.season,
+            category        = COALESCE(c.category, r.category),
+            current_club_id = COALESCE(c.club_id, r.current_club_id)
        FROM rider_rankings c
       WHERE c.rider_id = r.id
         AND c.season = $1::smallint`,
