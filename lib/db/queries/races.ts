@@ -36,6 +36,10 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     contactPhone: row.contact_phone as string | null,
     notes: row.notes as string | null,
     scrapedAt: toDateOnly(row.scraped_at) ?? "",
+    bibPickupTime: (row.bib_pickup_time as string) ?? null,
+    bibPickupPlace: (row.bib_pickup_place as string) ?? null,
+    circuitM: row.circuit_m != null ? Number(row.circuit_m) : null,
+    lapCount: row.lap_count != null ? Number(row.lap_count) : null,
     createdAt: toDateOnly(row.created_at) ?? "",
     updatedAt: toDateOnly(row.updated_at) ?? "",
     distanceFromUserKm:

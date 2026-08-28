@@ -209,9 +209,12 @@ async function main() {
   }
 
   const races = (await sql(
-    `SELECT id, name, city,
-            ST_Y(location::geometry) AS lat,
-            ST_X(location::geometry) AS lng
+    `SELECT id, name, city, circuit_m,
+            -- The organiser's own address when we could place it, the commune
+            -- otherwise: a circuit is judged on how close it sits to the start,
+            -- and a commune centroid can be a kilometre off the start line.
+            ST_Y(COALESCE(start_location, location)::geometry) AS lat,
+            ST_X(COALESCE(start_location, location)::geometry) AS lng
        FROM races
       WHERE location IS NOT NULL
         AND is_cancelled = false
@@ -279,6 +282,7 @@ async function main() {
         lat,
         lng,
         city: (race.city as string) ?? null,
+        expectedLapM: race.circuit_m != null ? Number(race.circuit_m) : null,
       })[0];
 
       /* Nothing yet, so ask in smaller pieces.
@@ -303,6 +307,7 @@ async function main() {
           lat,
           lng,
           city: (race.city as string) ?? null,
+          expectedLapM: race.circuit_m != null ? Number(race.circuit_m) : null,
         })[0];
         if (circuit) deepened++;
       }

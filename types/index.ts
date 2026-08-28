@@ -29,6 +29,14 @@ export interface Race {
   contactEmail: string | null;
   contactPhone: string | null;
   notes: string | null;
+  /* What the organiser wrote on their own competition page. Absent for most
+     races — a third of them state where dossards are collected, one in twenty
+     states the circuit — which is why every one of these is nullable. */
+  bibPickupTime: string | null;
+  bibPickupPlace: string | null;
+  /** One lap, in metres, as the organiser announced it. */
+  circuitM: number | null;
+  lapCount: number | null;
   scrapedAt: string;
   createdAt: string;
   updatedAt: string;

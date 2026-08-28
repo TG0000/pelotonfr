@@ -158,8 +158,15 @@ export function findCircuits(
     score += Math.max(0, 1 - proximityM / MAX_PROXIMITY_M) * 4;
     score += Math.max(0, 1 - centreM / MAX_CENTRE_M) * 4;
     if (race.expectedLapM) {
+      /* The organiser stated the lap. That is not one signal among several, it
+         is the answer: a loop that is not that length is not this circuit,
+         however well it closes and however good its name. Carrouges announces
+         seven kilometres and the segment measures 6.3 — organisers round, and
+         a quarter either way absorbs that without letting a 6 km loop pass for
+         a 1.7 km criterium. */
       const ratio = lengthM / race.expectedLapM;
-      score += Math.max(0, 1 - Math.abs(1 - ratio)) * 5;
+      if (ratio < 0.75 || ratio > 1.25) continue;
+      score += Math.max(0, 1 - Math.abs(1 - ratio)) * 8;
     } else {
       // Without a stated lap length, a longer loop is more likely to be the
       // circuit than a short one, which tends to be a single climb drawn as

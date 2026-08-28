@@ -11,6 +11,7 @@ import { getRaceById } from "@/lib/db/queries/races";
 import { RaceCompetitors } from "@/components/riders/RaceCompetitors";
 import { StartList, SectionHeading } from "@/components/races/StartList";
 import { RaceWeatherPanel } from "@/components/races/RaceWeather";
+import { OrganiserBriefing } from "@/components/races/OrganiserBriefing";
 import { RaceTerrain } from "@/components/races/RaceTerrain";
 import { RaceCircuit } from "@/components/races/RaceCircuit";
 import { FieldLevel } from "@/components/races/FieldLevel";
@@ -202,6 +203,13 @@ export default async function RaceDetailPage({ params }: PageProps) {
           </div>
         </div>
       )}
+
+      <OrganiserBriefing
+        bibPickupTime={race.bibPickupTime}
+        bibPickupPlace={race.bibPickupPlace}
+        circuitM={race.circuitM}
+        lapCount={race.lapCount}
+      />
 
       {race.notes && (
         <p className="mb-8 rounded-xl border border-border bg-surface-2 p-4 text-sm text-muted-foreground">

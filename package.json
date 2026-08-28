@@ -18,6 +18,7 @@
     "scrape:rankings": "tsx scripts/scrapers/ffc-rankings.ts",
     "scrape:categories": "tsx scripts/scrapers/amivelo-categories.ts",
     "db:recompute-categories": "tsx scripts/db/recompute-categories.ts",
+    "scrape:briefing": "tsx scripts/scrapers/ffc-briefing.ts",
     "scrape:segments": "tsx scripts/scrapers/strava-segments.ts",
     "scrape:engagements": "tsx scripts/scrapers/velopresse-engagements.ts",
     "alerts:send": "tsx scripts/alerts/send-digest.ts"
