@@ -21,6 +21,7 @@
     "scrape:briefing": "tsx scripts/scrapers/ffc-briefing.ts",
     "scrape:segments": "tsx scripts/scrapers/strava-segments.ts",
     "scrape:engagements": "tsx scripts/scrapers/velopresse-engagements.ts",
+    "alerts:club": "tsx scripts/alerts/club-reminder.ts",
     "alerts:send": "tsx scripts/alerts/send-digest.ts"
   },
   "dependencies": {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
-import { CalendarDays, Flag, Menu, Bell, UserRound } from "lucide-react";
+import { Bell, CalendarDays, Flag, Menu, UserRound, Users } from "lucide-react";
 import { Logo, Wordmark } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
@@ -22,6 +22,8 @@ const navLinks = [
   { href: "/calendrier", label: "Courses", icon: CalendarDays },
   // And one for the rider. Everything personal lives behind this.
   { href: "/ma-saison", label: "Ma saison", icon: Flag },
+  // Le club, parce qu'en FFC un coureur ne s'engage pas lui-même.
+  { href: "/club", label: "Mon club", icon: Users },
   { href: "/alertes", label: "Alertes", icon: Bell },
   { href: "/profil", label: "Profil", icon: UserRound },
 ];
