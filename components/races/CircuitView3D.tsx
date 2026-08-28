@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
-import { Layers, Satellite } from "lucide-react";
+import { Layers, Satellite, Wind } from "lucide-react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { bearings } from "@/lib/circuit-mesh";
 import { cn } from "@/lib/utils";
@@ -68,6 +68,7 @@ export function CircuitView3D({
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [satellite, setSatellite] = useState(true);
+  const [showWind, setShowWind] = useState(false);
 
   /**
    * The colour ramp along the lap, as stops on the line's own progress.
@@ -99,6 +100,47 @@ export function CircuitView3D({
     return stops;
   }, [points]);
 
+  /**
+   * The wind, as arrows standing on the course.
+   *
+   * Colouring the road by exposure meant losing the gradient to say it, and the
+   * gradient is what a rider looks for first. Words alone — "38 % du tour face
+   * au vent" — are true and say nothing about *where*.
+   *
+   * Arrows say both at once. They all point the same way, because the wind
+   * does, so the direction reads without a legend; and each is coloured by what
+   * it does to a rider at that point of the lap. Every three hundred metres,
+   * which is about as often as a village circuit changes its mind.
+   */
+  const windArrows = useMemo<GeoJSON.FeatureCollection>(() => {
+    if (windFromDeg == null) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    const towards = (windFromDeg + 180) % 360;
+    const bear = bearings(points);
+    const features: GeoJSON.Feature[] = [];
+    let nextAt = 0;
+
+    for (let i = 0; i < points.length; i++) {
+      if (points[i][3] < nextAt) continue;
+      nextAt = points[i][3] + 300;
+
+      const alignment = -Math.cos(
+        ((towards - bear[i]) * Math.PI) / 180
+      );
+      features.push({
+        type: "Feature",
+        properties: {
+          rotation: towards,
+          effect:
+            alignment > 0.4 ? "face" : alignment < -0.4 ? "dos" : "travers",
+        },
+        geometry: { type: "Point", coordinates: [points[i][0], points[i][1]] },
+      });
+    }
+    return { type: "FeatureCollection", features };
+  }, [points, windFromDeg]);
+
   useEffect(() => {
     const el = host.current;
     if (!el || map.current) return;
@@ -121,6 +163,17 @@ export function CircuitView3D({
       bearing: -22,
       maxPitch: 80,
       attributionControl: { compact: true },
+      /* Off by default because keeping the drawing buffer costs memory and a
+         little speed on every frame. On with ?capture=1, which is how the
+         rendered scene can be read back as an image and checked — a map that
+         can only be judged by looking at it can only be judged by whoever is
+         sitting in front of it. */
+      canvasContextAttributes: {
+        antialias: true,
+        preserveDrawingBuffer:
+          typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).has("capture"),
+      },
     });
     map.current = m;
 
@@ -233,6 +286,60 @@ export function CircuitView3D({
         });
       }
 
+      /* One arrow drawn once, tinted per feature. An SVG would be sharper but
+         MapLibre wants a raster for an icon, and at this size the difference
+         is invisible while the code is half as long. */
+      if (!m.hasImage("fleche-vent")) {
+        const size = 48;
+        const c = document.createElement("canvas");
+        c.width = size;
+        c.height = size;
+        const g = c.getContext("2d")!;
+        g.fillStyle = "#ffffff";
+        g.beginPath();
+        g.moveTo(24, 4);
+        g.lineTo(38, 30);
+        g.lineTo(24, 23);
+        g.lineTo(10, 30);
+        g.closePath();
+        g.fill();
+        m.addImage("fleche-vent", g.getImageData(0, 0, size, size), {
+          sdf: true,
+        });
+      }
+
+      if (!m.getSource("vent")) {
+        m.addSource("vent", { type: "geojson", data: windArrows });
+      }
+      if (!m.getLayer("vent")) {
+        m.addLayer({
+          id: "vent",
+          type: "symbol",
+          source: "vent",
+          layout: {
+            "icon-image": "fleche-vent",
+            "icon-size": ["interpolate", ["linear"], ["zoom"], 11, 0.28, 16, 0.6],
+            "icon-rotate": ["get", "rotation"],
+            "icon-rotation-alignment": "map",
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            visibility: "none",
+          },
+          paint: {
+            "icon-color": [
+              "match",
+              ["get", "effect"],
+              "face", "#d95347",
+              "dos", "#5cb87f",
+              "#e5b84c",
+            ],
+            "icon-halo-color": "#0d1117",
+            "icon-halo-width": 1.4,
+            "icon-opacity": 0.95,
+          },
+        });
+      }
+
       m.fitBounds(bounds, { padding: 56, pitch: 62, bearing: -22, duration: 0 });
       } catch (err) {
         // The course still draws without the sky, or without the relief.
@@ -276,6 +383,12 @@ export function CircuitView3D({
 
   useEffect(() => {
     const m = map.current;
+    if (!m || !m.getLayer("vent")) return;
+    m.setLayoutProperty("vent", "visibility", showWind ? "visible" : "none");
+  }, [showWind]);
+
+  useEffect(() => {
+    const m = map.current;
     const source = m?.getSource("curseur") as maplibregl.GeoJSONSource | undefined;
     if (!source) return;
 
@@ -310,6 +423,7 @@ export function CircuitView3D({
       <div ref={host} className="h-full w-full" />
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-2 p-3">
+        <div className="pointer-events-auto flex gap-2">
         <button
           type="button"
           onClick={() => setSatellite((v) => !v)}
@@ -319,25 +433,55 @@ export function CircuitView3D({
           {satellite ? "Plan" : "Vue aérienne"}
         </button>
 
+        <button
+          type="button"
+          disabled={windFromDeg == null}
+          onClick={() => setShowWind((v) => !v)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium backdrop-blur transition-colors",
+            showWind ? "bg-surface-3" : "bg-surface-1/90 hover:bg-surface-2",
+            windFromDeg == null && "cursor-not-allowed opacity-40"
+          )}
+          title={
+            windFromDeg == null
+              ? "Prévision indisponible à cette échéance"
+              : undefined
+          }
+        >
+          <Wind className="size-3.5" />
+          Vent
+        </button>
+        </div>
+
         <div className="pointer-events-none rounded-lg border border-border bg-surface-1/90 px-2.5 py-1.5 text-xs backdrop-blur">
+          {showWind ? (
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Legend colour="#d95347" label="de face" />
+              <Legend colour="#e5b84c" label="de travers" />
+              <Legend colour="#5cb87f" label="dans le dos" />
+              {windReading != null && (
+                <span className="text-muted-foreground">
+                  <span className="font-mono tabular-nums text-foreground">
+                    {windReading} %
+                  </span>{" "}
+                  du tour de face
+                  {windKmh != null && (
+                    <span className="font-mono tabular-nums">
+                      {" "}· {Math.round(windKmh)} km/h
+                    </span>
+                  )}
+                </span>
+              )}
+            </span>
+          ) : (
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <Legend colour="#9aa4b2" label="descente" />
             <Legend colour="#5cb87f" label="< 3 %" />
             <Legend colour="#e5b84c" label="3–6 %" />
             <Legend colour="#e0853d" label="6–9 %" />
             <Legend colour="#d95347" label="> 9 %" />
-            {windReading != null && (
-              <span className="text-muted-foreground">
-                <span className="font-mono tabular-nums text-foreground">
-                  {windReading} %
-                </span>{" "}
-                face au vent
-                {windKmh != null && (
-                  <span className="font-mono tabular-nums"> · {Math.round(windKmh)} km/h</span>
-                )}
-              </span>
-            )}
           </span>
+          )}
         </div>
       </div>
     </div>
