@@ -99,6 +99,22 @@ function windColour(bearingDeg: number, windFromDeg: number): [number, number, n
   return [0.85, 0.68, 0.28];
 }
 
+/** The widest extent of the lap itself, in metres. */
+function circuitSpanFor(
+  points: Array<[number, number, number, number]>,
+  projection: ReturnType<typeof projectionFor>
+): number {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const pt of points) {
+    const [x, y] = toLocal(projection, pt[0], pt[1]);
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  return Math.max(maxX - minX, maxY - minY, 400);
+}
+
 export function CircuitView3D({
   points,
   ground,
@@ -196,7 +212,17 @@ export function CircuitView3D({
     gl.useProgram(program);
 
     const land = terrainMesh(ground, projection, exaggeration);
-    const road = roadMesh(points, projection, exaggeration, roadColours);
+    /* The road is drawn wider than a road.
+       Fourteen metres is the truth and at this distance the truth is a hair:
+       the ribbon exists to be read as a line on a hillside, so it scales with
+       how far away the camera sits. */
+    const road = roadMesh(
+      points,
+      projection,
+      exaggeration,
+      roadColours,
+      Math.max(18, circuitSpanFor(points, projection) / 90)
+    );
 
     const buffer = (
       data: Float32Array | Uint32Array,
@@ -240,16 +266,7 @@ export function CircuitView3D({
     /* Framed on the circuit, not on the ground grid.
        The grid carries a margin so a valley has both its sides in frame, and
        framing on it left the lap as a stamp in the middle of a plate. */
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const pt of points) {
-      const [x, y] = toLocal(projection, pt[0], pt[1]);
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    }
-    const circuitSpan = Math.max(maxX - minX, maxY - minY, 400);
-    camera.current.distance ||= circuitSpan * 1.5;
+    camera.current.distance ||= circuitSpanFor(points, projection) * 1.35;
 
     const draw = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
