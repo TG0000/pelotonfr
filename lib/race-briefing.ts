@@ -23,6 +23,15 @@ export interface Briefing {
   /** One lap, in metres. */
   circuitM: number | null;
   lapCount: number | null;
+  /**
+   * When entries close, as the federation states it — "2026-08-25T20:00".
+   *
+   * The single most useful date on the page for a French amateur, and the one
+   * nobody sees in time. A licensed rider cannot enter a FFC race themselves:
+   * the club officer holds the account, so a rider who decides on Wednesday
+   * for Sunday has already missed it.
+   */
+  entriesCloseAt: string | null;
 }
 
 /** Words that end a pickup place — the page runs sections together. */
@@ -96,5 +105,14 @@ export function parseBriefing(pageText: string): Briefing {
     }
   }
 
-  return { bibPickupTime, bibPickupPlace, circuitM, lapCount };
+  /* "Engagements fermés depuis le 25/08/2026 20h local", and the same sentence
+     in the future tense while they are still open. */
+  const close = text.match(
+    /engagements?\s+(?:ferm[ée]s?|ouverts?)[^0-9]{0,40}(\d{2})\/(\d{2})\/(\d{4})\s*(\d{1,2})\s*h/i
+  );
+  const entriesCloseAt = close
+    ? `${close[3]}-${close[2]}-${close[1]}T${close[4].padStart(2, "0")}:00`
+    : null;
+
+  return { bibPickupTime, bibPickupPlace, circuitM, lapCount, entriesCloseAt };
 }

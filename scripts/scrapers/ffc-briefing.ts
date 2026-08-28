@@ -134,6 +134,9 @@ async function main() {
         `UPDATE races
             SET bib_pickup_time = $2, bib_pickup_place = $3,
                 circuit_m = $4, lap_count = $5,
+                entries_close_at = COALESCE($8::timestamp, entries_close_at),
+                entries_close_source = CASE WHEN $8::timestamp IS NULL
+                                            THEN entries_close_source ELSE 'fiche' END,
                 start_location = CASE WHEN $6::float8 IS NULL THEN start_location
                                       ELSE ST_MakePoint($6::float8, $7::float8)::geography END,
                 briefing_fetched_at = now()
@@ -146,6 +149,7 @@ async function main() {
           brief.lapCount,
           point?.lng ?? null,
           point?.lat ?? null,
+          brief.entriesCloseAt,
         ]
       );
 
