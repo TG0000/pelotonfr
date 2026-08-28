@@ -177,6 +177,15 @@ export function CircuitView3D({
     });
     map.current = m;
 
+    /* In capture mode the map is reachable from the console, so a layer that
+       refuses to draw can be interrogated instead of guessed at. */
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("capture")
+    ) {
+      (window as unknown as { __carte?: maplibregl.Map }).__carte = m;
+    }
+
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
 
     const bounds = new maplibregl.LngLatBounds();
