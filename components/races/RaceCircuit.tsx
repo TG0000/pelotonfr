@@ -6,6 +6,7 @@ import { Download, Route } from "lucide-react";
 import { ElevationProfile } from "./ElevationProfile";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { detectLaps } from "@/lib/trace";
+import { useNearViewport } from "@/components/common/useNearViewport";
 
 const CircuitMap = dynamic(
   () => import("./CircuitMap").then((m) => ({ default: m.CircuitMap })),
@@ -61,6 +62,7 @@ export function RaceCircuit({
   const [whole, setWhole] = useState(false);
 
   const laps = useMemo(() => detectLaps(trace.points), [trace.points]);
+  const { ref: mapSlot, near: mapNear } = useNearViewport();
 
   /* One lap by default when the race is laps of a circuit.
      Drawing the same hill fourteen times says nothing a single lap does not,
@@ -97,8 +99,17 @@ export function RaceCircuit({
       </h2>
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
-        <div className="h-72 w-full sm:h-80">
-          <CircuitMap points={profilePoints} bounds={trace.bounds} cursor={cursor} />
+        {/* The map is a megabyte; it loads when the reader gets near it. */}
+        <div ref={mapSlot} className="h-72 w-full sm:h-80">
+          {mapNear ? (
+            <CircuitMap
+              points={profilePoints}
+              bounds={trace.bounds}
+              cursor={cursor}
+            />
+          ) : (
+            <div className="h-full w-full bg-surface-2" />
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4 border-t border-border px-4 py-3 sm:grid-cols-4">
