@@ -1,4 +1,3 @@
-import type { Ground } from "@/lib/elevation";
 import { sql } from "@/lib/db";
 
 /**
@@ -179,8 +178,6 @@ export interface RaceTrace {
   tracedOn: string | null;
   /** False when it comes from another edition of the same meeting. */
   sameDay: boolean;
-  /** The land around the circuit, when it has been read. */
-  ground: Ground | null;
 }
 
 /**
@@ -196,7 +193,7 @@ export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
        SELECT event_id, race_date, discipline, location
          FROM races WHERE id = $1::uuid
      )
-     SELECT t.points, t.distance_m, t.elevation_gain_m, t.ground,
+     SELECT t.points, t.distance_m, t.elevation_gain_m,
             t.min_elevation_m, t.max_elevation_m, t.bounds, t.source,
             r.race_date::text AS traced_on,
             (r.race_date = me.race_date) AS same_day
@@ -241,7 +238,6 @@ export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
     source: String(row.source ?? "strava"),
     tracedOn: (row.traced_on as string | null) ?? null,
     sameDay: Boolean(row.same_day),
-    ground: (row.ground as Ground | null) ?? null,
   };
 }
 

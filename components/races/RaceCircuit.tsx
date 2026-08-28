@@ -22,17 +22,6 @@ const CircuitView3D = dynamic(
   }
 );
 
-const CircuitMap = dynamic(
-  () => import("./CircuitMap").then((m) => ({ default: m.CircuitMap })),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="grid h-full w-full place-items-center bg-surface-2">
-        <span className="text-sm text-muted-foreground">Chargement du tracé…</span>
-      </div>
-    ),
-  }
-);
 
 const MONTHS = [
   "janvier", "février", "mars", "avril", "mai", "juin",
@@ -118,24 +107,18 @@ export function RaceCircuit({
       </h2>
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
-        {/* The map is a megabyte; it loads when the reader gets near it. */}
+        {/* The map is heavy; it loads when the reader gets near it. */}
         <div ref={mapSlot} className="h-80 w-full sm:h-[26rem]">
-          {!mapNear ? (
-            <div className="h-full w-full bg-surface-2" />
-          ) : trace.ground ? (
+          {mapNear ? (
             <CircuitView3D
               points={profilePoints}
-              ground={trace.ground}
+              cursor={cursor}
               windFromDeg={windFromDeg ?? null}
               windKmh={windKmh ?? null}
               className="h-full w-full"
             />
           ) : (
-            <CircuitMap
-              points={profilePoints}
-              bounds={trace.bounds}
-              cursor={cursor}
-            />
+            <div className="h-full w-full bg-surface-2" />
           )}
         </div>
 
