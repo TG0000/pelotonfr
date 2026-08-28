@@ -8,6 +8,20 @@ import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { detectLaps } from "@/lib/trace";
 import { useNearViewport } from "@/components/common/useNearViewport";
 
+/* The relief view when the ground has been read, the flat map otherwise. Both
+   are split out and fetched only when the reader gets near them. */
+const CircuitView3D = dynamic(
+  () => import("./CircuitView3D").then((m) => ({ default: m.CircuitView3D })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="grid h-full w-full place-items-center bg-surface-2">
+        <span className="text-sm text-muted-foreground">Lecture du relief…</span>
+      </div>
+    ),
+  }
+);
+
 const CircuitMap = dynamic(
   () => import("./CircuitMap").then((m) => ({ default: m.CircuitMap })),
   {
@@ -54,9 +68,14 @@ function Figure({ label, value, unit }: { label: string; value: string; unit?: s
 export function RaceCircuit({
   trace,
   raceId,
+  windFromDeg,
+  windKmh,
 }: {
   trace: RaceTrace;
   raceId: string;
+  /** Where the wind comes from on the day, when the forecast reaches. */
+  windFromDeg?: number | null;
+  windKmh?: number | null;
 }) {
   const [cursor, setCursor] = useState<number | null>(null);
   const [whole, setWhole] = useState(false);
@@ -100,15 +119,23 @@ export function RaceCircuit({
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
         {/* The map is a megabyte; it loads when the reader gets near it. */}
-        <div ref={mapSlot} className="h-72 w-full sm:h-80">
-          {mapNear ? (
+        <div ref={mapSlot} className="h-80 w-full sm:h-[26rem]">
+          {!mapNear ? (
+            <div className="h-full w-full bg-surface-2" />
+          ) : trace.ground ? (
+            <CircuitView3D
+              points={profilePoints}
+              ground={trace.ground}
+              windFromDeg={windFromDeg ?? null}
+              windKmh={windKmh ?? null}
+              className="h-full w-full"
+            />
+          ) : (
             <CircuitMap
               points={profilePoints}
               bounds={trace.bounds}
               cursor={cursor}
             />
-          ) : (
-            <div className="h-full w-full bg-surface-2" />
           )}
         </div>
 

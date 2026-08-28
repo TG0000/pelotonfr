@@ -87,3 +87,63 @@ export async function groundAlongLine(
     return null;
   }
 }
+
+/**
+ * The ground around a circuit, as a grid.
+ *
+ * A profile says how much a lap climbs; it does not say what the lap is *in*.
+ * A rider reading "77 m a lap" learns nothing about whether the climb is a
+ * wall out of a river valley or a long drag across a plateau — and that is the
+ * difference between a race that splits and one that does not.
+ *
+ * The IGN samples along a line, not over an area, so the grid is read one row
+ * at a time. Thirty-two rows of thirty-two is a thousand heights for
+ * thirty-two requests: coarse enough to be affordable, fine enough that a
+ * bocage valley reads as a valley. It is computed once per circuit and kept.
+ */
+export interface Ground {
+  /** Points per side. */
+  size: number;
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+  /** Heights, row-major from the south edge northwards. */
+  z: number[];
+  minZ: number;
+  maxZ: number;
+}
+
+export async function groundGrid(
+  bounds: { west: number; south: number; east: number; north: number },
+  size = 32
+): Promise<Ground | null> {
+  const rows: number[][] = [];
+
+  for (let i = 0; i < size; i++) {
+    const lat = bounds.south + ((bounds.north - bounds.south) * i) / (size - 1);
+    const line = await groundAlongLine(
+      [
+        [lat, bounds.west],
+        [lat, bounds.east],
+      ],
+      size
+    );
+    // One missing row would tear the mesh, so a failure abandons the grid
+    // rather than leaving a seam a reader would take for a cliff.
+    if (!line || line.length < size) return null;
+    rows.push(line.slice(0, size).map((p) => p[2]));
+
+    // The service is free and public; asking for a thousand points politely.
+    await new Promise((r) => setTimeout(r, 120));
+  }
+
+  const z = rows.flat();
+  return {
+    size,
+    ...bounds,
+    z,
+    minZ: Math.min(...z),
+    maxZ: Math.max(...z),
+  };
+}

@@ -13,7 +13,7 @@ import { StartList, SectionHeading } from "@/components/races/StartList";
 import { RaceWeatherPanel } from "@/components/races/RaceWeather";
 import { OrganiserBriefing } from "@/components/races/OrganiserBriefing";
 import { RaceTerrain } from "@/components/races/RaceTerrain";
-import { RaceCircuit } from "@/components/races/RaceCircuit";
+import { CircuitWithWind } from "@/components/races/CircuitWithWind";
 import { FieldLevel } from "@/components/races/FieldLevel";
 import { PlanButton } from "@/components/races/PlanButton";
 import { RaceClimbs } from "@/components/races/RaceClimbs";
@@ -242,7 +242,22 @@ export default async function RaceDetailPage({ params }: PageProps) {
           </div>
         )}
 
-        {trace && <RaceCircuit trace={trace} raceId={race.id} />}
+        {trace && (
+          <Suspense fallback={<Skeleton rows={4} />}>
+            {/* The wind belongs on the circuit, not only beside it: what a
+                rider wants is not "31 km/h nord-ouest" but which side of the
+                lap that lands on. Awaited here so the panel arrives coloured
+                rather than repainting under the reader. */}
+            <CircuitWithWind
+              trace={trace}
+              raceId={race.id}
+              lat={race.lat}
+              lng={race.lng}
+              date={race.raceDate}
+              timing={timing}
+            />
+          </Suspense>
+        )}
 
         <Suspense fallback={<Skeleton rows={3} />}>
           <RaceClimbs raceId={race.id} hasTrace={trace !== null} />
