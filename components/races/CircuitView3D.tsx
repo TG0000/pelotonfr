@@ -6,6 +6,7 @@ import type { Ground } from "@/lib/elevation";
 import {
   bearings,
   projectionFor,
+  toLocal,
   roadMesh,
   terrainMesh,
   type RoadColouring,
@@ -129,8 +130,24 @@ export function CircuitView3D({
     [ground]
   );
 
-  /** 1.6× — enough that Normandy reads as undulating, not so much it lies. */
-  const EXAGGERATION = 1.6;
+  /**
+   * Vertical exaggeration, chosen from the ground rather than fixed.
+   *
+   * A fixed multiplier flatters a mountain and erases a bocage: sixty-six
+   * metres of relief across six kilometres is one per cent, and at any honest
+   * scale Louvigné is a grey plate. What a rider needs to see is the *shape* —
+   * which side of the lap climbs — so the exaggeration aims for the same
+   * apparent relief everywhere, about a fifteenth of the width, and is capped
+   * so a real climb is never turned into an alp.
+   */
+  const exaggeration = useMemo(() => {
+    const spanM = Math.max(
+      (ground.east - ground.west) * projection.mPerLng,
+      (ground.north - ground.south) * 110_574
+    );
+    const range = Math.max(1, ground.maxZ - ground.minZ);
+    return Math.min(7, Math.max(1.2, (spanM * 0.065) / range));
+  }, [ground, projection]);
 
   const roadColours = useMemo(() => {
     const out = new Float32Array(points.length * 3);
@@ -178,8 +195,8 @@ export function CircuitView3D({
     }
     gl.useProgram(program);
 
-    const land = terrainMesh(ground, projection, EXAGGERATION);
-    const road = roadMesh(points, projection, EXAGGERATION, roadColours);
+    const land = terrainMesh(ground, projection, exaggeration);
+    const road = roadMesh(points, projection, exaggeration, roadColours);
 
     const buffer = (
       data: Float32Array | Uint32Array,
@@ -220,7 +237,19 @@ export function CircuitView3D({
       (ground.east - ground.west) * projection.mPerLng,
       (ground.north - ground.south) * 110_574
     );
-    camera.current.distance ||= spanM * 1.25;
+    /* Framed on the circuit, not on the ground grid.
+       The grid carries a margin so a valley has both its sides in frame, and
+       framing on it left the lap as a stamp in the middle of a plate. */
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const pt of points) {
+      const [x, y] = toLocal(projection, pt[0], pt[1]);
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    const circuitSpan = Math.max(maxX - minX, maxY - minY, 400);
+    camera.current.distance ||= circuitSpan * 1.5;
 
     const draw = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -234,7 +263,7 @@ export function CircuitView3D({
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
       const { azimuth, tilt, distance } = camera.current;
-      const centreZ = ((ground.minZ + ground.maxZ) / 2) * EXAGGERATION;
+      const centreZ = ((ground.minZ + ground.maxZ) / 2) * exaggeration;
       const eye = [
         Math.sin(azimuth) * Math.cos(tilt) * distance,
         -Math.cos(azimuth) * Math.cos(tilt) * distance,
@@ -252,10 +281,18 @@ export function CircuitView3D({
 
       gl.uniformMatrix4fv(uVP, false, vp);
       gl.uniform3f(uLight, -0.4, -0.5, 0.77);
-      gl.uniform1f(uMinZ, ground.minZ * EXAGGERATION);
-      gl.uniform1f(uSpanZ, (ground.maxZ - ground.minZ) * EXAGGERATION);
-      gl.uniform3f(uLow, ...(dark ? [0.13, 0.16, 0.19] : [0.80, 0.83, 0.76]) as [number, number, number]);
-      gl.uniform3f(uHigh, ...(dark ? [0.28, 0.30, 0.30] : [0.62, 0.62, 0.56]) as [number, number, number]);
+      gl.uniform1f(uMinZ, ground.minZ * exaggeration);
+      gl.uniform1f(uSpanZ, (ground.maxZ - ground.minZ) * exaggeration);
+      /* Low ground green, high ground bare — the way a hillside reads from a
+         car window, and enough separation that a valley is a valley rather
+         than a shade of the same grey. */
+      if (dark) {
+        gl.uniform3f(uLow, 0.13, 0.20, 0.17);
+        gl.uniform3f(uHigh, 0.34, 0.33, 0.28);
+      } else {
+        gl.uniform3f(uLow, 0.72, 0.79, 0.66);
+        gl.uniform3f(uHigh, 0.87, 0.83, 0.72);
+      }
 
       // The land.
       gl.uniform1i(uMode, 0);
@@ -296,7 +333,7 @@ export function CircuitView3D({
         gl.deleteBuffer(b);
       }
     };
-  }, [ground, points, projection, roadColours]);
+  }, [ground, points, projection, roadColours, exaggeration]);
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
