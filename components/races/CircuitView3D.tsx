@@ -130,6 +130,7 @@ export function CircuitView3D({
     for (const [lng, lat] of points) bounds.extend([lng, lat]);
 
     m.on("style.load", () => {
+      try {
       if (!m.getSource("relief")) {
         m.addSource("relief", {
           type: "raster-dem",
@@ -196,18 +197,17 @@ export function CircuitView3D({
         });
       }
 
-      m.addLayer({
-        id: "ciel",
-        type: "sky",
-        paint: {
-          "sky-color": "#8bb4e8",
-          "sky-horizon-blend": 0.6,
-          "horizon-color": "#d8e4f0",
-          "horizon-fog-blend": 0.6,
-          "fog-color": "#cfd9e4",
-          "fog-ground-blend": 0.7,
-        },
-      } as unknown as maplibregl.LayerSpecification);
+      /* MapLibre 5 sets the sky on the map, not as a layer — asking for a
+         "sky" layer throws during style validation, and a throw in here takes
+         the terrain, the course and the camera down with it. */
+      m.setSky({
+        "sky-color": "#8bb4e8",
+        "sky-horizon-blend": 0.6,
+        "horizon-color": "#d8e4f0",
+        "horizon-fog-blend": 0.6,
+        "fog-color": "#cfd9e4",
+        "fog-ground-blend": 0.7,
+      });
 
       /* Where the profile is being read.
          Hovering a profile and watching the place move on the course is what
@@ -234,6 +234,10 @@ export function CircuitView3D({
       }
 
       m.fitBounds(bounds, { padding: 56, pitch: 62, bearing: -22, duration: 0 });
+      } catch (err) {
+        // The course still draws without the sky, or without the relief.
+        console.error("circuit:", err);
+      }
     });
 
     return () => {
