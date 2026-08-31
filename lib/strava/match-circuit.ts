@@ -43,14 +43,33 @@ const GENERIC =
 export interface CircuitDonor {
   raceId: string;
   raceName: string;
+  /** Comment on l'a reconnue : ce qui décide de la confiance qu'on lui accorde. */
+  by: "jour_et_lieu" | "nom_et_lieu";
   score: number;
   metres: number;
 }
 
+/**
+ * Le jour et le lieu d'abord, le nom seulement ensuite.
+ *
+ * Peu de coureurs renomment leur sortie du nom de la course : beaucoup laissent
+ * « Sortie de l'après-midi », ou écrivent tout autre chose. Chercher le nom
+ * d'abord, c'est ne trouver que les méticuleux.
+ *
+ * Une sortie partie d'à côté d'un village *le jour où on y courait* est en
+ * revanche presque toujours la course — personne ne va rouler par hasard à
+ * quatre kilomètres d'un départ un dimanche matin. C'est le signal fort, et il
+ * ne demande rien au coureur.
+ *
+ * Le nom reste utile pour les sorties d'un autre jour : une reconnaissance de
+ * mars nommée « Buais » documente la boucle aussi bien, et c'est la seule façon
+ * de la reconnaître.
+ */
 export async function matchRideToCircuit(
   sql: SqlLike,
   ride: {
     name: string;
+    localDate: string;
     lat: number | null;
     lng: number | null;
     distanceM: number;
@@ -58,12 +77,41 @@ export async function matchRideToCircuit(
 ): Promise<CircuitDonor | null> {
   if (ride.lat == null || ride.lng == null) return null;
 
-  const title = normalizeTitle(ride.name);
-  if (!title || title.length < 3 || GENERIC.test(ride.name.trim())) return null;
-
   // Une sortie de vingt kilomètres n'est pas une course ; une de trois cents
   // est une randonnée qui a traversé le village.
   if (ride.distanceM < 25_000 || ride.distanceM > 220_000) return null;
+
+  /* Le jour et le lieu. Quatre kilomètres : un départ de course est à quelques
+     centaines de mètres du centre de la commune, et notre point *est* le centre
+     de la commune. Au-delà, c'est un autre village. */
+  const sameDay = await sql(
+    `SELECT r.id, r.name,
+            ST_Distance(r.location, ST_MakePoint($1::float8, $2::float8)::geography) AS metres
+       FROM races r
+      WHERE r.race_date = $3::date
+        AND r.location IS NOT NULL
+        AND r.discipline = 'route'
+        AND ST_DWithin(r.location, ST_MakePoint($1::float8, $2::float8)::geography, 4000)
+      ORDER BY metres
+      LIMIT 1`,
+    [ride.lng, ride.lat, ride.localDate]
+  );
+
+  if (sameDay[0]) {
+    const r = sameDay[0] as Record<string, unknown>;
+    return {
+      raceId: r.id as string,
+      raceName: r.name as string,
+      by: "jour_et_lieu",
+      score: 1,
+      metres: Number(r.metres),
+    };
+  }
+
+  /* Sinon le nom, pour les reconnaissances et les éditions passées qu'on ne
+     tient pas au calendrier. */
+  const title = normalizeTitle(ride.name);
+  if (!title || title.length < 3 || GENERIC.test(ride.name.trim())) return null;
 
   const rows = await sql(
     `SELECT r.id, r.name, r.city,
@@ -85,8 +133,6 @@ export async function matchRideToCircuit(
     const core = raceTitleCore(r.name as string);
     const city = normalizeTitle((r.city as string) ?? "");
 
-    // Le titre de la sortie est presque toujours la commune. On compare aux
-    // deux, et on garde la meilleure des deux ressemblances.
     const score = Math.max(
       dice(joined, core.replace(/ /g, "")),
       city ? dice(joined, city.replace(/ /g, "")) : 0
@@ -96,6 +142,7 @@ export async function matchRideToCircuit(
       best = {
         raceId: r.id as string,
         raceName: r.name as string,
+        by: "nom_et_lieu",
         score,
         metres: Number(r.metres),
       };

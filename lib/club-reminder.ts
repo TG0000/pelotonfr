@@ -1,5 +1,6 @@
 import type { SqlLike } from "@/lib/strava/types";
 import { displayRaceName } from "@/lib/race-name";
+import { toDateOnly } from "@/lib/date";
 
 /**
  * Le rappel au responsable de club, avant que la porte se ferme.
@@ -76,7 +77,7 @@ export async function pendingEntries(
     raceId: row.race_id as string,
     raceName: row.race_name as string,
     city: (row.city as string) ?? null,
-    raceDate: String(row.race_date).slice(0, 10),
+    raceDate: toDateOnly(row.race_date as string | Date) ?? "",
     hoursLeft: Number(row.hours_left),
     riders: (row.riders as string[]) ?? [],
   }));

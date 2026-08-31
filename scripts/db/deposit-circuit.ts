@@ -36,7 +36,7 @@ async function resolveRace(needle: string): Promise<{ id: string; name: string }
   if (rows.length > 1) {
     console.error(`« ${needle} » désigne ${rows.length} courses :`);
     for (const r of rows as Array<Record<string, unknown>>) {
-      console.error(`  ${r.id}  ${String(r.race_date).slice(0, 10)}  ${r.name}`);
+      console.error(`  ${r.id}  ${new Date(r.race_date as string).toISOString().slice(0, 10)}  ${r.name}`);
     }
     throw new Error("Précise laquelle, par son identifiant.");
   }

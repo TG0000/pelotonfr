@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { sql } from "@/lib/db";
+import { toDateOnly } from "@/lib/date";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import {
   getAccessToken,
@@ -90,7 +91,9 @@ export async function POST() {
       const r = row as Record<string, unknown>;
       const match = await matchRideToRace(sql, {
         name: (r.name as string) ?? "",
-        localDate: String(r.local_date).slice(0, 10),
+        // `String()` sur un objet Date donne « Sat Mar 27 » ; dix caractères
+        // plus tard, Postgres refuse la date. toDateOnly comprend les deux.
+        localDate: toDateOnly(r.local_date as string | Date) ?? "",
         lat: r.lat != null ? Number(r.lat) : null,
         lng: r.lng != null ? Number(r.lng) : null,
         categories,
@@ -158,7 +161,7 @@ export async function POST() {
     let circuits = 0;
     if (traced < TRACES_PER_SYNC) {
       const candidates = await sql(
-        `SELECT a.activity_id, a.name, a.distance_m,
+        `SELECT a.activity_id, a.name, a.distance_m, a.local_date,
                 ST_Y(a.start_location::geometry) AS lat,
                 ST_X(a.start_location::geometry) AS lng
            FROM strava_activities a
@@ -167,7 +170,7 @@ export async function POST() {
             AND a.start_location IS NOT NULL
             AND a.sport_type IN ('Ride', 'GravelRide')
           ORDER BY a.local_date DESC
-          LIMIT 400`,
+          LIMIT 600`,
         [id]
       );
 
@@ -177,6 +180,7 @@ export async function POST() {
 
         const donor = await matchRideToCircuit(sql, {
           name: (r.name as string) ?? "",
+          localDate: toDateOnly(r.local_date as string | Date) ?? "",
           lat: r.lat != null ? Number(r.lat) : null,
           lng: r.lng != null ? Number(r.lng) : null,
           distanceM: Number(r.distance_m ?? 0),
@@ -184,14 +188,28 @@ export async function POST() {
         if (!donor) continue;
 
         try {
+          /* Reconnue par le jour et le lieu, c'est la course : la sortie s'y
+             rattache, et son tracé vaut celui du jour J. Reconnue par le nom,
+             c'est la boucle sans être l'épreuve. */
+          const raced = donor.by === "jour_et_lieu";
+
           const outcome = await saveRideTrace(
             sql,
             token,
             Number(r.activity_id),
             donor.raceId,
-            "parcouru"
+            raced ? "strava" : "parcouru"
           );
           if (outcome === "stored") circuits++;
+
+          if (raced) {
+            await sql(
+              `UPDATE strava_activities
+                  SET race_id = $2::uuid, race_match_method = 'location_and_date'
+                WHERE activity_id = $1::bigint AND race_id IS NULL`,
+              [Number(r.activity_id), donor.raceId]
+            );
+          }
         } catch {
           break;
         }
