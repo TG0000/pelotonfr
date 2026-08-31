@@ -27,6 +27,7 @@ export const COLLECTORS: CollectorSpec[] = [
   { key: "engagements",     label: "Listes d'engagés",      maxAgeHours: 36,  criticalAgeHours: 96 },
   { key: "categories",      label: "Catégories FSGT/UFOLEP", maxAgeHours: 72, criticalAgeHours: 240 },
   { key: "ffc-briefing",    label: "Fiches organisateur",   maxAgeHours: 48,  criticalAgeHours: 168 },
+  { key: "affiches",        label: "Affiches de course",    maxAgeHours: 72,  criticalAgeHours: 240 },
 ];
 
 export type CollectorVerdict = "ok" | "late" | "overdue" | "never";
