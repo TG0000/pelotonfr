@@ -23,7 +23,11 @@ export async function saveRideTrace(
   sql: SqlLike,
   token: string,
   activityId: number,
-  raceId: string
+  raceId: string,
+  /* 'strava' : la sortie était la course. 'parcouru' : le même coureur a fait
+     cette boucle un autre jour, ce qui documente le circuit sans documenter
+     l'épreuve — et se dit autrement sur la page. */
+  source: "strava" | "parcouru" = "strava"
 ): Promise<TraceOutcome> {
   const streams = await getActivityStreams(token, activityId);
   if (!streams) return "unavailable";
@@ -38,10 +42,10 @@ export async function saveRideTrace(
     `INSERT INTO race_traces (race_id, source, strava_activity, points, distance_m,
                               elevation_gain_m, min_elevation_m, max_elevation_m,
                               bounds, centre)
-     VALUES ($1::uuid, 'strava', $2::bigint, $3::jsonb, $4, $5, $6, $7,
+     VALUES ($1::uuid, $11::varchar, $2::bigint, $3::jsonb, $4, $5, $6, $7,
              $8::jsonb, ST_MakePoint($9::float8, $10::float8)::geography)
      ON CONFLICT (race_id) DO UPDATE
-        SET source          = 'strava',
+        SET source          = $11::varchar,
             strava_activity = EXCLUDED.strava_activity,
             points          = EXCLUDED.points,
             distance_m      = EXCLUDED.distance_m,
@@ -51,6 +55,8 @@ export async function saveRideTrace(
             bounds          = EXCLUDED.bounds,
             centre          = EXCLUDED.centre,
             updated_at      = now()
+      -- Un tracé déposé ou couru le jour J prime : on ne remplace qu'une
+      -- reconnaissance automatique parmi les segments.
       WHERE race_traces.source = 'segment'
       RETURNING race_id`,
     [
@@ -64,6 +70,7 @@ export async function saveRideTrace(
       JSON.stringify(trace.bounds),
       centreLng,
       centreLat,
+      source,
     ]
   );
 

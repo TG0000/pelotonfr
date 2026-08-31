@@ -10,9 +10,21 @@ import {
 import { listActivities, getAthleteSummary } from "@/lib/strava/client";
 import { matchRideToRace } from "@/lib/strava/match-races";
 import { saveRideTrace } from "@/lib/strava/ingest-trace";
+import { matchRideToCircuit } from "@/lib/strava/match-circuit";
 
 /** Rides older than this are not worth re-reading on every sync. */
 const SYNC_WINDOW_DAYS = 400;
+
+/**
+ * Jusqu'où remonte la première synchronisation.
+ *
+ * Six ans : un coureur qui court depuis cinq ans a déjà parcouru la plupart des
+ * circuits de sa région, et ses sorties sont la meilleure source de tracés que
+ * nous ayons. La fenêtre courte lui en cachait quatre saisons. Fait une fois,
+ * puis marqué — refaire la descente à chaque synchronisation serait payer vingt
+ * appels pour retrouver ce qu'on a déjà.
+ */
+const BACKFILL_DAYS = 2200;
 
 /**
  * How many courses one synchronisation may bring back.
@@ -35,7 +47,15 @@ export async function POST() {
   }
 
   try {
-    const after = new Date(Date.now() - SYNC_WINDOW_DAYS * 86400000);
+    const [connection] = await sql(
+      `SELECT backfilled_at FROM strava_connections WHERE user_id = $1::uuid`,
+      [id]
+    );
+    const firstTime = !connection?.backfilled_at;
+
+    const after = new Date(
+      Date.now() - (firstTime ? BACKFILL_DAYS : SYNC_WINDOW_DAYS) * 86400000
+    );
     const activities = await listActivities(token, after);
 
     // Only rides can be races; runs and gym sessions are noise here.
@@ -119,7 +139,72 @@ export async function POST() {
       }
     }
 
-    return NextResponse.json({ synced: saved, linked, traced });
+    if (firstTime) {
+      await sql(
+        `UPDATE strava_connections SET backfilled_at = now()
+          WHERE user_id = $1::uuid`,
+        [id]
+      );
+    }
+
+    /* Les circuits que le coureur a déjà parcourus.
+       Une sortie nommée « Buais » ou « Louvigne du désert », partie d'à côté du
+       village, documente cette boucle — même trois ans plus tard, parce qu'un
+       circuit de village ne bouge pas. C'est la meilleure source de tracés que
+       nous ayons, et elle dormait dans son propre historique.
+
+       Après les courses reliées, et jamais à leur place : un tracé du jour J
+       reste meilleur. */
+    let circuits = 0;
+    if (traced < TRACES_PER_SYNC) {
+      const candidates = await sql(
+        `SELECT a.activity_id, a.name, a.distance_m,
+                ST_Y(a.start_location::geometry) AS lat,
+                ST_X(a.start_location::geometry) AS lng
+           FROM strava_activities a
+          WHERE a.user_id = $1::uuid
+            AND a.race_id IS NULL
+            AND a.start_location IS NOT NULL
+            AND a.sport_type IN ('Ride', 'GravelRide')
+          ORDER BY a.local_date DESC
+          LIMIT 400`,
+        [id]
+      );
+
+      for (const row of candidates) {
+        if (traced + circuits >= TRACES_PER_SYNC) break;
+        const r = row as Record<string, unknown>;
+
+        const donor = await matchRideToCircuit(sql, {
+          name: (r.name as string) ?? "",
+          lat: r.lat != null ? Number(r.lat) : null,
+          lng: r.lng != null ? Number(r.lng) : null,
+          distanceM: Number(r.distance_m ?? 0),
+        });
+        if (!donor) continue;
+
+        try {
+          const outcome = await saveRideTrace(
+            sql,
+            token,
+            Number(r.activity_id),
+            donor.raceId,
+            "parcouru"
+          );
+          if (outcome === "stored") circuits++;
+        } catch {
+          break;
+        }
+      }
+    }
+
+    return NextResponse.json({
+      synced: saved,
+      linked,
+      traced,
+      circuits,
+      backfill: firstTime,
+    });
   } catch (err) {
     console.error("Strava sync:", err);
     const message = err instanceof Error ? err.message : "Erreur de synchronisation";

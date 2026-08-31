@@ -168,9 +168,16 @@ export function RaceCircuit({
       <p className="mt-2 text-xs text-muted-foreground">
         {trace.source === "segment"
           ? "Circuit reconnu parmi les segments Strava du secteur, altitudes lues sur le relief public."
-          : "Tracé relevé par un coureur ayant disputé l'épreuve."}
-        {!trace.sameDay && trace.tracedOn && (
+          : trace.source === "parcouru"
+            ? "Boucle enregistrée par un coureur qui l'a parcourue — pas nécessairement le jour de la course."
+            : trace.source === "depose"
+              ? "Circuit déposé à la main, depuis un segment Strava."
+              : "Tracé relevé par un coureur ayant disputé l'épreuve."}
+        {trace.source !== "parcouru" && !trace.sameDay && trace.tracedOn && (
           <> Relevé sur l&apos;édition du {formatEditionDate(trace.tracedOn)}.</>
+        )}
+        {trace.source === "parcouru" && trace.tracedOn && (
+          <> Enregistrée le {formatEditionDate(trace.tracedOn)}.</>
         )}{" "}
         Il peut différer du parcours officiel si l&apos;organisateur l&apos;a
         modifié.

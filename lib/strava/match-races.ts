@@ -67,6 +67,31 @@ export interface RideForMatching {
   categories?: string[];
 }
 
+/**
+ * Sørensen–Dice sur les bigrammes de caractères.
+ *
+ * Un coureur tape le nom de sa course de mémoire, le soir, sur son téléphone :
+ * « Buias » pour Buais, « Louvigne du desert » pour Louvigné-du-Désert. La
+ * comparaison mot à mot ne rattrape aucune de ces fautes — il faut mesurer la
+ * ressemblance des lettres, pas l'égalité des mots.
+ */
+function dice(a: string, b: string): number {
+  if (a.length < 2 || b.length < 2) return a === b ? 1 : 0;
+  const grams = (v: string) => {
+    const out = new Map<string, number>();
+    for (let i = 0; i < v.length - 1; i++) {
+      const g = v.slice(i, i + 2);
+      out.set(g, (out.get(g) ?? 0) + 1);
+    }
+    return out;
+  };
+  const ga = grams(a);
+  const gb = grams(b);
+  let shared = 0;
+  for (const [g, n] of ga) shared += Math.min(n, gb.get(g) ?? 0);
+  return (2 * shared) / (a.length - 1 + b.length - 1);
+}
+
 /** Ratio of the shorter title contained in the longer, on whole words. */
 function titleOverlap(rideTitle: string, raceCore: string): number {
   if (!rideTitle || !raceCore) return 0;
@@ -89,7 +114,12 @@ function titleOverlap(rideTitle: string, raceCore: string): number {
       ? 1
       : 0;
 
-  return Math.max(wordScore, joinedScore);
+  /* Et la ressemblance des lettres, pour les fautes de frappe.
+     Pondérée un peu en dessous des deux autres : « Buias » ressemble beaucoup à
+     « Buais » et un peu à « Bouais », et seule la première est la bonne. */
+  const spelling = dice(rideJoined, raceJoined) * 0.9;
+
+  return Math.max(wordScore, joinedScore, spelling);
 }
 
 export async function matchRideToRace(
