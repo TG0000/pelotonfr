@@ -23,6 +23,7 @@
     "scrape:segments": "tsx scripts/scrapers/strava-segments.ts",
     "scrape:engagements": "tsx scripts/scrapers/velopresse-engagements.ts",
     "scrape:guides": "tsx scripts/scrapers/velopresse-guides.ts",
+    "scrape:guides:vision": "tsx scripts/scrapers/guide-vision.ts",
     "alerts:club": "tsx scripts/alerts/club-reminder.ts",
     "alerts:send": "tsx scripts/alerts/send-digest.ts"
   },
@@ -30,6 +31,7 @@
     "@anthropic-ai/sdk": "^0.122.0",
     "@base-ui/react": "^1.3.0",
     "@clerk/nextjs": "^7.0.8",
+    "@garmin/fitsdk": "^21.214.0",
     "@neondatabase/serverless": "^1.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

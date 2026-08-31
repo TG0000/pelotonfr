@@ -94,16 +94,32 @@ export function RaceCircuit({
             {laps.lapCount} tours de {(laps.lapDistanceM / 1000).toFixed(1)} km
           </span>
         )}
-        {/* Downloads what is on screen: asking for one lap and getting fourteen
-            copies of it would be a different answer to the same question. */}
-        <a
-          href={`/api/course/${raceId}/gpx${lapped && !whole ? "?tour=1" : ""}`}
-          download
-          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs font-normal text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-        >
-          <Download className="size-3.5" />
-          GPX
-        </a>
+        {/* Se télécharge tel qu'il est à l'écran : demander un tour et recevoir
+            quatorze copies serait une autre réponse à la même question.
+
+            Le FIT d'abord, parce que c'est le format des compteurs : un Garmin
+            Edge et un Wahoo ELEMNT y lisent la distance restante et le profil
+            qui défile, là où un GPX n'est qu'une ligne à suivre. Le GPX reste,
+            il passe partout. */}
+        <span className="ml-auto inline-flex items-center gap-1.5">
+          <a
+            href={`/api/course/${raceId}/fit${lapped && !whole ? "?tour=1" : ""}`}
+            download
+            title="Pour le compteur : Garmin Edge, Wahoo ELEMNT"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs font-normal text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            <Download className="size-3.5" />
+            FIT
+          </a>
+          <a
+            href={`/api/course/${raceId}/gpx${lapped && !whole ? "?tour=1" : ""}`}
+            download
+            title="Format universel, lu par toutes les applications"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs font-normal text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            GPX
+          </a>
+        </span>
       </h2>
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
