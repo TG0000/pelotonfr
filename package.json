@@ -50,8 +50,6 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "axios": "^1.14.0",
-    "axios-retry": "^4.5.0",
     "cheerio": "^1.2.0",
     "dotenv": "^17.4.0",
     "eslint": "^9",

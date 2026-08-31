@@ -36,10 +36,19 @@ export interface Briefing {
 
 /** Words that end a pickup place — the page runs sections together. */
 const PLACE_STOP =
-  /\b(liste des arbitres|listes? d'engagements?|engagements?|documents?|contacter|informations?|circuit de|d[ée]part\s*:|horaires?\s*:|briefing)\b/i;
+  /\b(?:liste des arbitres|listes? d'engagements?|engagements?|documents?|contacter|informations?|circuit de|d[ée]part\s*:|horaires?\s*:|briefing)/i;
 
 function tidyPlace(raw: string): string | null {
-  let place = raw.replace(/\s+/g, " ").split(PLACE_STOP)[0];
+  /* La page colle les sections : « mairieDépart : 13h45 ». Sans espace il n'y a
+     pas de frontière de mot, la coupure ne se déclenche pas, et le lieu emporte
+     l'horaire du départ avec lui. On décolle avant de couper. */
+  let place = raw
+    .replace(/\s+/g, " ")
+    .replace(
+      /([a-zàâçéèêëîïôûùüÿñ0-9])(D[ée]part|Horaire|Briefing|Remise|Engagement)/g,
+      "$1 $2"
+    )
+    .split(PLACE_STOP)[0];
 
   /* Peel the front until nothing peels.
      Organisers repeat the label and the hour inside the place itself —

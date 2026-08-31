@@ -27,7 +27,7 @@ import type {
   ScraperError,
 } from "../../lib/scraper-types";
 import type { Discipline, RaceLevel } from "../../lib/constants";
-import { httpClient, politeDelay } from "./utils/http";
+import { fetchHtml, politeDelay } from "./utils/http";
 
 const BASE_URL = "https://competitions.ffc.fr";
 const FEDERATION_ID = 1;
@@ -256,7 +256,7 @@ async function scrapeWindow(
     `&fin=${encodeURIComponent(formatDate(window.to))}` +
     `&discipline=&categorie=&departement=&type=&carte=0`;
 
-  const { data } = await httpClient.get<string>(url);
+  const data = await fetchHtml(url);
   const $ = cheerio.load(data);
 
   // Pass 1 — coordinates, keyed by competition.
