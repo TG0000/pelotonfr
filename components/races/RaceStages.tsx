@@ -27,6 +27,10 @@ export async function RaceStages({ raceId }: { raceId: string }) {
 
   const total = stages.reduce((sum, s) => sum + (s.distanceKm ?? 0), 0);
 
+  /** 103,5 km. Une feuille de résultats française n'écrit pas 103.5. */
+  const km = (value: number) =>
+    value.toFixed(value % 1 === 0 ? 0 : 1).replace(".", ",");
+
   return (
     <section>
       <SectionHeading icon={Flag}>
@@ -36,10 +40,8 @@ export async function RaceStages({ raceId }: { raceId: string }) {
           {total > 0 && (
             <>
               {" · "}
-              <span className="font-mono tabular-nums">
-                {total.toFixed(total % 1 === 0 ? 0 : 1)}
-              </span>{" "}
-              km au total
+              <span className="font-mono tabular-nums">{km(total)}</span> km
+              au total
             </>
           )}
         </span>
@@ -89,7 +91,7 @@ export async function RaceStages({ raceId }: { raceId: string }) {
 
             {stage.distanceKm !== null && (
               <span className="shrink-0 font-mono text-sm tabular-nums">
-                {stage.distanceKm.toFixed(stage.distanceKm % 1 === 0 ? 0 : 1)} km
+                {km(stage.distanceKm)} km
               </span>
             )}
           </li>
