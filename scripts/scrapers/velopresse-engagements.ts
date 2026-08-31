@@ -93,7 +93,14 @@ export interface Entrant {
  * The press writes the surname in capitals, which is what separates the two.
  */
 function splitPersonName(raw: string): { last: string; first: string | null } {
-  const cleaned = raw.replace(/\s+/g, " ").trim();
+  /* Les marques en tête ne font pas partie du nom.
+     La source annote certains engagés d'une étoile — « * BRICARD Noa ». Sans
+     la retirer, le premier « mot » du nom n'a aucune lettre, la ligne est jugée
+     illisible et l'engagé disparaît : douze des vingt-deux d'Alençon. */
+  const cleaned = raw
+    .replace(/^[\s*•·+\-–—]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!cleaned) return { last: "", first: null };
 
   const words = cleaned.split(" ");
@@ -227,34 +234,66 @@ function inferColumns(rows: string[][]): ColumnRoles {
     .map((_, i) => i)
     .filter((i) => !taken.has(i));
 
-  // Two text columns side by side, once the bib, the category and the club are
-  // spoken for, are a surname and a given name.
-  //
-  // This used to require the given name NOT to be capitalised — "CÉLIANE" beside
-  // "DAHIREL" therefore failed the test, the pair was never formed, and the
-  // given-name column was then swept up by the club fallback further down:
-  // 7 590 entrants stored with a null given name and a club reading "Yann". The
-  // case is not rare, it is one of the source's ordinary layouts.
-  //
-  // What actually distinguishes a given name is that it is one or two words and
-  // says nothing about a club — capitalisation says only how the page was typed.
-  for (let k = 0; k < remaining.length - 1; k++) {
-    const a = columns[remaining[k]];
-    const b = columns[remaining[k + 1]];
-    const aCaps = share(a, (v) => ALL_CAPS_RE.test(v));
-    const bSingleWord = share(b, (v) => v.split(" ").length <= 2);
-    const bClubbish = share(b, (v) => CLUB_RE.test(v));
-    const bCategory = share(b, (v) => CATEGORY_RE.test(v));
-    if (aCaps > 0.8 && bSingleWord > 0.6 && bClubbish < 0.2 && bCategory < 0.2) {
-      roles.lastName = remaining[k];
-      roles.firstName = remaining[k + 1];
-      taken.add(remaining[k]);
-      taken.add(remaining[k + 1]);
+  /* D'abord une colonne qui contient un nom entier.
+     « BRICARD Noa » a des minuscules, donc la règle des capitales la rejetait ;
+     le parseur prenait alors les deux colonnes suivantes — « U23 » et « M » —
+     et rangeait la catégorie d'âge en nom et le sexe en prénom. Une colonne de
+     noms se reconnaît autrement : plusieurs mots, assez longue, et pas
+     uniquement des codes. */
+  const looksLikeFullName = (col: string[]) =>
+    share(col, (v) => v.split(" ").filter(Boolean).length >= 2) > 0.7 &&
+    share(col, (v) => v.replace(/[^A-Za-zÀ-ÿ]/g, "").length >= 6) > 0.7;
+
+  for (const i of remaining) {
+    if (looksLikeFullName(columns[i])) {
+      roles.fullName = i;
+      taken.add(i);
       break;
     }
   }
 
-  if (roles.lastName === undefined) {
+  /* Sinon deux colonnes de texte côte à côte, une fois le dossard, la catégorie
+     et le club servis : un nom et un prénom.
+     La règle exigeait autrefois que le prénom NE SOIT PAS en capitales, ce qui
+     ratait « DAHIREL | CÉLIANE » — une des mises en page ordinaires de la
+     source. Ce qui distingue un prénom, c'est d'être un ou deux mots et de ne
+     rien dire d'un club ; les capitales ne disent que la façon de saisir.
+     Mais il faut aussi que ce soient des mots : « U23 » et « M » passaient tous
+     les tests précédents. */
+  const isSubstantial = (col: string[]) =>
+    share(col, (v) => v.replace(/[^A-Za-zÀ-ÿ]/g, "").length >= 4) > 0.7;
+
+  if (roles.fullName === undefined) {
+    for (let k = 0; k < remaining.length - 1; k++) {
+      const a = columns[remaining[k]];
+      const b = columns[remaining[k + 1]];
+      if (taken.has(remaining[k]) || taken.has(remaining[k + 1])) continue;
+      const aCaps = share(a, (v) => ALL_CAPS_RE.test(v));
+      const bSingleWord = share(b, (v) => v.split(" ").length <= 2);
+      const bClubbish = share(b, (v) => CLUB_RE.test(v));
+      const bCategory = share(b, (v) => CATEGORY_RE.test(v));
+      if (
+        aCaps > 0.8 &&
+        bSingleWord > 0.6 &&
+        bClubbish < 0.2 &&
+        bCategory < 0.2 &&
+        isSubstantial(a) &&
+        isSubstantial(b)
+      ) {
+        roles.lastName = remaining[k];
+        roles.firstName = remaining[k + 1];
+        taken.add(remaining[k]);
+        taken.add(remaining[k + 1]);
+        break;
+      }
+    }
+  }
+
+  /* Dernier recours : la première colonne de lettres venue.
+     Il faut qu'aucun nom n'ait été trouvé — ni entier, ni en deux morceaux.
+     Sans cette seconde condition il écrasait la colonne que la détection venait
+     de choisir : « BRICARD Noa » était reconnue, puis remplacée par « U23 ». */
+  if (roles.lastName === undefined && roles.fullName === undefined) {
     const nameCol = remaining.find(
       (i) => !taken.has(i) && share(columns[i], (v) => /[A-Za-zÀ-ÿ]/.test(v)) > 0.8
     );
