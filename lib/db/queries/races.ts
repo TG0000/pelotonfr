@@ -47,6 +47,7 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     gender: (row.gender as Race["gender"]) ?? "mixed",
     distanceKm: row.distance_km != null ? Number(row.distance_km) : null,
     isCancelled: row.is_cancelled as boolean,
+    cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
     organizer: row.organizer as string | null,
     contactEmail: row.contact_email as string | null,
     contactPhone: row.contact_phone as string | null,
@@ -98,7 +99,12 @@ export async function getRaces(
    * paging parameters appended only to the one that pages.
    */
   const params: unknown[] = [];
-  const where: string[] = ["r.is_cancelled = false", "r.is_active = true"];
+  /* Les annulées restent dans la liste, barrées.
+     Les masquer laissait un coureur qui avait programmé la course revenir, ne
+     plus la trouver, et ne pas savoir si elle était annulée ou si on l'avait
+     perdue — deux choses qui se ressemblent exactement, et c'est la seconde
+     qu'on redoute. */
+  const where: string[] = ["r.is_active = true"];
 
   /** Adds a value and returns its placeholder, so no index is ever computed. */
   const bind = (value: unknown): string => {

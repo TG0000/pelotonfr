@@ -12,6 +12,8 @@ import { RaceCompetitors } from "@/components/riders/RaceCompetitors";
 import { StartList, SectionHeading } from "@/components/races/StartList";
 import { RaceWeatherPanel } from "@/components/races/RaceWeather";
 import { OrganiserBriefing } from "@/components/races/OrganiserBriefing";
+import { RaceResults } from "@/components/races/RaceResults";
+import { CancellationNotice } from "@/components/races/CancellationNotice";
 import { RaceTerrain } from "@/components/races/RaceTerrain";
 import { CircuitWithWind } from "@/components/races/CircuitWithWind";
 import { FieldLevel } from "@/components/races/FieldLevel";
@@ -204,6 +206,15 @@ export default async function RaceDetailPage({ params }: PageProps) {
         </div>
       )}
 
+      {race.isCancelled && (
+        <Suspense fallback={null}>
+          <CancellationNotice
+            raceId={race.id}
+            cancelledAt={race.cancelledAt}
+          />
+        </Suspense>
+      )}
+
       <OrganiserBriefing
         bibPickupTime={race.bibPickupTime}
         bibPickupPlace={race.bibPickupPlace}
@@ -256,6 +267,14 @@ export default async function RaceDetailPage({ params }: PageProps) {
               date={race.raceDate}
               timing={timing}
             />
+          </Suspense>
+        )}
+
+        {/* Après la course, la seule question. En premier, donc, avant le
+            relief et le peloton qu'on attendait. */}
+        {isPast && (
+          <Suspense fallback={<Skeleton rows={5} />}>
+            <RaceResults raceId={race.id} />
           </Suspense>
         )}
 

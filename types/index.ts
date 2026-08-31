@@ -25,6 +25,8 @@ export interface Race {
   gender: "men" | "women" | "mixed";
   distanceKm: number | null;
   isCancelled: boolean;
+  /** Quand l'annulation a été apprise, pour la dire à sa juste fraîcheur. */
+  cancelledAt: string | null;
   organizer: string | null;
   contactEmail: string | null;
   contactPhone: string | null;

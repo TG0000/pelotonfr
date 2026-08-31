@@ -1,3 +1,4 @@
+import { toDateOnly } from "@/lib/date";
 import { sql } from "@/lib/db";
 
 /**
@@ -390,4 +391,101 @@ export async function getRaceClimbs(raceId: string): Promise<RaceClimb[]> {
     elevationM: r.elevation_m === null ? null : Number(r.elevation_m),
     climbCategory: r.climb_category === null ? null : Number(r.climb_category),
   }));
+}
+
+
+/**
+ * Le classement, une fois la course courue.
+ *
+ * Quatre cent mille lignes étaient collectées depuis des mois et n'étaient
+ * affichées nulle part : la page d'une course passée montrait la météo qu'il
+ * avait fait et le peloton qu'on attendait, jamais qui avait gagné. C'est la
+ * seule chose qu'on vient y chercher après coup.
+ */
+export interface ResultRow {
+  rank: number | null;
+  riderId: string | null;
+  uciId: string | null;
+  lastName: string;
+  firstName: string | null;
+  club: string | null;
+  points: number | null;
+  finishTime: string | null;
+}
+
+export async function getRaceResults(
+  raceId: string,
+  limit = 200
+): Promise<ResultRow[]> {
+  const rows = await sql(
+    `SELECT rr.rank, rr.points, rr.finish_time,
+            ri.id AS rider_id, ri.uci_id, ri.last_name, ri.first_name,
+            COALESCE(c.name, rr.club_name_raw) AS club
+       FROM race_results rr
+       LEFT JOIN riders ri ON ri.id = rr.rider_id
+       LEFT JOIN clubs c ON c.id = rr.club_id
+      WHERE rr.race_id = $1::uuid
+      ORDER BY rr.rank NULLS LAST
+      LIMIT $2::int`,
+    [raceId, limit]
+  );
+
+  return rows.map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      rank: r.rank != null ? Number(r.rank) : null,
+      riderId: (r.rider_id as string) ?? null,
+      uciId: (r.uci_id as string) ?? null,
+      lastName: (r.last_name as string) ?? "",
+      firstName: (r.first_name as string) ?? null,
+      club: (r.club as string) ?? null,
+      points: r.points != null ? Number(r.points) : null,
+      finishTime: (r.finish_time as string) ?? null,
+    };
+  });
+}
+
+
+/**
+ * La course a-t-elle été reprise plus tard ?
+ *
+ * La fédération ne dit jamais « reportée » : elle marque annulé et republie
+ * l'épreuve à une autre date. Vu de la base, c'est deux courses du même
+ * rendez-vous à quelques semaines d'écart, dont la première est barrée — ce qui
+ * se lit, et évite à un coureur de conclure que sa saison a perdu une course
+ * quand elle a seulement changé de jour.
+ *
+ * Deux mois de fenêtre : au-delà, c'est l'édition suivante, pas un report.
+ */
+export interface Postponement {
+  raceId: string;
+  raceDate: string;
+  days: number;
+}
+
+export async function getPostponement(
+  raceId: string
+): Promise<Postponement | null> {
+  const [row] = await sql(
+    `SELECT b.id, b.race_date, b.race_date - a.race_date AS days
+       FROM races a
+       JOIN races b ON b.event_id = a.event_id
+                   AND b.id <> a.id
+                   AND b.is_cancelled = false
+                   AND b.race_date > a.race_date
+                   AND b.race_date - a.race_date BETWEEN 1 AND 60
+      WHERE a.id = $1::uuid
+        AND a.is_cancelled
+        AND a.event_id IS NOT NULL
+      ORDER BY b.race_date
+      LIMIT 1`,
+    [raceId]
+  );
+  if (!row) return null;
+  const r = row as Record<string, unknown>;
+  return {
+    raceId: r.id as string,
+    raceDate: toDateOnly(r.race_date as string | Date) ?? "",
+    days: Number(r.days),
+  };
 }

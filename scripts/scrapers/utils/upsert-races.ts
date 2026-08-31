@@ -289,6 +289,15 @@ export async function upsertRaces(
            gender           = EXCLUDED.gender,
            distance_km      = EXCLUDED.distance_km,
            is_cancelled     = EXCLUDED.is_cancelled,
+           -- Le jour où on l'a appris, posé une seule fois. Une annulation
+           -- signalée trois semaines avant ne se lit pas comme celle de la
+           -- veille, et réécrire la date à chaque passage effacerait la
+           -- différence.
+           cancelled_at     = CASE
+                                WHEN EXCLUDED.is_cancelled
+                                THEN COALESCE(races.cancelled_at, now())
+                                ELSE NULL
+                              END,
            organizer        = EXCLUDED.organizer,
            contact_email    = EXCLUDED.contact_email,
            contact_phone    = EXCLUDED.contact_phone,
