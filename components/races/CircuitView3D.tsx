@@ -406,6 +406,18 @@ export function CircuitView3D({
     m.setLayoutProperty("vent", "visibility", showWind ? "visible" : "none");
   }, [showWind]);
 
+  /* Les flèches sont poussées dans la source, pas seulement passées à sa
+     création. La source naissait dans l'effet qui construit la carte, lequel
+     capture la valeur du premier rendu : si la prévision arrivait après, ou si
+     elle changeait, la couche gardait une collection vide et se contentait de
+     ne rien dessiner — visible, sans une seule flèche. */
+  useEffect(() => {
+    const source = map.current?.getSource("vent") as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    source?.setData(windArrows);
+  }, [windArrows]);
+
   useEffect(() => {
     const m = map.current;
     const source = m?.getSource("curseur") as maplibregl.GeoJSONSource | undefined;
