@@ -39,9 +39,9 @@ export async function RaceClimbs({
   return (
     <section>
       <SectionHeading icon={TrendingUp}>
-        Les difficultés du secteur
+        {hasTrace ? "Les difficultés du parcours" : "Les difficultés du secteur"}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
-          {hasTrace ? "autour du parcours" : "autour du départ"}
+          {hasTrace ? "sur le tracé" : "autour du départ"}
         </span>
       </SectionHeading>
 
@@ -76,8 +76,10 @@ export async function RaceClimbs({
       </div>
 
       <p className="mt-2 text-xs text-muted-foreground">
-        Segments Strava du secteur, nommés par les coureurs qui y roulent.
-        {!hasTrace && " Le parcours exact n'est pas connu : ce sont les difficultés du terrain, pas nécessairement celles de la course."}
+        Segments Strava nommés par les coureurs qui y roulent.
+        {hasTrace
+          ? " Seules celles que le tracé emprunte : une bosse à trois kilomètres du parcours ne dit rien de la course."
+          : " Le parcours exact n'est pas connu : ce sont les difficultés du terrain, pas nécessairement celles de la course."}
       </p>
     </section>
   );

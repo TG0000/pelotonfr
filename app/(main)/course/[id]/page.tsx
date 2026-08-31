@@ -19,6 +19,7 @@ import { CircuitWithWind } from "@/components/races/CircuitWithWind";
 import { FieldLevel } from "@/components/races/FieldLevel";
 import { PlanButton } from "@/components/races/PlanButton";
 import { RaceClimbs } from "@/components/races/RaceClimbs";
+import { RaceStages } from "@/components/races/RaceStages";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
 import { estimateTiming, type RaceTiming } from "@/lib/race-timing";
 import { PastEditions } from "@/components/races/PastEditions";
@@ -279,6 +280,7 @@ export default async function RaceDetailPage({ params }: PageProps) {
         )}
 
         <Suspense fallback={<Skeleton rows={3} />}>
+          <RaceStages raceId={race.id} />
           <RaceClimbs raceId={race.id} hasTrace={trace !== null} />
         </Suspense>
 

@@ -23,7 +23,7 @@ import * as cheerio from "cheerio";
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "./utils/db";
 import { fetchHtml, politeDelay } from "./utils/http";
-import { parseBriefing } from "../../lib/race-briefing";
+import { parseBriefing, parseStages } from "../../lib/race-briefing";
 import { startRun } from "../lib/track-run";
 
 loadEnv();
@@ -94,19 +94,28 @@ async function main() {
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : 200;
   const force = process.argv.includes("--force");
+  /* Les courses par étapes sont une poignée dans un calendrier de seize
+     cents : les chercher dans l'ordre normal, c'est lire tout le calendrier
+     pour trouver dix fiches. --etapes va les chercher directement. */
+  const stagesOnly = process.argv.includes("--etapes");
 
   const races = (await sql(
-    `SELECT id, name, city, department_code, source_url
+    `SELECT id, name, city, department_code, source_url,
+            race_date, race_date_end
        FROM races
       WHERE federation_id = 1
         AND source_url LIKE '%/calendrier/competition/%'
         AND is_cancelled = false
         AND COALESCE(race_date_end, race_date) >= CURRENT_DATE
         AND ($2::boolean OR briefing_fetched_at IS NULL)
+        AND (NOT $3::boolean
+             OR (race_date_end > race_date
+                 AND NOT EXISTS (SELECT 1 FROM race_stages s
+                                  WHERE s.race_id = races.id)))
       ORDER BY EXISTS (SELECT 1 FROM user_favorites f WHERE f.race_id = races.id) DESC,
                race_date ASC
       LIMIT $1::int`,
-    [limit, force]
+    [limit, force, stagesOnly]
   )) as Array<Record<string, unknown>>;
 
   console.log(`${races.length} fiches à lire.\n`);
@@ -114,6 +123,7 @@ async function main() {
   let withCircuit = 0;
   let withPlace = 0;
   let located = 0;
+  let withStages = 0;
 
   for (const race of races) {
     try {
@@ -153,6 +163,57 @@ async function main() {
         ]
       );
 
+      /* Une compétition qui dure plusieurs jours est une course par étapes :
+         la fédération n'en fait qu'une ligne, alors que le coureur a trois
+         parcours à préparer. Les étapes ne vivent que dans le descriptif. */
+      if (race.race_date_end) {
+        const year = new Date(race.race_date as string).getUTCFullYear();
+        const stages = parseStages(text, year);
+        /* Cherbourg numérote ses étapes sans jamais dire quel jour : trois
+           étapes sur trois jours ne laissent qu'une lecture possible. Quand le
+           compte ne tombe pas juste — deux étapes le même jour — on préfère ne
+           rien écrire à écrire faux. */
+        const span =
+          Math.round(
+            (new Date(race.race_date_end as string).getTime() -
+              new Date(race.race_date as string).getTime()) /
+              86_400_000
+          ) + 1;
+        if (stages.length === span && stages.every((s) => s.day === null)) {
+          const day0 = new Date(race.race_date as string);
+          for (const stage of stages) {
+            const d = new Date(day0);
+            d.setUTCDate(d.getUTCDate() + stage.number - 1);
+            stage.day = d.toISOString().slice(0, 10);
+          }
+        }
+
+        if (stages.length > 1) {
+          await sql(`DELETE FROM race_stages WHERE race_id = $1::uuid`, [race.id]);
+          for (const stage of stages) {
+            await sql(
+              `INSERT INTO race_stages
+                 (race_id, stage_number, stage_date, start_place,
+                  finish_place, distance_km, kind)
+               VALUES ($1::uuid, $2::int, $3::date, $4, $5, $6::numeric, $7)`,
+              [
+                race.id,
+                stage.number,
+                stage.day,
+                stage.from?.slice(0, 80) ?? null,
+                stage.to?.slice(0, 80) ?? null,
+                stage.distanceKm,
+                stage.kind,
+              ]
+            );
+          }
+          withStages++;
+          console.log(
+            `  ${String(race.name).slice(0, 38).padEnd(40)} ${stages.length} étapes`
+          );
+        }
+      }
+
       if (brief.circuitM) withCircuit++;
       if (brief.bibPickupPlace) withPlace++;
       if (point) located++;
@@ -183,13 +244,14 @@ async function main() {
 
   console.log(
     `\n${withCircuit} circuits annoncés par l'organisateur, ` +
-      `${withPlace} lieux de retrait, dont ${located} situés précisément.`
+      `${withPlace} lieux de retrait, dont ${located} situés précisément, ` +
+      `${withStages} courses par étapes détaillées.`
   );
 
   return {
     seen: races.length,
     written: withPlace,
-    metadata: { circuits: withCircuit, located },
+    metadata: { circuits: withCircuit, located, stages: withStages },
   };
 }
 

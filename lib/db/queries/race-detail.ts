@@ -363,6 +363,8 @@ export interface RaceClimb {
   averageGrade: number;
   elevationM: number | null;
   climbCategory: number | null;
+  /** Vraie quand on tient le tracé et que la bosse est dessus. */
+  onCourse: boolean;
 }
 
 /**
@@ -374,11 +376,39 @@ export interface RaceClimb {
  * and this is context beside it.
  */
 export async function getRaceClimbs(raceId: string): Promise<RaceClimb[]> {
+  /* Les difficultés du parcours, pas celles du voisinage.
+     `race_segments` contient ce que l'explorateur Strava a trouvé dans le
+     cadre de recherche — un carré de dix kilomètres de côté autour de la
+     commune. La plupart de ces bosses ne sont pas sur la course : les montrer
+     répondait à une question que personne ne pose. Quand on tient le tracé, on
+     exige que la difficulté soit dessus. */
   const rows = (await sql(
-    `SELECT segment_id, name, distance_m, average_grade, elevation_m, climb_category
-       FROM race_segments
-      WHERE race_id = $1::uuid
-      ORDER BY elevation_m DESC NULLS LAST, average_grade DESC
+    `WITH parcours AS (
+       SELECT ST_MakeLine(
+                ARRAY(
+                  SELECT ST_MakePoint((p->>0)::float8, (p->>1)::float8)
+                    FROM jsonb_array_elements(t.points) AS p
+                )
+              )::geography AS ligne
+         FROM race_traces t
+        WHERE t.race_id = $1::uuid
+     )
+     SELECT s.segment_id, s.name, s.distance_m, s.average_grade,
+            s.elevation_m, s.climb_category,
+            (SELECT ligne FROM parcours) IS NOT NULL AS sur_le_parcours
+       FROM race_segments s
+      WHERE s.race_id = $1::uuid
+        AND (
+          NOT EXISTS (SELECT 1 FROM parcours)
+          OR ST_DWithin(
+               (SELECT ligne FROM parcours),
+               ST_MakePoint(s.start_lng, s.start_lat)::geography,
+               -- Cent vingt mètres : le point de départ d'un segment Strava est
+               -- relevé par GPS et la route a une largeur.
+               120
+             )
+        )
+      ORDER BY s.elevation_m DESC NULLS LAST, s.average_grade DESC
       LIMIT 6`,
     [raceId]
   )) as Array<Record<string, unknown>>;
@@ -390,6 +420,7 @@ export async function getRaceClimbs(raceId: string): Promise<RaceClimb[]> {
     averageGrade: Number(r.average_grade),
     elevationM: r.elevation_m === null ? null : Number(r.elevation_m),
     climbCategory: r.climb_category === null ? null : Number(r.climb_category),
+    onCourse: Boolean(r.sur_le_parcours),
   }));
 }
 
@@ -488,4 +519,38 @@ export async function getPostponement(
     raceDate: toDateOnly(r.race_date as string | Date) ?? "",
     days: Number(r.days),
   };
+}
+
+export interface RaceStage {
+  number: number;
+  day: string | null;
+  from: string | null;
+  to: string | null;
+  distanceKm: number | null;
+  kind: "ligne" | "clm" | null;
+}
+
+/**
+ * Les étapes d'une course par étapes.
+ *
+ * Vide pour l'immense majorité des courses, qui tiennent en un après-midi.
+ */
+export async function getRaceStages(raceId: string): Promise<RaceStage[]> {
+  const rows = (await sql(
+    `SELECT stage_number, stage_date, start_place, finish_place,
+            distance_km, kind
+       FROM race_stages
+      WHERE race_id = $1::uuid
+      ORDER BY stage_number`,
+    [raceId]
+  )) as Array<Record<string, unknown>>;
+
+  return rows.map((r) => ({
+    number: Number(r.stage_number),
+    day: r.stage_date ? toDateOnly(r.stage_date) : null,
+    from: (r.start_place as string) ?? null,
+    to: (r.finish_place as string) ?? null,
+    distanceKm: r.distance_km === null ? null : Number(r.distance_km),
+    kind: (r.kind as "ligne" | "clm" | null) ?? null,
+  }));
 }
