@@ -68,7 +68,11 @@ export function CircuitView3D({
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [satellite, setSatellite] = useState(true);
-  const [showWind, setShowWind] = useState(false);
+  /* Le vent est allumé d'emblée.
+     C'est la lecture qu'on ne trouve nulle part ailleurs, et une couche qu'il
+     faut penser à activer est une couche que personne ne voit. La pente, elle,
+     est déjà sur la route en permanence. */
+  const [showWind, setShowWind] = useState(true);
 
   /**
    * The colour ramp along the lap, as stops on the line's own progress.
@@ -124,25 +128,56 @@ export function CircuitView3D({
     const towards = (from + 180) % 360;
     const bear = bearings(points);
     const features: GeoJSON.Feature[] = [];
-    let nextAt = 0;
 
-    for (let i = 0; i < points.length; i++) {
-      if (points[i][3] < nextAt) continue;
-      nextAt = points[i][3] + 300;
+    /* Une flèche par portion droite, pas une tous les trois cents mètres.
+       À intervalle fixe, la moitié tombait dans un virage ou sur une portion
+       trop courte pour qu'un coureur en fasse quelque chose — et deux flèches
+       voisines pouvaient contredire l'une l'autre au milieu d'une épingle. Ce
+       qu'on veut savoir, c'est ce qu'on prend dans la ligne droite qui vient.
 
-      const alignment = -Math.cos(
-        ((towards - bear[i]) * Math.PI) / 180
-      );
-      features.push({
-        type: "Feature",
-        properties: {
-          rotation: towards,
-          effect:
-            alignment > 0.4 ? "face" : alignment < -0.4 ? "dos" : "travers",
-        },
-        geometry: { type: "Point", coordinates: [points[i][0], points[i][1]] },
-      });
+       Une portion droite : le cap ne varie pas de plus de trente degrés, et
+       elle dure au moins deux cents mètres. La flèche se pose au milieu, là où
+       elle décrit vraiment ce qu'on y subira. */
+    const CAP_TOLERANCE = 30;
+    const MIN_STRAIGHT_M = 200;
+
+    const turn = (a: number, b: number) => {
+      const d = Math.abs(((a - b + 540) % 360) - 180);
+      return d;
+    };
+
+    let start = 0;
+    for (let i = 1; i <= points.length; i++) {
+      const broken =
+        i === points.length || turn(bear[i], bear[start]) > CAP_TOLERANCE;
+      if (!broken) continue;
+
+      const end = i - 1;
+      const length = points[end][3] - points[start][3];
+      if (length >= MIN_STRAIGHT_M) {
+        const mid = Math.floor((start + end) / 2);
+        const alignment = -Math.cos(
+          ((towards - bear[mid]) * Math.PI) / 180
+        );
+        features.push({
+          type: "Feature",
+          properties: {
+            rotation: towards,
+            effect:
+              alignment > 0.4 ? "face" : alignment < -0.4 ? "dos" : "travers",
+            // Une longue ligne droite face au vent compte plus qu'un bout de
+            // cinquante mètres : la flèche grossit avec elle.
+            weight: Math.min(1.4, 0.7 + length / 2000),
+          },
+          geometry: {
+            type: "Point",
+            coordinates: [points[mid][0], points[mid][1]],
+          },
+        });
+      }
+      start = i;
     }
+
     return { type: "FeatureCollection", features };
   }, [points, windFromDeg]);
 
@@ -348,13 +383,17 @@ export function CircuitView3D({
               "dos", "vent-dos",
               "vent-travers",
             ],
-            "icon-size": ["interpolate", ["linear"], ["zoom"], 11, 0.35, 16, 0.75],
+            "icon-size": [
+              "*",
+              ["interpolate", ["linear"], ["zoom"], 11, 0.35, 16, 0.75],
+              ["coalesce", ["get", "weight"], 1],
+            ],
             "icon-rotate": ["get", "rotation"],
             "icon-rotation-alignment": "map",
             "icon-pitch-alignment": "map",
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
-            visibility: "none",
+            visibility: "visible",
           },
         });
       }
@@ -485,12 +524,25 @@ export function CircuitView3D({
         </button>
         </div>
 
-        <div className="pointer-events-none rounded-lg border border-border bg-surface-1/90 px-2.5 py-1.5 text-xs backdrop-blur">
-          {showWind ? (
-            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <Legend colour="#d95347" label="de face" />
-              <Legend colour="#e5b84c" label="de travers" />
-              <Legend colour="#5cb87f" label="dans le dos" />
+        {/* Deux lectures, deux lignes. La route porte la pente en permanence ;
+            les flèches disent le vent par-dessus, et se retirent sans emporter
+            l'autre légende avec elles. */}
+        <div className="pointer-events-none flex flex-col gap-1 rounded-lg border border-border bg-surface-1/90 px-2.5 py-1.5 text-xs backdrop-blur">
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-muted-foreground">La route</span>
+            <Legend colour="#9aa4b2" label="descente" />
+            <Legend colour="#5cb87f" label="< 3 %" />
+            <Legend colour="#e5b84c" label="3–6 %" />
+            <Legend colour="#e0853d" label="6–9 %" />
+            <Legend colour="#d95347" label="> 9 %" />
+          </span>
+
+          {showWind && windFromDeg != null && (
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-1">
+              <span className="text-muted-foreground">Les flèches</span>
+              <Legend colour="#e04a3c" label="de face" />
+              <Legend colour="#e8b73f" label="de travers" />
+              <Legend colour="#4fb87a" label="dans le dos" />
               {windReading != null && (
                 <span className="text-muted-foreground">
                   <span className="font-mono tabular-nums text-foreground">
@@ -499,20 +551,13 @@ export function CircuitView3D({
                   du tour de face
                   {windKmh != null && (
                     <span className="font-mono tabular-nums">
-                      {" "}· {Math.round(windKmh)} km/h
+                      {" "}
+                      · {Math.round(windKmh)} km/h
                     </span>
                   )}
                 </span>
               )}
             </span>
-          ) : (
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Legend colour="#9aa4b2" label="descente" />
-            <Legend colour="#5cb87f" label="< 3 %" />
-            <Legend colour="#e5b84c" label="3–6 %" />
-            <Legend colour="#e0853d" label="6–9 %" />
-            <Legend colour="#d95347" label="> 9 %" />
-          </span>
           )}
         </div>
       </div>
