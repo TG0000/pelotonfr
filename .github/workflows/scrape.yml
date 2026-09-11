@@ -48,6 +48,18 @@ jobs:
             npm run scrape
           fi
 
+      # The federation leaves some towns as "Lieu à préciser" while the race
+      # name starts with the town; and it files randonnées under "Route". Both
+      # are read from the name, after the calendar has been refreshed.
+      - name: Place unplaced races and set cyclosportives apart
+        if: ${{ !inputs.federation }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          npm run db:place
+          npm run db:retype-cyclos
+        continue-on-error: true
+
       # The calendar only serves the future, so races that have just taken place
       # are re-discovered through the results index before their classifications
       # are fetched.
