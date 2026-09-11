@@ -19,6 +19,7 @@
  * department and is resolved later by the venue pipeline.
  */
 
+import { isCyclosportiveName } from "../../lib/discipline";
 import * as cheerio from "cheerio";
 import { normalizeCategories } from "../../lib/categories";
 import type {
@@ -332,7 +333,12 @@ async function scrapeWindow(
       lat: marker?.lat,
       lng: marker?.lng,
       departmentName: departmentName || undefined,
-      discipline: mapDiscipline(disciplineLabel),
+      /* La fédération range les randonnées et cyclosportives sous « Route » ;
+         le nom, lui, ne ment pas. */
+      discipline:
+        mapDiscipline(disciplineLabel) === "route" && isCyclosportiveName(title)
+          ? "cyclosportive"
+          : mapDiscipline(disciplineLabel),
       raceType: disciplineLabel || undefined,
       level: mapLevel(levelLabel),
       categories: extractCategories(title),

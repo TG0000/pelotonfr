@@ -38,7 +38,8 @@ const CATEGORY_SECTIONS: Array<{
     defaultOpen: true,
   },
   {
-    title: "FSGT",
+    // Même échelle pour les deux fédérations.
+    title: "FSGT / UFOLEP",
     values: CATEGORY_DEFS.filter((c) => c.group === "fsgt").map((c) => c.value),
     defaultOpen: false,
   },

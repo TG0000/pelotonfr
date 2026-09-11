@@ -52,12 +52,16 @@ export const CATEGORIES: CategoryDef[] = [
   { value: "cat2", label: "2ème catégorie", group: "ffc" },
   { value: "cat3", label: "3ème catégorie", group: "ffc" },
 
-  { value: "fsgt1", label: "FSGT 1", group: "fsgt" },
-  { value: "fsgt2", label: "FSGT 2", group: "fsgt" },
-  { value: "fsgt3", label: "FSGT 3", group: "fsgt" },
-  { value: "fsgt4", label: "FSGT 4", group: "fsgt" },
-  { value: "fsgt5", label: "FSGT 5", group: "fsgt" },
-  { value: "fsgt6", label: "FSGT 6", group: "fsgt" },
+  /* L'échelle est commune à la FSGT et à l'UFOLEP, et la carte d'une course
+     porte déjà l'écusson de sa fédération : écrire « FSGT 1 » sur une course
+     UFOLEP contredisait l'écusson d'à côté. On dit la catégorie, l'écusson dit
+     la fédération. */
+  { value: "fsgt1", label: "1ʳᵉ cat.", group: "fsgt" },
+  { value: "fsgt2", label: "2ᵉ cat.", group: "fsgt" },
+  { value: "fsgt3", label: "3ᵉ cat.", group: "fsgt" },
+  { value: "fsgt4", label: "4ᵉ cat.", group: "fsgt" },
+  { value: "fsgt5", label: "5ᵉ cat.", group: "fsgt" },
+  { value: "fsgt6", label: "6ᵉ cat.", group: "fsgt" },
 
   ...YOUTH_LADDER.map((y) => ({
     value: y.value,
