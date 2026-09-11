@@ -40,7 +40,7 @@ export async function startRun(
   }
 
   async function close(
-    status: "success" | "partial" | "failed",
+    status: "success" | "partial" | "failed" | "aborted",
     totals: RunTotals | undefined,
     errorMessage: string | null
   ) {
@@ -66,8 +66,25 @@ export async function startRun(
     }
   }
 
+  /* A job that overruns its timeout is killed with SIGTERM, and a row that
+     was never closed reads "running" forever — twenty-six of them did, one a
+     night, while the watchdog saw a collector that was always busy and never
+     late. Closing the row on the way out turns the kill into a fact. */
+  const onSignal = (signal: NodeJS.Signals) => {
+    close("aborted", undefined, `tué par ${signal}`).finally(() =>
+      process.exit(143)
+    );
+  };
+  process.once("SIGTERM", onSignal);
+  process.once("SIGINT", onSignal);
+  const forget = () => {
+    process.off("SIGTERM", onSignal);
+    process.off("SIGINT", onSignal);
+  };
+
   return {
     async finish(totals) {
+      forget();
       // Seeing plenty and keeping little is worth flagging as partial rather
       // than reporting a clean success.
       const seen = totals?.seen ?? 0;
@@ -76,6 +93,7 @@ export async function startRun(
       await close(shortfall ? "partial" : "success", totals, null);
     },
     async fail(error, totals) {
+      forget();
       const message =
         error instanceof Error ? error.message : String(error ?? "unknown");
       await close("failed", totals, message.slice(0, 2000));

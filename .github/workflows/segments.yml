@@ -1,0 +1,48 @@
+name: Strava segments
+
+# The climbs around each upcoming race, read from Strava.
+#
+# Strava allows 100 reads a quarter of an hour and 1 000 a day, so a full
+# nightly budget of 900 reads takes about two and a half hours at the pace the
+# script keeps. That is far longer than any other collector, which is why this
+# runs on its own: inside the nightly job it was killed at 45 minutes every
+# night, and the steps queued behind it never ran.
+
+on:
+  schedule:
+    - cron: '30 3 * * *'   # after the calendar has been refreshed
+  workflow_dispatch:
+    inputs:
+      reads:
+        description: 'Strava read budget for this pass (1 000 a day at most)'
+        required: false
+        default: '900'
+        type: string
+
+concurrency:
+  group: segments
+  cancel-in-progress: false
+
+jobs:
+  segments:
+    runs-on: ubuntu-latest
+    # 900 reads at 9.5 s each is 143 minutes; the rest is the calendar queries.
+    timeout-minutes: 170
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Read the climbs around upcoming races
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+        run: npm run scrape:segments -- --limit=300 --reads=${{ inputs.reads || '900' }}

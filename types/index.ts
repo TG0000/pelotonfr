@@ -35,6 +35,8 @@ export interface Race {
      races — a third of them state where dossards are collected, one in twenty
      states the circuit — which is why every one of these is nullable. */
   bibPickupTime: string | null;
+  /** Le premier départ de la réunion, tel que l'organisateur l'écrit : « 13h ». */
+  startTime: string | null;
   bibPickupPlace: string | null;
   /** One lap, in metres, as the organiser announced it. */
   circuitM: number | null;

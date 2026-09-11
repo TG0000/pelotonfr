@@ -84,7 +84,9 @@ async function findRace(place: string, date: string) {
       `SELECT r.id, r.name, r.city FROM races r
         WHERE r.race_date = $1::date
           AND r.is_cancelled = false
-          AND lower(translate(r.city, 'àâäçéèêëîïôöùûüÿ-''', 'aaaceeeeiioouuuy  ')) LIKE $2
+          -- lower() d'abord : la table ne connaît que les accents minuscules,
+          -- et « Évreux » commence par une majuscule qui lui échappait.
+          AND translate(lower(r.city), 'àâäçéèêëîïôöùûüÿ-''', 'aaaceeeeiioouuuy  ') LIKE $2
         ORDER BY r.name LIMIT 6`,
       [date, pattern]
     );
@@ -136,7 +138,9 @@ async function main() {
     /* L'affiche porte le nom de l'article. Les autres images de la page sont
        les vignettes des articles voisins, rangées sous /thumbnails/. */
     const stem = slug.replace(/^\d+-/, "").replace(/\.html$/, "");
-    const image = (article.match(/src="\/media\/[^"]+\.jpg"/g) ?? [])
+    // .jpg, .jpeg, .png : Landerneau publie en .jpeg, et l'affiche
+    // n'existait pas pour une regex qui ne connaissait que .jpg.
+    const image = (article.match(/src="\/media\/[^"]+\.(?:jpe?g|png)"/gi) ?? [])
       .map((m) => m.slice(5, -1))
       .find(
         (src) =>
@@ -160,7 +164,10 @@ async function main() {
     const bytes = new Uint8Array(
       await (await fetch(`${BASE}${image}`)).arrayBuffer()
     );
-    const poster = await readPoster(bytes, "image/jpeg");
+    const poster = await readPoster(
+      bytes,
+      image.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg"
+    );
     read++;
 
     if (!poster || poster.confidence < 0.6) {
@@ -180,7 +187,11 @@ async function main() {
             SET circuit_m        = COALESCE(circuit_m, $2::int),
                 lap_count        = COALESCE(lap_count, $3::smallint),
                 bib_pickup_time  = COALESCE(bib_pickup_time, $4),
-                bib_pickup_place = COALESCE(bib_pickup_place, $5)
+                bib_pickup_place = COALESCE(bib_pickup_place, $5),
+                -- Landerneau ne dit ni circuit ni dossards, mais « 1er départ
+                -- 13h » et le club : deux réponses qu'on jetait.
+                start_time       = COALESCE(start_time, $6),
+                organizer        = COALESCE(organizer, $7)
           WHERE id = $1::uuid`,
         [
           race.id,
@@ -188,6 +199,8 @@ async function main() {
           poster.lapCount,
           poster.bibPickupTime,
           poster.bibPickupPlace,
+          poster.firstStartTime?.slice(0, 40) ?? null,
+          poster.organiser?.slice(0, 120) ?? null,
         ]
       );
     }

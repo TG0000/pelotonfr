@@ -28,6 +28,10 @@ export const COLLECTORS: CollectorSpec[] = [
   { key: "categories",      label: "Catégories FSGT/UFOLEP", maxAgeHours: 72, criticalAgeHours: 240 },
   { key: "ffc-briefing",    label: "Fiches organisateur",   maxAgeHours: 48,  criticalAgeHours: 168 },
   { key: "affiches",        label: "Affiches de course",    maxAgeHours: 72,  criticalAgeHours: 240 },
+  { key: "velopresse-guides", label: "Guides techniques",   maxAgeHours: 72,  criticalAgeHours: 240 },
+  { key: "guide-vision",    label: "Lecture des guides",    maxAgeHours: 72,  criticalAgeHours: 240 },
+  // Its own workflow, and the one that was dying unseen for sixteen nights.
+  { key: "strava-segments", label: "Bosses Strava",         maxAgeHours: 48,  criticalAgeHours: 120 },
 ];
 
 export type CollectorVerdict = "ok" | "late" | "overdue" | "never";

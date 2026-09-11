@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import maplibregl from "maplibre-gl";
+// MapLibre 6 est distribué en ESM seul, sans export par défaut.
+import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Race } from "@/types";
 import { FRANCE_CENTER, FRANCE_ZOOM } from "@/lib/constants";

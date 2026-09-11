@@ -1,4 +1,4 @@
-import { ClipboardList, MapPin, RotateCw } from "lucide-react";
+import { ClipboardList, Clock, MapPin, RotateCw } from "lucide-react";
 import { SectionHeading } from "./StartList";
 
 /**
@@ -17,16 +17,19 @@ import { SectionHeading } from "./StartList";
 export function OrganiserBriefing({
   bibPickupTime,
   bibPickupPlace,
+  startTime,
   circuitM,
   lapCount,
 }: {
   bibPickupTime: string | null;
   bibPickupPlace: string | null;
+  /** Le premier départ de la réunion — pas forcément celui de cette course. */
+  startTime: string | null;
   circuitM: number | null;
   lapCount: number | null;
 }) {
   const hasPickup = Boolean(bibPickupTime || bibPickupPlace);
-  if (!hasPickup && !circuitM) return null;
+  if (!hasPickup && !circuitM && !startTime) return null;
 
   const total =
     circuitM && lapCount ? (circuitM * lapCount) / 1000 : null;
@@ -63,6 +66,18 @@ export function OrganiserBriefing({
                   </span>
                 )}
               </dd>
+            </div>
+          </div>
+        )}
+
+        {startTime && (
+          <div className="flex items-start gap-2.5">
+            <Clock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                Premier départ de la réunion
+              </dt>
+              <dd className="font-mono tabular-nums">{startTime}</dd>
             </div>
           </div>
         )}

@@ -19,7 +19,8 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Twenty-six minutes on a normal night; the rest is margin, not budget.
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -78,23 +79,31 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run scrape:engagements -- --pages=4
 
-      # The climbs around each upcoming race. One connected Strava account
-      # answers for every reader, so this is worth running even though almost
-      # nobody will have connected one.
-      - name: Read the climbs around upcoming races
+      # The climbs around each race live in their own workflow (segments.yml):
+      # at nine and a half seconds a Strava read, a nightly budget takes over
+      # two hours, and for sixteen nights that step was killed by this job's
+      # timeout — taking the categories and the alert digests down with it.
+
+      # What the organiser wrote on their own page: dossards, circuit, stages.
+      # A page is read once, so a night's work is the new races only.
+      - name: Read organiser pages
         if: ${{ !inputs.federation }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
-          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
-        # Strava's two ceilings: 100 reads a quarter of an hour, which the
-        # script paces itself under, and 1 000 a day, which is what decides how
-        # much a nightly pass may take. A sector costs two reads, or eleven when
-        # the first pair finds no circuit and it is asked again as nine smaller
-        # boxes — so the budget is stated in reads rather than races, and the
-        # pass stops cleanly when it is spent. The order is by date, so the next
-        # night resumes where this one stopped.
-        run: npm run scrape:segments -- --limit=300 --reads=900
+        run: npm run scrape:briefing -- --limit=150
+        continue-on-error: true
+
+      # Posters and technical guides, read by a vision model. Each image is
+      # read once and stored for good; the scripts do nothing without the key.
+      - name: Read posters and technical guides
+        if: ${{ !inputs.federation }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          npm run scrape:affiches -- --limit=30
+          npm run scrape:guides -- --limit=30
+          npm run scrape:guides:vision -- --limit=40
         continue-on-error: true
 
       # Categories for FSGT and UFOLEP, which their own calendar never states.
@@ -120,8 +129,11 @@ jobs:
       # outside this workflow: an alarm inside the thing it watches switches
       # off with it, which is how this job went 73 days unnoticed.
 
+      # A run killed by its own timeout is "cancelled", not "failed", and for
+      # sixteen nights that distinction was the difference between an issue
+      # and silence.
       - name: Open issue on failure
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/github-script@v7
         with:
           script: |

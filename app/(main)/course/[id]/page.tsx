@@ -219,6 +219,7 @@ export default async function RaceDetailPage({ params }: PageProps) {
       <OrganiserBriefing
         bibPickupTime={race.bibPickupTime}
         bibPickupPlace={race.bibPickupPlace}
+        startTime={race.startTime}
         circuitM={race.circuitM}
         lapCount={race.lapCount}
       />
