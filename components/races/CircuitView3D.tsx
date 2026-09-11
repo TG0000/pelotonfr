@@ -384,10 +384,16 @@ export function CircuitView3D({
               "dos", "vent-dos",
               "vent-travers",
             ],
+            /* MapLibre 6 n'accepte ["zoom"] qu'au sommet d'un interpolate :
+               imbriqué sous un « * », la couche entière est refusée et les
+               flèches disparaissent sans autre bruit qu'une ligne de console.
+               Le poids de la flèche se multiplie donc dans chaque sortie. */
             "icon-size": [
-              "*",
-              ["interpolate", ["linear"], ["zoom"], 11, 0.35, 16, 0.75],
-              ["coalesce", ["get", "weight"], 1],
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              11, ["*", 0.35, ["coalesce", ["get", "weight"], 1]],
+              16, ["*", 0.75, ["coalesce", ["get", "weight"], 1]],
             ],
             "icon-rotate": ["get", "rotation"],
             "icon-rotation-alignment": "map",
