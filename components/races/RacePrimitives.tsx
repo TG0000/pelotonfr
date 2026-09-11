@@ -210,10 +210,16 @@ export function DisciplineTag({
   // Road is the overwhelming majority; labelling it adds nothing.
   if (discipline === "route") return null;
 
+  /* Le type fédéral est plus précis (« VTT - Enduro », « Piste Vitesse »)…
+     sauf quand on l'a contredit : une randonnée que la fédération range sous
+     « Route » et qu'on a mise à part doit dire « Cyclosportive », pas
+     « Route » sous un filtre « Cyclosportive ». */
   const label =
-    raceType && raceType.length <= 22
-      ? raceType
-      : discipline.replace(/_/g, " ");
+    discipline === "cyclosportive"
+      ? "Cyclosportive"
+      : raceType && raceType.length <= 22
+        ? raceType
+        : discipline.replace(/_/g, " ");
 
   return (
     <span
