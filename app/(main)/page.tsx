@@ -1,3 +1,4 @@
+import { SavedSearchLink } from "@/components/races/SavedSearchLink";
 import Link from "next/link";
 import { ArrowRight, Map, List, Calendar, TrendingUp } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
@@ -165,13 +166,17 @@ export default async function HomePage() {
           <div>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl font-bold">Prochaines courses</h2>
-              <Link
-                href="/calendrier?vue=liste"
-                className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5 text-muted-foreground")}
-              >
-                Tout voir
-                <ArrowRight className="size-3.5" />
-              </Link>
+              <div className="flex items-center gap-2">
+                {/* Sa recherche retenue, si le navigateur en a une. */}
+                <SavedSearchLink />
+                <Link
+                  href="/calendrier?vue=liste"
+                  className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5 text-muted-foreground")}
+                >
+                  Tout voir
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              </div>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {upcomingRaces.map((race) => (
