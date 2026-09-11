@@ -135,6 +135,15 @@ export default async function RaceDetailPage({ params }: PageProps) {
         </Link>
         <div className="flex items-center gap-2">
           <PlanButton raceId={race.id} />
+          {/* Dans l'agenda du téléphone : la journée, la commune, les dossards. */}
+          <a
+            href={`/api/course/${race.id}/ics`}
+            download
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+          >
+            <Calendar className="size-3.5" />
+            Agenda
+          </a>
           {race.lat && race.lng && (
             <Link
               href={`/calendrier?vue=carte&lat=${race.lat}&lng=${race.lng}&radius=30`}
