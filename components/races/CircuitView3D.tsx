@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-// MapLibre 6 est distribué en ESM seul, sans export par défaut.
-import * as maplibregl from "maplibre-gl";
+// Depuis lib/maplibre : MapLibre 6 y reçoit l'URL de son worker avant toute carte.
+import { maplibregl } from "@/lib/maplibre";
 import { Layers, Satellite, Wind } from "lucide-react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { bearings } from "@/lib/circuit-mesh";

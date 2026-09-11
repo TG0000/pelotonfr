@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Local recovery artefact from the April repo corruption
 .git.corrupt/
+
+# Copié depuis node_modules à chaque install (scripts/build/copy-maplibre-worker.mjs)
+public/maplibre/
