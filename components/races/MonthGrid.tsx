@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MapPin } from "lucide-react";
-import { displayRaceName } from "@/lib/race-name";
+import { calendarName, displayRaceName } from "@/lib/race-name";
 import { cn } from "@/lib/utils";
 import type { Race } from "@/types";
 import {
@@ -79,6 +79,79 @@ export function racesByDay(races: Race[]): Map<string, Race[]> {
   return byDay;
 }
 
+/** Quatre courses lisibles valent mieux que trois et un « +90 » plus tôt. */
+const CELL_RACES = 4;
+
+/** Les jours, sept par sept. */
+function weeksOf(days: string[]): string[][] {
+  const weeks: string[][] = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  return weeks;
+}
+
+/** Les courses qui durent plusieurs jours, sans doublon — une par identité. */
+function spanningRaces(byDay: Map<string, Race[]>): Map<string, Race> {
+  const out = new Map<string, Race>();
+  for (const races of byDay.values()) {
+    for (const race of races) {
+      if (!race.raceDateEnd || race.raceDateEnd === race.raceDate) continue;
+      const span =
+        Math.round(
+          (Date.parse(`${race.raceDateEnd}T12:00:00Z`) - Date.parse(`${race.raceDate}T12:00:00Z`)) /
+            86_400_000
+        ) + 1;
+      if (span > 1 && span <= MAX_SPAN_DAYS) out.set(race.id, race);
+    }
+  }
+  return out;
+}
+
+interface Bar {
+  race: Race;
+  /** Colonnes de la semaine, de 0 à 6, incluses. */
+  from: number;
+  to: number;
+  lane: number;
+  continuesBefore: boolean;
+  continuesAfter: boolean;
+}
+
+/**
+ * Les barres d'une semaine, rangées en couloirs pour ne pas se chevaucher.
+ * La plus longue prend le premier couloir : c'est elle qu'on lit d'abord.
+ */
+function barsForWeek(week: string[], spanning: Map<string, Race>): Bar[] {
+  const first = week[0];
+  const last = week[week.length - 1];
+  const bars: Bar[] = [];
+
+  for (const race of spanning.values()) {
+    const end = race.raceDateEnd!;
+    if (end < first || race.raceDate > last) continue;
+    const from = race.raceDate < first ? 0 : week.indexOf(race.raceDate);
+    const to = end > last ? week.length - 1 : week.indexOf(end);
+    if (from < 0 || to < 0) continue;
+    bars.push({
+      race,
+      from,
+      to,
+      lane: 0,
+      continuesBefore: race.raceDate < first,
+      continuesAfter: end > last,
+    });
+  }
+
+  bars.sort((a, b) => b.to - b.from - (a.to - a.from) || a.from - b.from);
+  const taken: Array<Array<[number, number]>> = [];
+  for (const bar of bars) {
+    let lane = 0;
+    while (taken[lane]?.some(([f, t]) => bar.from <= t && bar.to >= f)) lane++;
+    bar.lane = lane;
+    (taken[lane] ??= []).push([bar.from, bar.to]);
+  }
+  return bars;
+}
+
 interface MonthGridProps {
   year: number;
   month: number;
@@ -101,6 +174,8 @@ export function MonthGrid({
   closeHref,
 }: MonthGridProps) {
   const selectedRaces = selectedDay ? (byDay.get(selectedDay) ?? []) : [];
+  const weeks = weeksOf(days);
+  const spanning = spanningRaces(byDay);
 
   return (
     <>
@@ -116,70 +191,106 @@ export function MonthGrid({
           ))}
         </div>
 
-        <div className="grid grid-cols-7">
-          {days.map((day, i) => {
-            const dayRaces = byDay.get(day) ?? [];
-            const inMonth = Number(day.slice(5, 7)) - 1 === month;
-            const isToday = day === today;
-            const isSelected = day === selectedDay;
-
-            return (
-              <div
-                key={day}
-                className={cn(
-                  "min-h-28 border-b border-r border-border/60 p-1.5",
-                  i % 7 === 6 && "border-r-0",
-                  i >= 35 && "border-b-0",
-                  !inMonth && "bg-surface-2/40",
-                  isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/30"
-                )}
-              >
-                <div className="mb-1 flex items-center justify-between px-0.5">
-                  <span
-                    className={cn(
-                      "text-xs tabular-nums",
-                      isToday
-                        ? "grid size-5 place-items-center rounded-full bg-primary font-bold text-primary-foreground"
-                        : inMonth
-                          ? "font-medium"
-                          : "text-muted-foreground/50"
-                    )}
-                  >
-                    {Number(day.slice(8, 10))}
-                  </span>
-                  {dayRaces.length > 3 && (
+        {/* Semaine par semaine : les courses par étapes courent en barres
+            au-dessus des cases, à cheval sur leurs jours — le Tour de l'Orne
+            est une seule course du samedi au dimanche, pas deux mentions. */}
+        {weeks.map((week, w) => {
+          const bars = barsForWeek(week, spanning);
+          const lanes = bars.length ? Math.max(...bars.map((b) => b.lane)) + 1 : 0;
+          return (
+            <div key={week[0]} className="relative">
+              {lanes > 0 && (
+                <div
+                  className="grid grid-cols-7 gap-y-0.5 px-1 pt-1"
+                  style={{ gridTemplateRows: `repeat(${lanes}, minmax(0, 1fr))` }}
+                >
+                  {bars.map((bar) => (
                     <Link
-                      href={`${dayHref(day)}#jour`}
-                      className="text-[10px] font-medium text-primary hover:underline"
+                      key={`${week[0]}-${bar.race.id}`}
+                      href={`/course/${bar.race.id}`}
+                      title={`${displayRaceName(bar.race.name)} — ${placeLabel(bar.race).text}`}
+                      style={{ gridColumn: `${bar.from + 1} / ${bar.to + 2}`, gridRow: bar.lane + 1 }}
+                      className={cn(
+                        "truncate px-1.5 py-0.5 text-[11px] font-medium leading-tight text-primary-foreground hover:brightness-110",
+                        FEDERATION_BG[bar.race.federationSlug] ?? "bg-primary",
+                        bar.continuesBefore ? "rounded-l-none" : "rounded-l",
+                        bar.continuesAfter ? "rounded-r-none" : "rounded-r"
+                      )}
                     >
-                      +{dayRaces.length - 3}
-                    </Link>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-0.5">
-                  {dayRaces.slice(0, 3).map((race) => (
-                    <Link
-                      key={`${day}-${race.id}`}
-                      href={`/course/${race.id}`}
-                      title={`${displayRaceName(race.name)} — ${placeLabel(race).text}`}
-                      className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] leading-tight hover:bg-surface-3"
-                    >
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          FEDERATION_BG[race.federationSlug] ?? "bg-primary"
-                        )}
-                      />
-                      <span className="truncate">{displayRaceName(race.name)}</span>
+                      {calendarName(bar.race.name)}
                     </Link>
                   ))}
                 </div>
+              )}
+
+              <div className="grid grid-cols-7">
+                {week.map((day, d) => {
+                  const i = w * 7 + d;
+                  const dayRaces = (byDay.get(day) ?? []).filter((r) => !spanning.has(r.id));
+                  const inMonth = Number(day.slice(5, 7)) - 1 === month;
+                  const isToday = day === today;
+                  const isSelected = day === selectedDay;
+
+                  return (
+                    <div
+                      key={day}
+                      className={cn(
+                        "min-h-32 border-b border-r border-border/60 p-1.5",
+                        d === 6 && "border-r-0",
+                        i >= days.length - 7 && "border-b-0",
+                        !inMonth && "bg-surface-2/40",
+                        isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/30"
+                      )}
+                    >
+                      <div className="mb-1 flex items-center justify-between px-0.5">
+                        <span
+                          className={cn(
+                            "text-xs tabular-nums",
+                            isToday
+                              ? "grid size-5 place-items-center rounded-full bg-primary font-bold text-primary-foreground"
+                              : inMonth
+                                ? "font-medium"
+                                : "text-muted-foreground/50"
+                          )}
+                        >
+                          {Number(day.slice(8, 10))}
+                        </span>
+                        {dayRaces.length > CELL_RACES && (
+                          <Link
+                            href={`${dayHref(day)}#jour`}
+                            className="font-mono text-[10px] font-medium tabular-nums text-primary hover:underline"
+                          >
+                            +{dayRaces.length - CELL_RACES}
+                          </Link>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-0.5">
+                        {dayRaces.slice(0, CELL_RACES).map((race) => (
+                          <Link
+                            key={`${day}-${race.id}`}
+                            href={`/course/${race.id}`}
+                            title={`${displayRaceName(race.name)} — ${placeLabel(race).text}`}
+                            className="flex items-start gap-1 rounded px-1 py-0.5 text-[11px] leading-tight hover:bg-surface-3"
+                          >
+                            <span
+                              aria-hidden
+                              className={cn(
+                                "mt-1 size-1.5 shrink-0 rounded-full",
+                                FEDERATION_BG[race.federationSlug] ?? "bg-primary"
+                              )}
+                            />
+                            <span className="line-clamp-2">{calendarName(race.name)}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
 
       {selectedDay && selectedRaces.length > 0 && (

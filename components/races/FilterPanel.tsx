@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { FILTERS_COOKIE, FILTERS_MAX_AGE, rememberedFrom } from "@/lib/filters-memory";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
@@ -27,12 +28,19 @@ import { RaceFilters, useActiveFilterCount } from "./RaceFilters";
 const STORAGE_KEY = "pelotonfr.filters";
 const FOLD_KEY = "pelotonfr.filters.folded";
 
-/** Only what describes a search. Paging and the chosen view are not filters. */
-const REMEMBERED = [
-  "fed", "disc", "cat", "q",
-  "lat", "lng", "radius", "lieu",
-  "dateFrom", "dateTo",
-];
+/** Écrit la recherche dans le cookie que le serveur rejoue, et dans le
+    stockage local que l'accueil lit. Vide, c'est un oubli. */
+function persist(serialised: string) {
+  try {
+    if (serialised) localStorage.setItem(STORAGE_KEY, serialised);
+    else localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Sans stockage, le cookie fait le travail.
+  }
+  document.cookie = serialised
+    ? `${FILTERS_COOKIE}=${encodeURIComponent(serialised)}; Max-Age=${FILTERS_MAX_AGE}; Path=/; SameSite=Lax`
+    : `${FILTERS_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
 
 function readSaved(): string | null {
   try {
@@ -91,20 +99,23 @@ export function FilterPanel() {
     () => false
   );
 
-  /* Remember what the rider searched for. */
+  /* Retenir ce que le coureur a cherché.
+
+     Une adresse sans filtre n'efface rien : revenir sur le calendrier n'est
+     pas un geste, et c'est justement là qu'on veut retrouver sa recherche. Cet
+     effet effaçait la mémoire à l'arrivée, un instant avant que l'effet
+     suivant ne la lise — les filtres semblaient oubliés à chaque retour. Seul
+     le passage d'une recherche à rien, dans cette visite, vaut un oubli. */
+  const previous = useRef<string | null>(null);
   useEffect(() => {
     if (!hydrated) return;
-    const kept = new URLSearchParams();
-    for (const key of REMEMBERED) {
-      for (const value of searchParams.getAll(key)) kept.append(key, value);
+    const serialised = rememberedFrom(searchParams);
+    if (serialised) {
+      persist(serialised);
+    } else if (previous.current) {
+      persist("");
     }
-    try {
-      const serialised = kept.toString();
-      if (serialised) localStorage.setItem(STORAGE_KEY, serialised);
-      else localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Nothing to do: the filters still work, they just will not be recalled.
-    }
+    previous.current = serialised;
   }, [searchParams, hydrated]);
 
   /* Replay them when a rider comes back to an unfiltered calendar. */
@@ -130,11 +141,8 @@ export function FilterPanel() {
   }, [hydrated]);
 
   function forget() {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
+    persist("");
+    previous.current = null;
     router.push(pathname, { scroll: false });
   }
 

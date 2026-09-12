@@ -102,3 +102,27 @@ export function displayRaceName(name: string): string {
     })
     .join("");
 }
+
+/**
+ * Le nom tel qu'il tient dans une case de calendrier.
+ *
+ * « Janze - Semi Nocturne - Open 2-3 + Access 1-2 H/F » : la moitié du nom est
+ * la liste des catégories, que la carte de la course affiche déjà sous forme
+ * de puces. Dans une case de trois centimètres, elle mange la place du nom.
+ * On retire les segments qui ne sont qu'une catégorie et on garde le reste ;
+ * le nom entier reste dans l'infobulle.
+ */
+const CATEGORY_SEGMENT =
+  /^(?:(?:open|access|acc|elite|élite|pass|pass'?cyclisme|u\s?\d{1,2}|cadets?|juniors?|minimes?|benjamins?|pupilles?|poussins?|seniors?|masters?|femmes?|dames|feminines?|féminines?|h\/f|h et f|hommes?|toutes? cat[ée]gories?|[ée]coles? de v[ée]lo|[ée]cole de cyclisme|\d)[\s\d,.+\-/&àa]*)+$/i;
+
+export function calendarName(name: string): string {
+  const display = displayRaceName(name);
+  const segments = display
+    .split(/\s+[-–]\s+|\s*\(|\)\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const kept = segments.filter((s) => !CATEGORY_SEGMENT.test(s));
+  // Un nom qui n'est qu'une catégorie garde son nom : mieux vaut « Open 2-3 »
+  // que rien.
+  return (kept.length > 0 ? kept : segments).join(" · ") || display;
+}

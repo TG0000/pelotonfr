@@ -1,4 +1,7 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { FILTERS_COOKIE, REMEMBERED_KEYS } from "@/lib/filters-memory";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, SearchX } from "lucide-react";
@@ -71,6 +74,25 @@ function buildQuery(
 export default async function CalendrierPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const base = params as Record<string, string | string[]>;
+
+  /* La recherche retenue, rejouée avant de rendre la page.
+
+     Sans filtre dans l'adresse et avec un cookie, on va droit au calendrier
+     filtré : pas de page vide qui se remplit après coup, et aucun compte
+     nécessaire. « Effacer » supprime le cookie, donc plus de renvoi. */
+  const remembered = (await cookies()).get(FILTERS_COOKIE)?.value;
+  const hasFilters = REMEMBERED_KEYS.some((key) => params[key] !== undefined);
+  if (remembered && !hasFilters) {
+    const merged = new URLSearchParams(decodeURIComponent(remembered));
+    if ([...merged.keys()].length > 0) {
+      for (const [key, value] of Object.entries(params)) {
+        for (const v of Array.isArray(value) ? value : [value]) {
+          if (v) merged.append(key, v);
+        }
+      }
+      redirect(`/calendrier?${merged.toString()}`);
+    }
+  }
 
   const viewParam = getString(params.vue);
   const view: RaceView = isView(viewParam) ? viewParam : "calendrier";

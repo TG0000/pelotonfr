@@ -1,0 +1,29 @@
+/**
+ * La recherche d'un coureur, retenue d'une visite à l'autre.
+ *
+ * Elle vit dans un cookie : le serveur peut alors la rejouer avant de rendre
+ * la page, sans le clignotement d'un calendrier vide qui se remplit après
+ * coup — et sans compte, un cookie suffit. Elle n'est effacée que par un
+ * geste : le bouton « Effacer », ou retirer le dernier filtre. Revenir sur
+ * une adresse sans paramètres n'est pas un geste, c'est un retour.
+ */
+
+export const FILTERS_COOKIE = "pelotonfr.filters";
+
+/** Ce qui décrit une recherche. La page et la vue n'en font pas partie. */
+export const REMEMBERED_KEYS = [
+  "fed", "disc", "cat", "q",
+  "lat", "lng", "radius", "lieu",
+  "dateFrom", "dateTo",
+] as const;
+
+/** Un an : une saison, et la suivante commence pareil. */
+export const FILTERS_MAX_AGE = 60 * 60 * 24 * 365;
+
+export function rememberedFrom(params: URLSearchParams): string {
+  const kept = new URLSearchParams();
+  for (const key of REMEMBERED_KEYS) {
+    for (const value of params.getAll(key)) kept.append(key, value);
+  }
+  return kept.toString();
+}
