@@ -480,6 +480,11 @@ function containment(a: string, b: string): number {
 
   const [small, large] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
   if (!small.some((t) => t.length >= 3)) return 0;
+  /* « Saint » tout seul n'est pas un lieu. Le préfixe « st denis de gastines »
+     offre aussi le candidat « st », qui devient « saint » et se retrouve dans
+     « Saint-Omer » : la liste de Gastines est partie sur une réunion sur piste
+     à l'autre bout de la France. Il faut au moins un mot qui nomme. */
+  if (small.every((t) => t === "saint" || t === "sainte")) return 0;
 
   const inLarge = new Set(large);
   return small.every((t) => inLarge.has(t)) ? 0.95 : 0;
@@ -510,7 +515,7 @@ interface RaceLookup {
  * defines meeting identity is what makes the two comparable — and keeps one
  * definition of what a meeting is called.
  */
-async function findRaces(prefix: string, date: Date): Promise<RaceLookup> {
+export async function findRaces(prefix: string, date: Date): Promise<RaceLookup> {
   const iso = date.toISOString().split("T")[0];
   const candidates = communeCandidates(prefix);
 
@@ -690,7 +695,7 @@ interface Ingested {
   bestRaceId?: string;
 }
 
-async function ingestArticle(path: string, dryRun: boolean): Promise<Ingested> {
+export async function ingestArticle(path: string, dryRun: boolean): Promise<Ingested> {
   const slug = path.split("/").pop() ?? "";
   const parsed = parseSlug(slug);
   if (!parsed) return { stored: 0, matched: 0, race: null, miss: "unreadable-slug" };
@@ -822,10 +827,15 @@ async function ingestArticle(path: string, dryRun: boolean): Promise<Ingested> {
   //
   // Scoped to this article, not to the race: two articles can cover the same
   // race, one category each, and neither is entitled to delete the other.
+  //
+  // But not scoped to the race either: an article belongs to one race, and
+  // its rows under another race are an earlier, wrong attachment — the list
+  // of Saint-Denis-de-Gastines sat on Saint-Omer, and re-reading it correctly
+  // left the wrong copy in place.
   await sql(
     `DELETE FROM engagements
-      WHERE race_id = $1 AND source_url = $2 AND observed_at < $3`,
-    [target.id, `${BASE_URL}${path}`, passStartedAt]
+      WHERE source_url = $1 AND observed_at < $2`,
+    [`${BASE_URL}${path}`, passStartedAt]
   );
 
   return { stored: raceIds.length, matched, race: target.name };
