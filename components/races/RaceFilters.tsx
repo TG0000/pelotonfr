@@ -157,6 +157,9 @@ function Collapsible({
 export function RaceFilters() {
   const router = useRouter();
 
+
+  const pathname = usePathname();
+
   /* Toute navigation passe ici : quand il ne reste plus rien qui décrive une
      recherche, retirer la dernière puce vaut « Effacer », et la mémoire doit
      partir avant la navigation — sinon le serveur rejoue ce qu'on vient de
@@ -168,7 +171,6 @@ export function RaceFilters() {
     },
     [router, pathname]
   );
-  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const updateParam = useCallback(
