@@ -27,3 +27,26 @@ export function rememberedFrom(params: URLSearchParams): string {
   }
   return kept.toString();
 }
+
+/** Côté navigateur seulement : écrit ou efface la recherche retenue. */
+export function rememberFilters(serialised: string): void {
+  if (typeof document === "undefined") return;
+  try {
+    if (serialised) localStorage.setItem(FILTERS_COOKIE, serialised);
+    else localStorage.removeItem(FILTERS_COOKIE);
+  } catch {
+    // Sans stockage, le cookie fait le travail.
+  }
+  document.cookie = serialised
+    ? `${FILTERS_COOKIE}=${encodeURIComponent(serialised)}; Max-Age=${FILTERS_MAX_AGE}; Path=/; SameSite=Lax`
+    : `${FILTERS_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
+/**
+ * L'oubli est un geste — « Effacer », ou retirer la dernière puce — et il doit
+ * précéder la navigation : sinon le serveur rejoue la recherche que le
+ * coureur vient de retirer.
+ */
+export function forgetFilters(): void {
+  rememberFilters("");
+}

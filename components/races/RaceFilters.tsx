@@ -1,5 +1,6 @@
 "use client";
 
+import { forgetFilters, rememberedFrom } from "@/lib/filters-memory";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
@@ -155,6 +156,18 @@ function Collapsible({
  */
 export function RaceFilters() {
   const router = useRouter();
+
+  /* Toute navigation passe ici : quand il ne reste plus rien qui décrive une
+     recherche, retirer la dernière puce vaut « Effacer », et la mémoire doit
+     partir avant la navigation — sinon le serveur rejoue ce qu'on vient de
+     retirer. */
+  const navigateTo = useCallback(
+    (params: URLSearchParams) => {
+      if (!rememberedFrom(params)) forgetFilters();
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname]
+  );
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -168,9 +181,9 @@ export function RaceFilters() {
         ? [...current, value]
         : current.filter((v) => v !== value);
       next.forEach((v) => params.append(key, v));
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      navigateTo(params);
     },
-    [router, pathname, searchParams]
+    [navigateTo, searchParams]
   );
 
   const setParams = useCallback(
@@ -181,12 +194,14 @@ export function RaceFilters() {
         if (value) params.set(key, value);
         else params.delete(key);
       }
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      navigateTo(params);
     },
-    [router, pathname, searchParams]
+    [navigateTo, searchParams]
   );
 
   const clearAll = useCallback(() => {
+    // Un geste : la recherche retenue part avec les filtres.
+    forgetFilters();
     router.push(pathname, { scroll: false });
   }, [router, pathname]);
 

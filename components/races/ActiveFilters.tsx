@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { X } from "lucide-react";
 import { FEDERATIONS, DISCIPLINES } from "@/lib/constants";
 import { categoryLabel } from "@/lib/categories";
+import { forgetFilters, rememberedFrom } from "@/lib/filters-memory";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -12,6 +13,16 @@ export function ActiveFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  /* Retirer la dernière puce vaut « Effacer » : la mémoire part avant la
+     navigation, sinon le serveur rejoue ce qu'on vient de retirer. */
+  const navigateTo = useCallback(
+    (params: URLSearchParams) => {
+      if (!rememberedFrom(params)) forgetFilters();
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname]
+  );
 
   const removeParam = useCallback(
     (key: string, value?: string) => {
@@ -25,9 +36,9 @@ export function ActiveFilters() {
       } else {
         params.delete(key);
       }
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      navigateTo(params);
     },
-    [router, pathname, searchParams]
+    [navigateTo, searchParams]
   );
 
   const chips: Array<{ label: string; onRemove: () => void }> = [];
@@ -53,7 +64,7 @@ export function ActiveFilters() {
         params.delete("radius");
         params.delete("lieu");
         params.delete("page");
-        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+        navigateTo(params);
       },
     });
   }
@@ -85,7 +96,7 @@ export function ActiveFilters() {
         params.delete("dateFrom");
         params.delete("dateTo");
         params.delete("page");
-        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+        navigateTo(params);
       },
     });
   }

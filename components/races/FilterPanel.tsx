@@ -1,6 +1,6 @@
 "use client";
 
-import { FILTERS_COOKIE, FILTERS_MAX_AGE, rememberedFrom } from "@/lib/filters-memory";
+import { forgetFilters, rememberFilters, rememberedFrom } from "@/lib/filters-memory";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -28,19 +28,6 @@ import { RaceFilters, useActiveFilterCount } from "./RaceFilters";
 const STORAGE_KEY = "pelotonfr.filters";
 const FOLD_KEY = "pelotonfr.filters.folded";
 
-/** Écrit la recherche dans le cookie que le serveur rejoue, et dans le
-    stockage local que l'accueil lit. Vide, c'est un oubli. */
-function persist(serialised: string) {
-  try {
-    if (serialised) localStorage.setItem(STORAGE_KEY, serialised);
-    else localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Sans stockage, le cookie fait le travail.
-  }
-  document.cookie = serialised
-    ? `${FILTERS_COOKIE}=${encodeURIComponent(serialised)}; Max-Age=${FILTERS_MAX_AGE}; Path=/; SameSite=Lax`
-    : `${FILTERS_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
-}
 
 function readSaved(): string | null {
   try {
@@ -111,9 +98,9 @@ export function FilterPanel() {
     if (!hydrated) return;
     const serialised = rememberedFrom(searchParams);
     if (serialised) {
-      persist(serialised);
+      rememberFilters(serialised);
     } else if (previous.current) {
-      persist("");
+      forgetFilters();
     }
     previous.current = serialised;
   }, [searchParams, hydrated]);
@@ -141,7 +128,7 @@ export function FilterPanel() {
   }, [hydrated]);
 
   function forget() {
-    persist("");
+    forgetFilters();
     previous.current = null;
     router.push(pathname, { scroll: false });
   }
