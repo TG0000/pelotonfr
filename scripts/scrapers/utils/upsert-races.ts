@@ -269,7 +269,10 @@ export async function upsertRaces(
            slug             = EXCLUDED.slug,
            source_url       = EXCLUDED.source_url,
            race_date        = EXCLUDED.race_date,
-           race_date_end    = EXCLUDED.race_date_end,
+           -- Une fois la première étape courue, le calendrier n'annonce plus
+           -- que « Le 12/09 » : la fin connue ne doit pas s'effacer, sinon un
+           -- tour disparaît le jour de son contre-la-montre.
+           race_date_end    = COALESCE(EXCLUDED.race_date_end, races.race_date_end),
            city             = EXCLUDED.city,
            department_code  = EXCLUDED.department_code,
            department_name  = EXCLUDED.department_name,

@@ -217,9 +217,11 @@ export function DisciplineTag({
   const label =
     discipline === "cyclosportive"
       ? "Cyclosportive"
-      : raceType && raceType.length <= 22
-        ? raceType
-        : discipline.replace(/_/g, " ");
+      : discipline === "course_par_etapes"
+        ? "Par étapes"
+        : raceType && raceType.length <= 22
+          ? raceType
+          : discipline.replace(/_/g, " ");
 
   return (
     <span

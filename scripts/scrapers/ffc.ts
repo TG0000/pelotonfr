@@ -335,10 +335,17 @@ async function scrapeWindow(
       departmentName: departmentName || undefined,
       /* La fédération range les randonnées et cyclosportives sous « Route » ;
          le nom, lui, ne ment pas. */
+      /* Une course sur route qui dure plusieurs jours est une course par
+         étapes — la fédération la range sous « Route » comme les autres, et
+         la case « Course par étapes » des filtres ne trouvait rien. */
       discipline:
         mapDiscipline(disciplineLabel) === "route" && isCyclosportiveName(title)
           ? "cyclosportive"
-          : mapDiscipline(disciplineLabel),
+          : mapDiscipline(disciplineLabel) === "route" &&
+              parsedDate.end &&
+              parsedDate.end.getTime() > parsedDate.start.getTime()
+            ? "course_par_etapes"
+            : mapDiscipline(disciplineLabel),
       raceType: disciplineLabel || undefined,
       level: mapLevel(levelLabel),
       categories: extractCategories(title),
