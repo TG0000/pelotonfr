@@ -106,8 +106,10 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
     : "";
 
   const sortParam = getString(params.sortBy);
-  const sortBy: "date_asc" | "date_desc" | "distance" =
-    sortParam === "date_desc" || sortParam === "distance" ? sortParam : "date_asc";
+  const sortBy: "date_asc" | "date_desc" | "distance" | "engages" =
+    sortParam === "date_desc" || sortParam === "distance" || sortParam === "engages"
+      ? sortParam
+      : "date_asc";
 
   const shared = {
     fed: getArray(params.fed) as FederationSlug[],

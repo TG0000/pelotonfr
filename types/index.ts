@@ -37,6 +37,9 @@ export interface Race {
   bibPickupTime: string | null;
   /** Le premier départ de la réunion, tel que l'organisateur l'écrit : « 13h ». */
   startTime: string | null;
+  /** Déjà engagés, d'après « 74/150 places disponibles » sur la fiche fédérale. */
+  entriesEngaged: number | null;
+  entriesCapacity: number | null;
   bibPickupPlace: string | null;
   /** One lap, in metres, as the organiser announced it. */
   circuitM: number | null;
@@ -59,7 +62,7 @@ export interface RaceFilters {
   radius: number;
   q: string;
   page: number;
-  sortBy: "date_asc" | "date_desc" | "distance";
+  sortBy: "date_asc" | "date_desc" | "distance" | "engages";
 }
 
 export interface PaginatedRaces {

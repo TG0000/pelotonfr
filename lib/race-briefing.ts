@@ -32,6 +32,9 @@ export interface Briefing {
    * for Sunday has already missed it.
    */
   entriesCloseAt: string | null;
+  /** « 74/150 places disponibles » : 74 places restantes sur 150. */
+  placesLeft: number | null;
+  placesTotal: number | null;
 }
 
 /** Words that end a pickup place — the page runs sections together. */
@@ -123,7 +126,13 @@ export function parseBriefing(pageText: string): Briefing {
     ? `${close[3]}-${close[2]}-${close[1]}T${close[4].padStart(2, "0")}:00`
     : null;
 
-  return { bibPickupTime, bibPickupPlace, circuitM, lapCount, entriesCloseAt };
+  /* Le compteur d'engagés, tel que la fédération l'affiche : les places
+     restantes sur le total. Engagés = total − restantes. */
+  const places = /(\d{1,4})\s*\/\s*(\d{1,4})\s*places?\s+disponibles?/i.exec(text);
+  const placesLeft = places ? Number(places[1]) : null;
+  const placesTotal = places ? Number(places[2]) : null;
+
+  return { bibPickupTime, bibPickupPlace, circuitM, lapCount, entriesCloseAt, placesLeft, placesTotal };
 }
 
 /**

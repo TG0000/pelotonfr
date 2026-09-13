@@ -7,6 +7,8 @@ import { ArrowUpDown } from "lucide-react";
 const SORT_OPTIONS = [
   { value: "date_asc", label: "Date (croissante)" },
   { value: "date_desc", label: "Date (décroissante)" },
+  // Le compteur d'engagés de la fiche fédérale : qui y va, avant la liste.
+  { value: "engages", label: "Les plus courues" },
   // Offered only once a location is set: there is nothing to measure from
   // otherwise, and an option that silently does nothing is worse than none.
   { value: "distance", label: "Distance", needsLocation: true },

@@ -55,6 +55,8 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     scrapedAt: toDateOnly(row.scraped_at) ?? "",
     bibPickupTime: (row.bib_pickup_time as string) ?? null,
     startTime: (row.start_time as string) ?? null,
+    entriesEngaged: row.entries_engaged != null ? Number(row.entries_engaged) : null,
+    entriesCapacity: row.entries_capacity != null ? Number(row.entries_capacity) : null,
     bibPickupPlace: (row.bib_pickup_place as string) ?? null,
     circuitM: row.circuit_m != null ? Number(row.circuit_m) : null,
     lapCount: row.lap_count != null ? Number(row.lap_count) : null,
@@ -190,7 +192,10 @@ export async function getRaces(
        WHERE ${whereClause}
      ) g
      WHERE g.sibling_rank = 1
-     ORDER BY ${distanceOrder} g.race_date ${sortBy === "date_desc" ? "DESC" : "ASC"}
+     ORDER BY ${distanceOrder} ${
+       // « Les plus courues » : le compteur d'engagés de la fiche, les inconnues à la fin.
+       sortBy === "engages" ? "g.entries_engaged DESC NULLS LAST," : ""
+     } g.race_date ${sortBy === "date_desc" ? "DESC" : "ASC"}
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
     pageParams
   );

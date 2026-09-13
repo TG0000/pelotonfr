@@ -102,6 +102,14 @@ export function RaceCard({
             categories={race.categories}
             highlight={myCategories}
           />
+          {race.entriesEngaged != null && race.entriesEngaged > 0 && (
+            <span
+              className="ml-auto shrink-0 rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground"
+              title={race.entriesCapacity ? `${race.entriesEngaged} engagés sur ${race.entriesCapacity} places` : undefined}
+            >
+              {race.entriesEngaged} engagé{race.entriesEngaged > 1 ? "s" : ""}
+            </span>
+          )}
         </div>
       </div>
 

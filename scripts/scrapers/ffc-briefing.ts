@@ -98,6 +98,10 @@ async function main() {
      cents : les chercher dans l'ordre normal, c'est lire tout le calendrier
      pour trouver dix fiches. --etapes va les chercher directement. */
   const stagesOnly = process.argv.includes("--etapes");
+  /* Le compteur d'engagés bouge chaque jour jusqu'à la clôture : --places
+     relit les fiches des dix prochains jours, déjà lues ou non, pour ce
+     chiffre-là. */
+  const placesOnly = process.argv.includes("--places");
 
   const races = (await sql(
     `SELECT id, name, city, department_code, source_url,
@@ -107,7 +111,8 @@ async function main() {
         AND source_url LIKE '%/calendrier/competition/%'
         AND is_cancelled = false
         AND COALESCE(race_date_end, race_date) >= CURRENT_DATE
-        AND ($2::boolean OR briefing_fetched_at IS NULL)
+        AND ($2::boolean OR $4::boolean OR briefing_fetched_at IS NULL)
+        AND (NOT $4::boolean OR race_date <= CURRENT_DATE + 10)
         AND (NOT $3::boolean
              OR (race_date_end > race_date
                  AND NOT EXISTS (SELECT 1 FROM race_stages s
@@ -115,7 +120,7 @@ async function main() {
       ORDER BY EXISTS (SELECT 1 FROM user_favorites f WHERE f.race_id = races.id) DESC,
                race_date ASC
       LIMIT $1::int`,
-    [limit, force, stagesOnly]
+    [limit, force, stagesOnly, placesOnly]
   )) as Array<Record<string, unknown>>;
 
   console.log(`${races.length} fiches à lire.\n`);
@@ -149,6 +154,9 @@ async function main() {
                                             THEN entries_close_source ELSE 'fiche' END,
                 start_location = CASE WHEN $6::float8 IS NULL THEN start_location
                                       ELSE ST_MakePoint($6::float8, $7::float8)::geography END,
+                entries_engaged  = CASE WHEN $9::int IS NULL THEN entries_engaged ELSE $10::int - $9::int END,
+                entries_capacity = COALESCE($10::int, entries_capacity),
+                entries_counted_at = CASE WHEN $9::int IS NULL THEN entries_counted_at ELSE now() END,
                 briefing_fetched_at = now()
           WHERE id = $1::uuid`,
         [
@@ -160,6 +168,8 @@ async function main() {
           point?.lng ?? null,
           point?.lat ?? null,
           brief.entriesCloseAt,
+          brief.placesLeft,
+          brief.placesTotal,
         ]
       );
 
