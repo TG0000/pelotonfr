@@ -102,7 +102,11 @@ jobs:
         if: ${{ !inputs.federation }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npm run scrape:briefing -- --limit=150
+        run: |
+          npm run scrape:briefing -- --limit=150
+          # The entries counter moves every day until entries close: re-read
+          # the next ten days for that number alone.
+          npm run scrape:briefing -- --places --limit=800
         continue-on-error: true
 
       # Posters and technical guides, read by a vision model. Each image is
