@@ -14,7 +14,6 @@ import { Pagination } from "@/components/common/Pagination";
 import { SortSelect } from "@/components/races/SortSelect";
 import { EmptyState } from "@/components/common/States";
 import { MapClient } from "@/components/map/MapClient";
-import { MapDayPicker } from "@/components/map/MapDayPicker";
 import { ViewSwitcher, type RaceView } from "@/components/races/ViewSwitcher";
 import {
   MONTHS,
@@ -279,17 +278,15 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
       </header>
 
       {view === "carte" ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
-          <Suspense fallback={null}>
-            <MapDayPicker
-              month={`${year}-${String(month + 1).padStart(2, "0")}`}
-              selected={dateFrom && dateFrom === dateTo ? dateFrom : ""}
-              daysWithRaces={[...byDay.keys()]}
-            />
-          </Suspense>
-          <div className="min-h-0 flex-1">
-            <MapClient races={mapRaces} />
-          </div>
+        <div className="min-h-0 flex-1">
+          <MapClient
+            races={mapRaces}
+            dayPicker={{
+              month: `${year}-${String(month + 1).padStart(2, "0")}`,
+              selected: dateFrom && dateFrom === dateTo ? dateFrom : "",
+              daysWithRaces: [...byDay.keys()],
+            }}
+          />
         </div>
       ) : (
         <div className="flex gap-8">

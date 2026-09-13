@@ -1,5 +1,6 @@
 "use client";
 
+import { MapDayPicker, type DayPickerState } from "./MapDayPicker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -33,6 +34,8 @@ const RaceMap = dynamic(
 
 interface MapClientProps {
   races: Race[];
+  /** Le sélecteur de jour, dans le volet : la carte garde sa largeur. */
+  dayPicker?: DayPickerState;
 }
 
 /** One race in the panel beside the map. */
@@ -80,7 +83,7 @@ function ResultRow({
   );
 }
 
-export function MapClient({ races }: MapClientProps) {
+export function MapClient({ races, dayPicker }: MapClientProps) {
   const searchParams = useSearchParams();
 
   const userLocation = useMemo(() => {
@@ -136,6 +139,8 @@ export function MapClient({ races }: MapClientProps) {
           </button>
         )}
       </div>
+
+      {dayPicker && <MapDayPicker {...dayPicker} />}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visible.length === 0 ? (
