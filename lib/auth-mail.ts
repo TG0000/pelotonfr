@@ -16,7 +16,7 @@ export async function sendMagicLinkEmail(email: string, url: string): Promise<vo
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: process.env.AUTH_EMAIL_FROM ?? "PelotonFR <onboarding@resend.dev>",
+      from: process.env.ALERT_FROM_EMAIL ?? "PelotonFR <onboarding@resend.dev>",
       to: email,
       subject: "Votre lien de connexion à PelotonFR",
       text:
