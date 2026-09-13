@@ -94,7 +94,7 @@ export default async function AdminPage() {
                     {c.region && <span className="ml-1 text-xs text-muted-foreground">{c.region}</span>}
                   </span>
                   <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                    {c.views} · {describeAge((Date.now() - new Date(c.lastSeen).getTime()) / 3_600_000)}
+                    {c.views} · {describeAge(c.ageHours)}
                   </span>
                 </li>
               ))}

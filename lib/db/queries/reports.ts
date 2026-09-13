@@ -101,6 +101,8 @@ export interface LiveCity {
   lng: number | null;
   views: number;
   lastSeen: string;
+  /** Depuis la dernière vue, en heures — calculé en base, pas au rendu. */
+  ageHours: number;
 }
 
 /** Qui lit le site depuis une demi-heure, commune par commune. */
@@ -108,7 +110,8 @@ export async function getLiveViewers(minutes = 30): Promise<{ cities: LiveCity[]
   const [cities, totals, paths] = await Promise.all([
     sql(
       `SELECT COALESCE(city, 'Inconnue') AS city, region, avg(lat) AS lat, avg(lng) AS lng,
-              count(*) AS views, max(seen_at)::text AS last_seen
+              count(*) AS views, max(seen_at)::text AS last_seen,
+              extract(epoch FROM now() - max(seen_at)) / 3600 AS age_hours
          FROM page_views
         WHERE seen_at > now() - ($1 || ' minutes')::interval
         GROUP BY 1, 2 ORDER BY views DESC LIMIT 40`,
@@ -130,6 +133,7 @@ export async function getLiveViewers(minutes = 30): Promise<{ cities: LiveCity[]
       lng: c.lng === null ? null : Number(c.lng),
       views: Number(c.views),
       lastSeen: c.last_seen as string,
+      ageHours: Number(c.age_hours ?? 0),
     })),
     total: Number((totals as Array<Record<string, unknown>>)[0]?.n ?? 0),
     paths: (paths as Array<Record<string, unknown>>).map((p) => ({ path: p.path as string, views: Number(p.views) })),
