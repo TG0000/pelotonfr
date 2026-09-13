@@ -93,8 +93,49 @@ function titleCaseWord(word: string, isFirst: boolean): string {
  * tail keep the place shouting. Anything already mixed case is left exactly as
  * the organiser wrote it.
  */
+/** « Tour », « Jours », « Étapes », « Boucles » : le nom d'une course par étapes. */
+const STAGE_RACE_WORD = /\b(?:tour|jours?|[ée]tapes?|boucles?|ronde|circuit)\b/i;
+
+/** Une commune : quelques mots, sans chiffre ni mot de course. */
+function looksLikePlace(segment: string): boolean {
+  const words = segment.trim().split(/\s+/);
+  return (
+    words.length >= 1 &&
+    words.length <= 5 &&
+    !/\d/.test(segment) &&
+    !STAGE_RACE_WORD.test(segment) &&
+    !/\b(?:open|access|elite|u\d|prix|championnat|trophée|trophee|coupe)\b/i.test(segment)
+  );
+}
+
+/**
+ * Le nom d'une course par étapes, sans ses villes-étapes.
+ *
+ * « La Ferrière Bochard - Bagnoles de l'Orne - 10èTour de l'Orne masculin -
+ * Open 1-2-3 » : la fédération écrit le départ et l'arrivée avant le nom, ce
+ * qui ne désigne qu'une étape — et pas la bonne. Quand des segments qui
+ * ressemblent à des communes précèdent un segment qui nomme un tour, ce sont
+ * eux qu'on retire ; le reste est le nom de la course.
+ */
+function withoutStageTowns(name: string): string {
+  const segments = name.split(/\s+[-–]\s+/);
+  if (segments.length < 3) return name;
+  /* Le segment qui nomme le tour commence par lui — « 10èTour de l'Orne »,
+     « 3 Jours de Cherbourg », « Tour de Moselle » — et n'est pas une
+     catégorie : « U17 (course d'attente Tour de l'Orne) » est une course d'un
+     après-midi à Briouze, et Briouze doit rester. */
+  const raceAt = segments.findIndex((s) =>
+    /^(?:\d+\s*(?:ᵉ|è|e|ème)?\s*)?(?:tour|jours?|[ée]tapes?|boucles?)\b/i.test(s.trim())
+  );
+  if (raceAt < 1) return name;
+  if (!segments.slice(0, raceAt).every(looksLikePlace)) return name;
+  return segments.slice(raceAt).join(" - ");
+}
+
 export function displayRaceName(name: string): string {
-  return name
+  return withoutStageTowns(name)
+    // « 10èTour » : la fédération colle l'ordinal au mot.
+    .replace(/(\d)(?:è|e|ème)(?=[A-Z][a-zé])/g, "$1ᵉ ")
     .split(/(\s+)/)
     .map((token, i) => {
       if (/^\s+$/.test(token) || !isShouted(token)) return token;
@@ -121,7 +162,9 @@ export function calendarName(name: string): string {
     .split(/\s+[-–]\s+|\s*\(|\)\s*/)
     .map((s) => s.trim())
     .filter(Boolean);
-  const kept = segments.filter((s) => !CATEGORY_SEGMENT.test(s));
+  const kept = segments
+    .map((s) => s.replace(/^[-–]\s*/, ""))
+    .filter((s) => s && !CATEGORY_SEGMENT.test(s));
   // Un nom qui n'est qu'une catégorie garde son nom : mieux vaut « Open 2-3 »
   // que rien.
   return (kept.length > 0 ? kept : segments).join(" · ") || display;
