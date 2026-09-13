@@ -7,6 +7,7 @@ import { getCollectorHealth } from "@/lib/db/queries/collectors";
 import { getLiveViewers, getOpenReports, getSiteKpis, type SiteKpis } from "@/lib/db/queries/reports";
 import { describeAge } from "@/lib/collectors";
 import { ReportList } from "./ReportList";
+import { LiveMap } from "@/components/ops/LiveMap";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Tableau de bord", robots: { index: false } };
@@ -82,6 +83,9 @@ export default async function AdminPage() {
             <span className="ml-auto font-mono text-sm tabular-nums text-muted-foreground">
               {live.total} vue{live.total > 1 ? "s" : ""} · 30 min
             </span>
+          </div>
+          <div className="mb-3">
+            <LiveMap cities={live.cities} />
           </div>
           {live.cities.length === 0 ? (
             <p className="text-sm text-muted-foreground">Personne depuis une demi-heure.</p>
