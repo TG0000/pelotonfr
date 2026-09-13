@@ -18,6 +18,7 @@ import { RaceTerrain } from "@/components/races/RaceTerrain";
 import { CircuitWithWind } from "@/components/races/CircuitWithWind";
 import { FieldLevel } from "@/components/races/FieldLevel";
 import { PlanButton } from "@/components/races/PlanButton";
+import { ShareButton } from "@/components/races/ShareButton";
 import { RaceClimbs } from "@/components/races/RaceClimbs";
 import { RaceStages } from "@/components/races/RaceStages";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
@@ -37,6 +38,7 @@ import { fr } from "date-fns/locale";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -81,8 +83,10 @@ function Skeleton({ rows = 3 }: { rows?: number }) {
   );
 }
 
-export default async function RaceDetailPage({ params }: PageProps) {
+export default async function RaceDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const sharedBy = (await searchParams)?.de;
+  const from = typeof sharedBy === "string" ? sharedBy.trim().slice(0, 40) : "";
 
   let race;
   try {
@@ -135,6 +139,11 @@ export default async function RaceDetailPage({ params }: PageProps) {
         </Link>
         <div className="flex items-center gap-2">
           <PlanButton raceId={race.id} />
+          <ShareButton
+            raceId={race.id}
+            title={displayRaceName(race.name)}
+            when={`${format(new Date(`${race.raceDate}T12:00:00Z`), "EEEE d MMMM", { locale: fr })} à ${placeLabel(race).text}`}
+          />
           {/* Dans l'agenda du téléphone : la journée, la commune, les dossards. */}
           <a
             href={`/api/course/${race.id}/ics`}
@@ -155,6 +164,16 @@ export default async function RaceDetailPage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      {from && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-sm">
+          <span>
+            <span className="font-semibold">{from}</span> vous propose cette course.
+            {!isPast && " Ajoutez-la à votre saison pour la retrouver."}
+          </span>
+          {!isPast && <PlanButton raceId={race.id} />}
+        </div>
+      )}
 
       <header className="mb-8">
         <div className="mb-3 flex flex-wrap items-center gap-3">
