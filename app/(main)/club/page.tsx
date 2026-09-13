@@ -5,8 +5,9 @@ import { Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sql } from "@/lib/db";
 import { resolveUser } from "@/lib/db/queries/alerts";
-import { getClubQueue, getMembership } from "@/lib/db/queries/club";
+import { getClubQueue, getMembership, getClubPlans, getViewerCategory } from "@/lib/db/queries/club";
 import { ClubQueue } from "@/components/club/ClubQueue";
+import { ClubPlans } from "@/components/club/ClubPlans";
 import { JoinClub } from "@/components/club/JoinClub";
 
 export const metadata: Metadata = {
@@ -36,7 +37,12 @@ async function suggestedClub(userId: string) {
   };
 }
 
-export default async function ClubPage() {
+export default async function ClubPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ cat?: string }>;
+}) {
+  const onlyMine = (await searchParams)?.cat === "moi";
   const { userId: clerkId } = await auth();
 
   if (!clerkId) {
@@ -84,7 +90,11 @@ export default async function ClubPage() {
     );
   }
 
-  const queue = await getClubQueue(membership.clubId);
+  const [queue, viewerCategory] = await Promise.all([
+    getClubQueue(membership.clubId),
+    getViewerCategory(id),
+  ]);
+  const plans = await getClubPlans(membership.clubId, id, viewerCategory);
   const officer = membership.role === "responsable";
 
   return (
@@ -120,6 +130,8 @@ export default async function ClubPage() {
           )}
         </p>
       </header>
+
+      <ClubPlans plans={plans} viewerCategory={viewerCategory} onlyMine={onlyMine} />
 
       <ClubQueue races={queue} canAct={officer} />
 

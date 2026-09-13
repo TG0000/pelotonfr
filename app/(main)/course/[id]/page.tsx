@@ -20,6 +20,7 @@ import { FieldLevel } from "@/components/races/FieldLevel";
 import { PlanButton } from "@/components/races/PlanButton";
 import { ShareButton } from "@/components/races/ShareButton";
 import { ReportButton } from "@/components/races/ReportButton";
+import { ClubmatesOnRace } from "@/components/club/ClubmatesOnRace";
 import { RaceClimbs } from "@/components/races/RaceClimbs";
 import { RaceStages } from "@/components/races/RaceStages";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
@@ -245,6 +246,10 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
           />
         </Suspense>
       )}
+
+      <Suspense fallback={null}>
+        <ClubmatesOnRace raceId={race.id} />
+      </Suspense>
 
       <OrganiserBriefing
         bibPickupTime={race.bibPickupTime}

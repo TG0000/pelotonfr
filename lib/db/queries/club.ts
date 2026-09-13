@@ -192,3 +192,126 @@ export async function searchClubs(
     };
   });
 }
+
+/* ------------------------------------------------------------------------ */
+/* Où vont les coéquipiers                                                   */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Un coéquipier, nommé comme on le nomme au départ : « Théo G. ».
+ *
+ * Le nom vient de sa licence quand il l'a reliée, sinon du nom qu'il s'est
+ * donné, sinon rien — et rien vaut mieux qu'une adresse e-mail.
+ */
+const MATE_NAME_SQL = `
+  COALESCE(
+    NULLIF(TRIM(CONCAT(rd.first_name, ' ', LEFT(rd.last_name, 1), '.')), '.'),
+    NULLIF(u.display_name, ''),
+    'un coéquipier'
+  )`;
+
+export interface ClubPlan {
+  raceId: string;
+  raceName: string;
+  raceDate: string;
+  raceDateEnd: string | null;
+  city: string | null;
+  departmentCode: string | null;
+  federationSlug: string;
+  categories: string[];
+  /** Ceux qui y vont (programmée) et ceux qui y pensent (envisagée). */
+  going: string[];
+  considering: string[];
+  /** Le lecteur lui-même y est-il ? */
+  mine: "programmee" | "envisagee" | null;
+  /** La course admet la catégorie du lecteur. */
+  fitsMe: boolean;
+}
+
+/**
+ * Les courses à venir que les membres du club ont mises à leur calendrier.
+ *
+ * C'est la question qu'on se pose le mardi : « qui va où ce week-end ? » —
+ * pour partir ensemble, ou pour choisir la course où l'on sera plusieurs à
+ * rouler. Le lecteur voit sa catégorie en premier si on le lui demande.
+ */
+export async function getClubPlans(
+  clubId: string,
+  viewerId: string,
+  viewerCategory: string | null
+): Promise<ClubPlan[]> {
+  const rows = (await sql(
+    `SELECT r.id::text AS race_id, r.name, r.race_date::text, r.race_date_end::text,
+            r.city, r.department_code, f.slug AS federation_slug, r.categories,
+            array_remove(array_agg(CASE WHEN uf.intent = 'programmee' AND uf.user_id <> $2::uuid THEN ${MATE_NAME_SQL} END), NULL) AS going,
+            array_remove(array_agg(CASE WHEN uf.intent = 'envisagee' AND uf.user_id <> $2::uuid THEN ${MATE_NAME_SQL} END), NULL) AS considering,
+            max(CASE WHEN uf.user_id = $2::uuid THEN uf.intent END) AS mine
+       FROM user_favorites uf
+       JOIN club_members cm ON cm.user_id = uf.user_id AND cm.club_id = $1::uuid
+       JOIN users u ON u.id = uf.user_id
+       LEFT JOIN riders rd ON rd.id = u.rider_id
+       JOIN races r ON r.id = uf.race_id
+       JOIN federations f ON f.id = r.federation_id
+      WHERE COALESCE(r.race_date_end, r.race_date) >= CURRENT_DATE
+        AND r.is_cancelled = false
+      GROUP BY r.id, f.slug
+     HAVING count(*) FILTER (WHERE uf.user_id <> $2::uuid) > 0 OR max(CASE WHEN uf.user_id = $2::uuid THEN 1 END) = 1
+      ORDER BY r.race_date, r.name`,
+    [clubId, viewerId]
+  )) as Array<Record<string, unknown>>;
+
+  return rows.map((row) => {
+    const categories = (row.categories as string[]) ?? [];
+    return {
+      raceId: row.race_id as string,
+      raceName: row.name as string,
+      raceDate: row.race_date as string,
+      raceDateEnd: (row.race_date_end as string) ?? null,
+      city: (row.city as string) ?? null,
+      departmentCode: (row.department_code as string) ?? null,
+      federationSlug: row.federation_slug as string,
+      categories,
+      going: (row.going as string[]) ?? [],
+      considering: (row.considering as string[]) ?? [],
+      mine: (row.mine as "programmee" | "envisagee" | null) ?? null,
+      fitsMe: viewerCategory ? categories.includes(viewerCategory) : true,
+    };
+  });
+}
+
+export interface ClubmatesOnRace {
+  clubName: string;
+  going: string[];
+  considering: string[];
+}
+
+/** Les coéquipiers du lecteur qui ont cette course à leur calendrier. */
+export async function getClubmatesOnRace(
+  raceId: string,
+  viewerId: string
+): Promise<ClubmatesOnRace | null> {
+  const rows = (await sql(
+    `SELECT c.name AS club_name, uf.intent, ${MATE_NAME_SQL} AS mate
+       FROM club_members me
+       JOIN clubs c ON c.id = me.club_id
+       JOIN club_members cm ON cm.club_id = me.club_id AND cm.user_id <> me.user_id
+       JOIN user_favorites uf ON uf.user_id = cm.user_id AND uf.race_id = $1::uuid
+       JOIN users u ON u.id = cm.user_id
+       LEFT JOIN riders rd ON rd.id = u.rider_id
+      WHERE me.user_id = $2::uuid
+      ORDER BY uf.intent, mate`,
+    [raceId, viewerId]
+  )) as Array<Record<string, unknown>>;
+  if (rows.length === 0) return null;
+  return {
+    clubName: rows[0].club_name as string,
+    going: rows.filter((r) => r.intent === "programmee").map((r) => r.mate as string),
+    considering: rows.filter((r) => r.intent === "envisagee").map((r) => r.mate as string),
+  };
+}
+
+/** La catégorie que le lecteur s'est donnée, pour trier ce qui le concerne. */
+export async function getViewerCategory(userId: string): Promise<string | null> {
+  const rows = (await sql(`SELECT category FROM users WHERE id = $1::uuid`, [userId])) as Array<{ category: string | null }>;
+  return rows[0]?.category ?? null;
+}
