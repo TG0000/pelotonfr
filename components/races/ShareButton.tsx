@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useUser } from "@/components/auth";
 import { Check, Link2, Mail, MessageCircle, Share2 } from "lucide-react";
 import { buttonVariants } from "@/lib/button-variants";
 import { cn } from "@/lib/utils";

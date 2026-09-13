@@ -1,7 +1,7 @@
 "use client";
 
 import { Bookmark, Check, Plus } from "lucide-react";
-import { SignInButton } from "@clerk/nextjs";
+import { SignInButton } from "@/components/auth";
 import { usePlan } from "@/hooks/usePlan";
 import type { RaceIntent } from "@/lib/db/queries/plan";
 import { cn } from "@/lib/utils";

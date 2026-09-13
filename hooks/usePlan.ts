@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/components/auth";
 import type { RaceIntent } from "@/lib/db/queries/plan";
 
 const NONE: ReadonlyMap<string, RaceIntent> = new Map();

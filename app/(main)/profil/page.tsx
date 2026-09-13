@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { auth } from "@clerk/nextjs/server";
-import { SignInButton } from "@clerk/nextjs";
+import { auth } from "@/lib/session";
+import { SignInButton } from "@/components/auth";
 import { UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StravaPanel } from "@/components/strava/StravaPanel";
 import type { StravaPanelState } from "@/components/strava/StravaPanel";
-import { currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@/lib/session";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { getConnection } from "@/lib/db/queries/strava";
 import { authorizeUrl, stravaConfigured } from "@/lib/strava/client";

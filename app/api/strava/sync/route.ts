@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { toDateOnly } from "@/lib/date";
 import { resolveUser } from "@/lib/db/queries/alerts";

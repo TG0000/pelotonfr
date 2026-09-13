@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSiteUrl } from "@/lib/site-url";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/session";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { saveConnection, saveFitness } from "@/lib/db/queries/strava";
 import {

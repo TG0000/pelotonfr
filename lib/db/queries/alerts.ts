@@ -76,16 +76,29 @@ const RULE_COLUMNS = `
  * it is refreshed on every call rather than captured once at signup.
  */
 export async function resolveUser(
-  clerkId: string,
+  authId: string,
   email?: string | null
 ): Promise<string> {
+  /* Les comptes ont changé de service : l'identifiant est nouveau, l'adresse
+     est la même. Une ligne qui porte cette adresse sous l'ancien identifiant
+     est la même personne — sa saison, son club, ses alertes la suivent. */
+  if (email) {
+    const moved = await sql(
+      `UPDATE users SET clerk_id = $1::varchar
+        WHERE lower(email) = lower($2::varchar) AND clerk_id <> $1::varchar
+          AND NOT EXISTS (SELECT 1 FROM users u2 WHERE u2.clerk_id = $1::varchar)
+        RETURNING id`,
+      [authId, email]
+    );
+    if (moved.length > 0) return moved[0].id as string;
+  }
   const rows = await sql(
     `INSERT INTO users (clerk_id, email)
      VALUES ($1::varchar, $2::varchar)
      ON CONFLICT (clerk_id) DO UPDATE SET
        email = COALESCE(EXCLUDED.email, users.email)
      RETURNING id`,
-    [clerkId, email ?? null]
+    [authId, email ?? null]
   );
   return rows[0].id as string;
 }

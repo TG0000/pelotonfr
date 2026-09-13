@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { auth, currentUser } from "@clerk/nextjs/server";
-import { SignInButton } from "@clerk/nextjs";
+import { auth, currentUser } from "@/lib/session";
+import { SignInButton } from "@/components/auth";
 import { Bookmark, CalendarCheck, Flag, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { resolveUser } from "@/lib/db/queries/alerts";

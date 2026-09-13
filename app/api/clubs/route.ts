@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/session";
 import { searchClubs } from "@/lib/db/queries/club";
 
 /** Les clubs qui ressemblent à ce qu'on cherche. Réservé aux personnes

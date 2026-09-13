@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { auth } from "@clerk/nextjs/server";
-import { SignInButton } from "@clerk/nextjs";
+import { auth } from "@/lib/session";
+import { SignInButton } from "@/components/auth";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AlertManager } from "@/components/alerts/AlertManager";
 import type { AlertRuleView } from "@/components/alerts/AlertManager";
-import { currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@/lib/session";
 import { resolveUser, getUserAlertRules, getRuleMatches } from "@/lib/db/queries/alerts";
 
 /**

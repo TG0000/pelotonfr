@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/nextjs";
+import { SignInButton, SignUpButton, UserButton, useAuth } from "@/components/auth";
 import { Bell, CalendarDays, Flag, Menu, UserRound, Users } from "lucide-react";
 import { Logo, Wordmark } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";

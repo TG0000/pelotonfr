@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { auth, currentUser } from "@clerk/nextjs/server";
-import { SignInButton } from "@clerk/nextjs";
+import { auth, currentUser } from "@/lib/session";
+import { SignInButton } from "@/components/auth";
 import { Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sql } from "@/lib/db";

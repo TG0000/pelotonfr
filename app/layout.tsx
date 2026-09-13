@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Archivo, IBM_Plex_Mono } from "next/font/google";
-import { ClerkProvider } from "@clerk/nextjs";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -47,7 +46,6 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
       <html
         lang="fr"
         suppressHydrationWarning
@@ -65,6 +63,5 @@ export default function RootLayout({
           <TooltipProvider>{children}</TooltipProvider>
         </body>
       </html>
-    </ClerkProvider>
   );
 }

@@ -1,6 +1,6 @@
 "use server";
 
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import {
