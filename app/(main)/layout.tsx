@@ -1,3 +1,4 @@
+import { Beacon } from "@/components/layout/Beacon";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 
@@ -16,6 +17,8 @@ export default function MainLayout({
       <Navbar />
       <main id="contenu" className="flex-1">
         {children}
+        {/* Une vue par page, sans personne dedans : le tableau de bord lit d'où le site est lu. */}
+        <Beacon />
       </main>
       <Footer />
     </>

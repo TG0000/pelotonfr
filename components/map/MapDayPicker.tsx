@@ -70,7 +70,7 @@ export function MapDayPicker({ month, selected, daysWithRaces }: DayPickerState)
           <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate">
             <span className="text-muted-foreground">Quel jour · </span>
-            <span className="font-medium capitalize">{label}</span>
+            <span className="font-medium">{label.charAt(0).toUpperCase() + label.slice(1)}</span>
           </span>
           <ChevronDown
             className={cn("ml-auto size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}

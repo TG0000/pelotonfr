@@ -19,6 +19,7 @@ import { CircuitWithWind } from "@/components/races/CircuitWithWind";
 import { FieldLevel } from "@/components/races/FieldLevel";
 import { PlanButton } from "@/components/races/PlanButton";
 import { ShareButton } from "@/components/races/ShareButton";
+import { ReportButton } from "@/components/races/ReportButton";
 import { RaceClimbs } from "@/components/races/RaceClimbs";
 import { RaceStages } from "@/components/races/RaceStages";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
@@ -138,6 +139,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
           Retour aux courses
         </Link>
         <div className="flex items-center gap-2">
+          <ReportButton raceId={race.id} />
           <PlanButton raceId={race.id} />
           <ShareButton
             raceId={race.id}
