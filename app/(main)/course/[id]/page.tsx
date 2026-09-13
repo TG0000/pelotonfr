@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowLeft, Building2, Calendar, ExternalLink, Mail,
-  MapPin, Phone, Route, Trophy,
+  MapPin, Phone, Route, Trophy, Users,
 } from "lucide-react";
 import { buttonVariants } from "@/lib/button-variants";
 import { getRaceById } from "@/lib/db/queries/races";
@@ -217,6 +217,18 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
             <span className="flex items-center gap-2">
               <Route className="size-4 shrink-0 text-primary" />
               <span className="font-mono tabular-nums">{race.distanceKm} km</span>
+            </span>
+          )}
+          {/* Le compteur de la fiche fédérale : qui y va, avant la liste. */}
+          {!isPast && race.entriesEngaged != null && race.entriesEngaged > 0 && (
+            <span className="flex items-center gap-2">
+              <Users className="size-4 shrink-0 text-primary" />
+              <span>
+                <span className="font-mono tabular-nums">{race.entriesEngaged}</span> engagé{race.entriesEngaged > 1 ? "s" : ""}
+                {race.entriesCapacity != null && race.entriesCapacity > race.entriesEngaged && (
+                  <span className="text-sm"> · {race.entriesCapacity - race.entriesEngaged} places restantes</span>
+                )}
+              </span>
             </span>
           )}
         </div>
