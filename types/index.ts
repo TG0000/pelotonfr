@@ -40,6 +40,8 @@ export interface Race {
   /** Déjà engagés, d'après « 74/150 places disponibles » sur la fiche fédérale. */
   entriesEngaged: number | null;
   entriesCapacity: number | null;
+  /** Les engagés de la liste publiée par la presse, quand elle l'est. */
+  entrantCount: number | null;
   bibPickupPlace: string | null;
   /** One lap, in metres, as the organiser announced it. */
   circuitM: number | null;

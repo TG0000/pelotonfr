@@ -56,6 +56,7 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     bibPickupTime: (row.bib_pickup_time as string) ?? null,
     startTime: (row.start_time as string) ?? null,
     entriesEngaged: row.entries_engaged != null ? Number(row.entries_engaged) : null,
+    entrantCount: row.entrant_count != null ? Number(row.entrant_count) : null,
     entriesCapacity: row.entries_capacity != null ? Number(row.entries_capacity) : null,
     bibPickupPlace: (row.bib_pickup_place as string) ?? null,
     circuitM: row.circuit_m != null ? Number(row.circuit_m) : null,
@@ -185,7 +186,9 @@ export async function getRaces(
          ST_X(r.location::geometry) AS lng,
          ST_Y(r.location::geometry) AS lat,
          ROW_NUMBER() OVER (PARTITION BY ${SIBLING_KEY} ORDER BY r.id) AS sibling_rank,
-         COUNT(*)     OVER (PARTITION BY ${SIBLING_KEY})               AS sibling_count
+         COUNT(*)     OVER (PARTITION BY ${SIBLING_KEY})               AS sibling_count,
+         -- La liste publiée par la presse : le vrai compte des engagés.
+         (SELECT count(*) FROM engagements e WHERE e.race_id = r.id)  AS entrant_count
          ${distanceSelect}
        FROM races r
        JOIN federations f ON f.id = r.federation_id
@@ -194,7 +197,9 @@ export async function getRaces(
      WHERE g.sibling_rank = 1
      ORDER BY ${distanceOrder} ${
        // « Les plus courues » : le compteur d'engagés de la fiche, les inconnues à la fin.
-       sortBy === "engages" ? "g.entries_engaged DESC NULLS LAST," : ""
+       sortBy === "engages"
+         ? "GREATEST(COALESCE(g.entrant_count, 0), COALESCE(g.entries_engaged, 0)) DESC,"
+         : ""
      } g.race_date ${sortBy === "date_desc" ? "DESC" : "ASC"}
      LIMIT ${limitParam} OFFSET ${offsetParam}`,
     pageParams
