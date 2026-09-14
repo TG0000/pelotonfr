@@ -204,6 +204,7 @@ jobs:
       # read once and stored for good; the scripts do nothing without the key.
       - name: Read posters and technical guides
         env:
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
