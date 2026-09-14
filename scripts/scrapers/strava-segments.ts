@@ -30,6 +30,7 @@ import {
 import { distancesAlong, resample } from "../../lib/polyline";
 import { groundAlongLine } from "../../lib/elevation";
 import { startRun } from "../lib/track-run";
+import { isPointToPoint } from "./utils/point-to-point";
 
 loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
@@ -279,6 +280,10 @@ async function main() {
          separates it from every climb and descent in the sector is that it
          closes: the loops that turn out to be real circuits finish within a
          handful of metres of where they start. */
+      /* Une course en ligne n'a pas de circuit : Paris-Tours a reçu un tour
+         de Longchamp parce qu'une boucle fermée passait près du départ. */
+      if (await isPointToPoint(sql, String(race.name))) continue;
+
       let circuit = findCircuits([...found.values()], {
         lat,
         lng,

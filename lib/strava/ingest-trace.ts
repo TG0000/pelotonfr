@@ -1,6 +1,7 @@
 import { getActivityStreams } from "./client";
 import { summariseTrace } from "@/lib/trace";
 import type { SqlLike } from "./types";
+import { overlapOf } from "@/lib/trace-compare";
 
 /**
  * Turns a rider's ride into the course everyone else will read.
@@ -39,6 +40,13 @@ export async function saveRideTrace(
      En dessous de quinze kilomètres, une sortie n'est pas une épreuve. */
   if (source === "strava" && trace.distanceM < 15_000) return "kept";
 
+  /* Avant de remplacer, on regarde ce qu'on remplace : une boucle déduite
+     qui ne recouvre pas la boucle roulée, c'est une détection qui s'est
+     trompée, et il faut le savoir pour la corriger. */
+  const [existing] = await sql(
+    `SELECT source, strava_segment, strava_activity, distance_m, points FROM race_traces WHERE race_id = $1::uuid`,
+    [raceId]
+  );
   const centreLng = (trace.bounds.west + trace.bounds.east) / 2;
   const centreLat = (trace.bounds.south + trace.bounds.north) / 2;
 
@@ -80,5 +88,26 @@ export async function saveRideTrace(
     ]
   );
 
+  if (rows.length > 0 && existing) {
+    const oldSource = String(existing.source);
+    const oldPts = existing.points as Array<[number, number, number, number]>;
+    const overlap = overlapOf(oldPts, trace.points);
+    const oldM = Number(existing.distance_m ?? 0);
+    const verdict =
+      oldSource === "segment" || oldSource === "guide"
+        ? overlap >= 0.7 ? "confirme" : "faux"
+        : "echauffement";
+    const reason =
+      verdict === "confirme"
+        ? `La boucle ${oldSource} recouvrait la sortie à ${Math.round(overlap * 100)} %.`
+        : verdict === "faux"
+          ? `La boucle ${oldSource} (${Math.round(oldM / 100) / 10} km) ne recouvre la sortie (${Math.round(trace.distanceM / 100) / 10} km) qu'à ${Math.round(overlap * 100)} % : mauvaise boucle reconnue.`
+          : `Une sortie de ${Math.round(oldM / 100) / 10} km remplacée par une de ${Math.round(trace.distanceM / 100) / 10} km : la première était l'échauffement.`;
+    await sql(
+      `INSERT INTO trace_checks (race_id, old_source, old_ref, old_distance_m, new_source, new_ref, new_distance_m, overlap, verdict, reason)
+       VALUES ($1::uuid, $2, $3, $4::int, $5, $6, $7::int, $8::real, $9, $10)`,
+      [raceId, oldSource, String(existing.strava_segment ?? existing.strava_activity ?? ""), Math.round(oldM), source, String(activityId), Math.round(trace.distanceM), overlap, verdict, reason]
+    ).catch(() => {});
+  }
   return rows.length > 0 ? "stored" : "kept";
 }

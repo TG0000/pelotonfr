@@ -7,6 +7,8 @@ import { getCollectorHealth } from "@/lib/db/queries/collectors";
 import { getLiveViewers, getOpenReports, getSiteKpis, type SiteKpis } from "@/lib/db/queries/reports";
 import { describeAge } from "@/lib/collectors";
 import { ReportList } from "./ReportList";
+import { TraceChecks } from "./TraceChecks";
+import { getTraceChecks, countTraceChecks } from "@/lib/db/queries/traces";
 import { LiveMap } from "@/components/ops/LiveMap";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +55,7 @@ function coverage(k: SiteKpis) {
 export default async function AdminPage() {
   if (!(await isOperator())) notFound();
 
+  const [checks, checkCounts] = await Promise.all([getTraceChecks().catch(() => []), countTraceChecks().catch(() => ({ faux: 0, confirme: 0, echauffement: 0, audit: 0, douteux: 0 }))]);
   const [kpis, live, reports, health] = await Promise.all([
     getSiteKpis(),
     getLiveViewers(30),
@@ -134,6 +137,10 @@ export default async function AdminPage() {
       </section>
 
       {/* À traiter */}
+      <section className="mb-8">
+        <TraceChecks checks={checks} counts={checkCounts} />
+      </section>
+
       <section className="mb-8 grid gap-4 lg:grid-cols-3">
         <div className="overflow-hidden rounded-xl border border-border bg-surface-1 lg:col-span-2">
           <div className="flex items-center gap-2 border-b border-border px-4 py-3">
