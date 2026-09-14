@@ -13,7 +13,7 @@ import { createSql } from "./utils/db";
 import { findRoadPictures } from "../../lib/panoramax";
 import { findMapillaryPictures, mapillaryConfigured } from "../../lib/mapillary";
 import { detectLaps } from "../../lib/trace";
-import { readRoadPicture } from "../../lib/road-vision";
+import { readRoadPicture, rankTextures } from "../../lib/road-vision";
 import { orientPicture } from "../../lib/road-picture";
 import sharp from "sharp";
 
@@ -90,8 +90,39 @@ async function main() {
       }
     }
   }
+  /* Le grain, comparé entre les photos d'un même circuit, pour toutes les
+     courses qui ont au moins deux photos lues et pas encore de grain. */
+  const rankOnly = process.argv.includes("--rank");
+  const toRank = (await sql(
+    `SELECT race_id::text AS race_id FROM road_views WHERE ok AND crop IS NOT NULL AND reading IS NOT NULL
+      GROUP BY race_id HAVING count(*) >= 2 AND count(*) FILTER (WHERE (reading->>'texture') IS NOT NULL) = 0
+      ${onlyRace ? "AND race_id = $1::uuid" : ""} LIMIT 40`,
+    onlyRace ? [onlyRace] : []
+  )) as Array<{ race_id: string }>;
+  let ranked = 0;
+  for (const r of toRank) {
+    const rows = (await sql(`SELECT picture_id, along_m, crop FROM road_views WHERE race_id = $1::uuid AND ok AND crop IS NOT NULL ORDER BY along_m`, [r.race_id])) as Array<Record<string, unknown>>;
+    const crops = rows.map((x) => {
+      const c = x.crop as string | Buffer;
+      const bytes = typeof c === "string" ? Buffer.from(c.replace(/^\\x/, ""), "hex") : Buffer.from(c);
+      return { id: String(x.picture_id), bytes: new Uint8Array(bytes) };
+    });
+    try {
+      const out = await rankTextures(crops, apiKey, MODEL);
+      if (!out) continue;
+      tokensIn += out.inputTokens; tokensOut += out.outputTokens;
+      for (const [id, t] of out.textures) {
+        await sql(`UPDATE road_views SET reading = jsonb_set(reading, '{texture}', to_jsonb($2::int)) WHERE picture_id = $1`, [id, t]);
+      }
+      ranked++;
+      console.log(`  grain : ${[...out.textures.entries()].map(([id, t]) => `${rows.find((x) => x.picture_id === id)?.along_m ?? "?"} m→${t}`).join("  ")}`);
+    } catch (err) {
+      console.error(`  grain : ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  void rankOnly;
   const cost = (tokensIn * 3 + tokensOut * 15) / 1_000_000;
-  console.log(`\n${read} photos lues sur ${seen} trouvées, environ ${cost.toFixed(2)} $. Elles ne seront plus relues.`);
+  console.log(`\n${read} photos lues sur ${seen} trouvées, ${ranked} circuit(s) classé(s) par grain, environ ${cost.toFixed(2)} $. Elles ne seront plus relues.`);
   return { seen, written: read, metadata: { tokensIn, tokensOut } };
 }
 

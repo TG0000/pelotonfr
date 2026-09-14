@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { recordPageView } from "@/lib/db/queries/reports";
+import { isOperator } from "@/lib/admin";
 
 /**
  * Une vue de page, sans personne dedans.
@@ -24,8 +25,22 @@ export async function POST(request: NextRequest) {
   const num = (v: string | null) => (v && Number.isFinite(Number(v)) ? Number(v) : null);
   const city = h.get("x-vercel-ip-city");
 
+  /* L'opérateur regarde son site cent fois par jour : ses vues sont marquées
+     et sortent des chiffres. Reconnu par sa session, et par un cookie posé la
+     première fois, pour que ses passages déconnectés sur le même navigateur
+     comptent pareil. */
+  let operator = request.cookies.get("pelotonfr.op")?.value === "1";
+  if (!operator) {
+    try {
+      operator = await isOperator();
+    } catch {
+      operator = false;
+    }
+  }
+
   try {
     await recordPageView({
+      operator,
       path,
       city: city ? decodeURIComponent(city) : null,
       region: h.get("x-vercel-ip-country-region"),
@@ -36,5 +51,7 @@ export async function POST(request: NextRequest) {
   } catch {
     // Une vue perdue ne vaut pas une erreur pour le lecteur.
   }
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  if (operator) res.cookies.set("pelotonfr.op", "1", { maxAge: 60 * 60 * 24 * 365, path: "/", sameSite: "lax" });
+  return res;
 }

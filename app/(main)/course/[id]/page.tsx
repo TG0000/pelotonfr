@@ -340,7 +340,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
           </Suspense>
         )}
 
-        {trace && <RaceRoad report={road} views={roadViews.views} seen={roadViews.seen} />}
+        {trace && <RaceRoad report={road} views={roadViews.views} seen={roadViews.seen} trace={trace} />}
 
         {/* Sans tracé, la page le dit et tend la main : le circuit d'une
             course de village n'existe qu'en segment Strava, chez ceux qui

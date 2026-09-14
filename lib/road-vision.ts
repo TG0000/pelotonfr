@@ -65,6 +65,12 @@ export interface RoadReading {
   note: string | null;
   /** Les dangers vus, pour les poser sur la carte. Vide si rien. */
   hazards: Hazard[];
+  /**
+   * Grain du revêtement de 1 (lisse) à 5 (très granuleux), jugé en
+   * comparant les photos d'un même circuit entre elles : l'œil classe mieux
+   * qu'il n'évalue dans l'absolu. Null tant que la comparaison n'a pas eu lieu.
+   */
+  texture: number | null;
   /** 0 à 1 : la photo permet-elle vraiment de juger. */
   confidence: number;
 }
@@ -134,6 +140,7 @@ export async function readRoadPicture(
       coverRight: COVERS.includes(p.coverRight as Cover) ? (p.coverRight as Cover) : null,
       widthM: typeof p.widthM === "number" && p.widthM > 0 && p.widthM < 20 ? p.widthM : null,
       note: typeof p.note === "string" && p.note.trim() ? p.note.trim() : null,
+      texture: null,
       hazards: Array.isArray(p.hazards)
         ? (p.hazards as Array<Record<string, unknown>>)
             .filter((h) => h && typeof h === "object")
@@ -259,4 +266,84 @@ export function hazardsAlong(
     for (const h of v.reading.hazards ?? []) out.push({ ...h, alongM: v.alongM });
   }
   return out.sort((a, b) => b.severity - a.severity || a.alongM - b.alongM);
+}
+
+/**
+ * Classer les photos d'un même circuit par grain du revêtement.
+ *
+ * Six photos lues une à une donnent six fois « enrobé grenu, bon » : dans
+ * l'absolu, tout enrobé de campagne se ressemble. Côte à côte, l'écart se
+ * voit — la rue du bourg du km 0,2 est plus rugueuse que la départementale
+ * du km 3,5, et un coureur qui connaît la boucle le confirme. Une requête,
+ * toutes les images, un grain de 1 à 5 pour chacune.
+ */
+export async function rankTextures(
+  crops: Array<{ id: string; bytes: Uint8Array }>,
+  apiKey = process.env.ANTHROPIC_API_KEY,
+  model = "claude-sonnet-5"
+): Promise<{ textures: Map<string, number>; inputTokens: number; outputTokens: number } | null> {
+  if (!apiKey || crops.length < 2) return null;
+  const client = new Anthropic({ apiKey });
+  const content: Anthropic.MessageParam["content"] = [];
+  crops.forEach((c, i) => {
+    content.push({ type: "text", text: `Photo ${i + 1}` });
+    content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: Buffer.from(c.bytes).toString("base64") } });
+  });
+  content.push({
+    type: "text",
+    text:
+      `Ces ${crops.length} photos sont prises sur le même circuit de course cycliste. Compare le GRAIN du revêtement de la chaussée entre elles ` +
+      `(granulosité de l'enrobé : lisse et fermé, ou ouvert avec gravillons apparents, ou enduit superficiel rugueux). Ne juge pas l'état ni la propreté, seulement le grain. ` +
+      `Réponds UNIQUEMENT par un tableau JSON, un objet par photo, dans l'ordre : [{"photo":1,"texture":3,"why":"…"}, …] avec texture de 1 (le plus lisse) à 5 (le plus granuleux). ` +
+      `Utilise toute l'échelle si les photos diffèrent ; donne la même valeur à deux photos identiques. "why" : cinq mots, en français.`,
+  });
+  const response = await client.messages.create({ model, max_tokens: 600, messages: [{ role: "user", content }] });
+  const text = response.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text).join("").trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+  const textures = new Map<string, number>();
+  try {
+    const arr = JSON.parse(text) as Array<{ photo?: number; texture?: number }>;
+    for (const it of arr) {
+      const i = Number(it.photo) - 1;
+      const t = Number(it.texture);
+      if (crops[i] && t >= 1 && t <= 5) textures.set(crops[i].id, Math.round(t));
+    }
+  } catch {
+    /* réponse illisible : pas de grain cette fois */
+  }
+  return { textures, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens };
+}
+
+/** Les portions du tour sans aucune photo : là où l'on est aveugle. */
+export function blindSpots(
+  views: Array<{ alongM: number | null }>,
+  lapM: number,
+  minGapM = 800
+): Array<{ fromM: number; toM: number }> {
+  const marks = views.map((v) => v.alongM).filter((a): a is number => a != null).sort((a, b) => a - b);
+  if (lapM <= 0) return [];
+  const out: Array<{ fromM: number; toM: number }> = [];
+  let prev = 0;
+  for (const m of [...marks, lapM]) {
+    if (m - prev >= minGapM) out.push({ fromM: prev, toM: m });
+    prev = m;
+  }
+  // Boucle : la fin et le début se touchent.
+  if (marks.length > 0 && out.length > 1 && out[0].fromM === 0 && out[out.length - 1].toM === lapM) {
+    const last = out.pop()!;
+    out[0] = { fromM: last.fromM, toM: out[0].toM };
+  }
+  return out;
+}
+
+/** Les textures d'un circuit, dites en une phrase, ou null si tout se vaut. */
+export function textureVerdict(views: Array<{ alongM: number | null; reading: RoadReading | null }>): string | null {
+  const t = views.filter((v) => v.alongM != null && v.reading?.texture != null) as Array<{ alongM: number; reading: RoadReading & { texture: number } }>;
+  if (t.length < 2) return null;
+  const max = Math.max(...t.map((v) => v.reading.texture));
+  const min = Math.min(...t.map((v) => v.reading.texture));
+  if (max - min < 2) return null;
+  const km = (m: number) => (m / 1000).toFixed(1).replace(".", ",");
+  const rough = t.filter((v) => v.reading.texture === max).map((v) => `km ${km(v.alongM)}`);
+  const smooth = t.filter((v) => v.reading.texture === min).map((v) => `km ${km(v.alongM)}`);
+  return `Le grain change : plus rugueux ${rough.join(", ")}, plus roulant ${smooth.join(", ")}.`;
 }

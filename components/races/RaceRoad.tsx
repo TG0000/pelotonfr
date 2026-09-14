@@ -3,7 +3,8 @@ import { fetchRoadFeatures, readRoad, type RoadReport } from "@/lib/road";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { SectionHeading } from "./StartList";
 import type { RoadView } from "@/lib/db/queries/road";
-import { hazardsAlong, type RoadSeen } from "@/lib/road-vision";
+import { hazardsAlong, blindSpots, textureVerdict, type RoadSeen } from "@/lib/road-vision";
+import { detectLaps } from "@/lib/trace";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,19 +27,42 @@ function km(m: number): string {
   return `${(m / 1000).toFixed(1).replace(".", ",")} km`;
 }
 
+/** Street View au point donné, sans clé ni compte : un lien vers Google Maps. */
+function streetViewLink(lat: number, lng: number, heading: number): string {
+  return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat.toFixed(6)},${lng.toFixed(6)}&heading=${heading}&pitch=0&fov=90`;
+}
+
 export function RaceRoad({
   report,
   views = [],
   seen = null,
+  trace = null,
 }: {
   report: RoadReport | null;
   views?: RoadView[];
   seen?: RoadSeen | null;
+  trace?: RaceTrace | null;
 }) {
   if (!report && views.length === 0) return null;
   const shown = report?.stretches.slice(0, 6) ?? [];
   const readable = views.filter((v) => v.reading && v.reading.surface !== "inconnu");
   const hazards = hazardsAlong(views);
+  const grain = textureVerdict(views);
+
+  /* Là où l'on est aveugle : les portions du tour sans photo, avec le point
+     du milieu et son cap, pour aller voir ailleurs. */
+  const lap = trace ? (detectLaps(trace.points).lap ?? trace.points) : null;
+  const lapM = lap ? lap[lap.length - 1][3] : 0;
+  const blind = lap && readable.length > 0 ? blindSpots(readable, lapM) : [];
+  const at = (m: number) => {
+    if (!lap) return null;
+    let i = lap.findIndex((p) => p[3] >= m);
+    if (i < 0) i = lap.length - 1;
+    const a = lap[Math.max(0, i - 2)], b = lap[Math.min(lap.length - 1, i + 2)];
+    const dLng = (b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180);
+    const heading = Math.round(((Math.atan2(dLng, b[1] - a[1]) * 180) / Math.PI + 360) % 360);
+    return { lat: lap[i][1], lng: lap[i][0], heading };
+  };
   const latestIso = readable.map((v) => v.takenOn ?? "").filter(Boolean).sort().at(-1);
   const latest = latestIso
     ? new Date(`${latestIso}T12:00:00Z`).toLocaleDateString("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" })
@@ -56,6 +80,7 @@ export function RaceRoad({
         <div className="mb-4 rounded-xl border border-border bg-surface-1 p-4">
           <p className="mb-3 text-sm">
             {seen?.verdict ?? "Revêtement vu en photo : enrobé ordinaire en bon état."}
+            {grain && <> {grain}</>}
             <span className="text-muted-foreground"> D&rsquo;après {readable.length} photo{readable.length > 1 ? "s" : ""} prise{readable.length > 1 ? "s" : ""} sur la boucle.</span>
           </p>
           {hazards.length > 0 && (
@@ -87,6 +112,7 @@ export function RaceRoad({
                   {v.reading?.surface}
                   {v.reading?.condition && v.reading.condition !== "bon" && v.reading.condition !== "inconnu" ? `, ${v.reading.condition}` : ""}
                   {v.reading?.looseGravel ? ", gravillons" : ""}
+                  {v.reading?.texture != null && <span className="text-muted-foreground"> · grain {v.reading.texture}/5</span>}
                   {v.reading?.coverLeft && v.reading?.coverRight && (v.orientation === "avant" || v.orientation === "arrière") && (
                     <div className="text-muted-foreground">
                       G {v.orientation === "arrière" ? v.reading.coverRight : v.reading.coverLeft} · D {v.orientation === "arrière" ? v.reading.coverLeft : v.reading.coverRight}
@@ -96,6 +122,27 @@ export function RaceRoad({
               </a>
             ))}
           </div>
+          {blind.length > 0 && (
+            <p className="mt-3 text-sm">
+              <span className="font-medium">Sans photo</span>
+              <span className="text-muted-foreground"> : </span>
+              {blind.map((b, i) => {
+                const mid = at((b.fromM + b.toM) / 2);
+                const label = `km ${(b.fromM / 1000).toFixed(1).replace(".", ",")} → ${(b.toM / 1000).toFixed(1).replace(".", ",")}`;
+                return (
+                  <span key={`${b.fromM}-${b.toM}`}>
+                    {i > 0 && ", "}
+                    {mid ? (
+                      <a href={streetViewLink(mid.lat, mid.lng, mid.heading)} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2" title="Ouvrir Street View à cet endroit">
+                        {label}
+                      </a>
+                    ) : label}
+                  </span>
+                );
+              })}
+              <span className="text-muted-foreground"> — personne n&rsquo;y a roulé caméra ouverte ; le lien ouvre Street View à cet endroit.</span>
+            </p>
+          )}
           <p className="mt-2 text-xs text-muted-foreground">
             Photos Panoramax, prises par des contributeurs{latest ? ` (la plus récente en ${latest})` : ""}, lues une fois par vision dans le sens de la course (G et D : ce qui borde à gauche et à droite du coureur). La route a pu être refaite depuis.
           </p>

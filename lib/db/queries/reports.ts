@@ -87,12 +87,18 @@ export async function recordPageView(v: {
   country: string | null;
   lat: number | null;
   lng: number | null;
+  operator?: boolean;
 }): Promise<void> {
   await sql(
-    `INSERT INTO page_views (path, city, region, country, lat, lng)
-     VALUES ($1, $2, $3, $4, $5::float8, $6::float8)`,
-    [v.path, v.city, v.region, v.country, v.lat, v.lng]
+    `INSERT INTO page_views (path, city, region, country, lat, lng, operator)
+     VALUES ($1, $2, $3, $4, $5::float8, $6::float8, $7::boolean)`,
+    [v.path, v.city, v.region, v.country, v.lat, v.lng, Boolean(v.operator)]
   );
+}
+
+/** Les adresses de l'opérateur, pour le sortir des comptes d'utilisateurs. */
+function operatorEmails(): string[] {
+  return (process.env.ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
 export interface LiveCity {
@@ -114,14 +120,14 @@ export async function getLiveViewers(minutes = 30): Promise<{ cities: LiveCity[]
               count(*) AS views, max(seen_at)::text AS last_seen,
               extract(epoch FROM now() - max(seen_at)) / 3600 AS age_hours
          FROM page_views
-        WHERE seen_at > now() - ($1 || ' minutes')::interval
+        WHERE seen_at > now() - ($1 || ' minutes')::interval AND NOT operator
         GROUP BY 1, 2 ORDER BY views DESC LIMIT 40`,
       [String(minutes)]
     ),
-    sql(`SELECT count(*) AS n FROM page_views WHERE seen_at > now() - ($1 || ' minutes')::interval`, [String(minutes)]),
+    sql(`SELECT count(*) AS n FROM page_views WHERE seen_at > now() - ($1 || ' minutes')::interval AND NOT operator`, [String(minutes)]),
     sql(
       `SELECT path, count(*) AS views FROM page_views
-        WHERE seen_at > now() - ($1 || ' minutes')::interval
+        WHERE seen_at > now() - ($1 || ' minutes')::interval AND NOT operator
         GROUP BY 1 ORDER BY 2 DESC LIMIT 8`,
       [String(minutes)]
     ),
@@ -174,11 +180,12 @@ export async function getSiteKpis(): Promise<SiteKpis> {
        (SELECT count(*) FROM races WHERE has_results AND race_date >= CURRENT_DATE - 7) AS results_7d,
        (SELECT count(*) FROM reports WHERE status = 'ouvert') AS reports_open,
        (SELECT count(*) FROM reports WHERE kind = 'circuit') AS reports_circuit,
-       (SELECT count(*) FROM page_views WHERE seen_at > now() - interval '24 hours') AS views_24h,
-       (SELECT count(*) FROM page_views WHERE seen_at > now() - interval '7 days') AS views_7d,
-       (SELECT count(*) FROM users) AS users,
-       (SELECT count(*) FROM user_favorites) AS favourites`,
-    []
+       (SELECT count(*) FROM page_views WHERE seen_at > now() - interval '24 hours' AND NOT operator) AS views_24h,
+       (SELECT count(*) FROM page_views WHERE seen_at > now() - interval '7 days' AND NOT operator) AS views_7d,
+       (SELECT count(*) FROM users u WHERE NOT (lower(u.email) = ANY($1::text[]) OR u.alias_emails && $1::text[])) AS users,
+       (SELECT count(*) FROM user_favorites f JOIN users u ON u.id = f.user_id
+         WHERE NOT (lower(u.email) = ANY($1::text[]) OR u.alias_emails && $1::text[])) AS favourites`,
+    [operatorEmails()]
   )) as Array<Record<string, unknown>>;
   const n = (k: string) => Number(r?.[k] ?? 0);
   return {

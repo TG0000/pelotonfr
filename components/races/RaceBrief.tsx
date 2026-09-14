@@ -11,7 +11,8 @@ import {
 } from "@/lib/db/queries/race-detail";
 import type { Race } from "@/types";
 import type { RoadReport } from "@/lib/road";
-import { windShelter, type RoadSeen } from "@/lib/road-vision";
+import { windShelter, blindSpots, textureVerdict, type RoadSeen } from "@/lib/road-vision";
+import { detectLaps } from "@/lib/trace";
 import type { RoadView } from "@/lib/db/queries/road";
 import { SectionHeading } from "./StartList";
 
@@ -77,6 +78,14 @@ export async function RaceBrief({
       weather && weather.windVerdict !== "calme" && views.length > 0
         ? windShelter(views, weather.atStart.windDirectionDeg).verdict
         : null,
+    grain: textureVerdict(views),
+    blind: (() => {
+      if (!trace || views.length === 0) return [];
+      const lap = detectLaps(trace.points).lap ?? trace.points;
+      return blindSpots(views.filter((v) => v.reading), lap[lap.length - 1][3]).map(
+        (b) => `${(b.fromM / 1000).toFixed(1).replace(".", ",")} → ${(b.toM / 1000).toFixed(1).replace(".", ",")}`
+      );
+    })(),
     now: new Date(),
   });
 

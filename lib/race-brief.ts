@@ -49,6 +49,10 @@ export interface BriefInput {
   seen: RoadSeen | null;
   /** Le vent posé sur les bas-côtés vus en photo, ou null. */
   shelter: string | null;
+  /** Le grain du revêtement comparé entre photos, ou null. */
+  grain: string | null;
+  /** Les portions sans photo, en km : « 1,2 → 3,4 ». */
+  blind: string[];
   /** Aujourd'hui, ISO local, pour la clôture. */
   now: Date;
 }
@@ -195,7 +199,9 @@ export function composeBrief(input: BriefInput): Brief {
     lines.push(input.seen.verdict);
     sources++;
   }
+  if (input.grain) lines.push(input.grain);
   if (input.shelter) lines.push(input.shelter);
+  if (input.blind.length > 0) lines.push(`Aucune photo entre les km ${input.blind.join(" et ")} : on n'y voit rien de la route.`);
 
   const onCourse = input.climbs.filter((c) => c.onCourse);
   // Une « bosse » de 300 m à 3 % ne décide rien ; on ne la nomme pas.
