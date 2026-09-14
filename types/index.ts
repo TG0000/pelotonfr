@@ -49,6 +49,8 @@ export interface Race {
   forecast: { windKmh: number; gustKmh: number | null; windFromDeg: number | null; rainPct: number | null; tempC: number | null } | null;
   /** Membres du club du lecteur qui y vont — connu seulement pour un membre. */
   clubGoing: number | null;
+  /** Les classés de l'édition précédente, quand on l'a retrouvée. */
+  previousFinishers: number | null;
   bibPickupPlace: string | null;
   /** One lap, in metres, as the organiser announced it. */
   circuitM: number | null;

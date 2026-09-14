@@ -38,13 +38,19 @@ function townFrom(name: string): string | null {
 
 async function main() {
   const dry = process.argv.includes("--dry-run");
+  /* --past : les courses passées aussi. La reprise de l'historique ne connaît
+     que le département ; 7 730 courses courues portent « Lieu à préciser »,
+     et 6 200 ont leur commune en tête de nom. Sans commune, une édition ne
+     retrouve pas la suivante l'année d'après. */
+  const past = process.argv.includes("--past");
 
   const rows = (await sql(
     `SELECT id::text, name, department_code
        FROM races
-      WHERE city ILIKE '%préciser%' AND race_date >= CURRENT_DATE - 30
-      ORDER BY race_date`,
-    []
+      WHERE city ILIKE '%préciser%'
+        AND ($1::boolean OR race_date >= CURRENT_DATE - 30)
+      ORDER BY race_date DESC`,
+    [past]
   )) as Array<{ id: string; name: string; department_code: string | null }>;
 
   console.log(`${rows.length} courses « lieu à préciser ».`);

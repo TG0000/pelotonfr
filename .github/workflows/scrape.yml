@@ -60,6 +60,8 @@ jobs:
         run: |
           npm run db:place
           npm run db:retype-cyclos
+          # Each race meets its previous edition: same village, same week, same discipline.
+          npm run db:link-editions
         continue-on-error: true
 
       # The calendar only serves the future, so races that have just taken place
@@ -75,7 +77,11 @@ jobs:
         if: ${{ !inputs.federation || inputs.federation == 'ffc' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npm run scrape:results -- --limit=400
+        run: |
+          npm run scrape:results -- --limit=400
+          # A classification often appears days after the race: a page read
+          # once and found empty is read again for a fortnight.
+          npm run scrape:results -- --force --max-age=14 --limit=300
 
       # Only the running season is refreshed daily; closed seasons never change,
       # and back-filling them is a one-off (npm run scrape:rankings -- --seasons=…).

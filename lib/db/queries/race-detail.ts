@@ -100,12 +100,19 @@ export async function getPastEditions(
   limit = 6
 ): Promise<PastEdition[]> {
   const rows = (await sql(
-    `WITH me AS (SELECT event_id, race_date FROM races WHERE id = $1::uuid)
+    `WITH RECURSIVE me AS (SELECT event_id, race_date FROM races WHERE id = $1::uuid),
+     -- L'édition d'avant, et celle d'avant encore : la chaîne que le
+     -- rapprochement par commune et semaine a posée.
+     chain AS (
+       SELECT previous_race_id AS id FROM races WHERE id = $1::uuid AND previous_race_id IS NOT NULL
+       UNION
+       SELECT r.previous_race_id FROM races r JOIN chain ON r.id = chain.id WHERE r.previous_race_id IS NOT NULL
+     )
      SELECT r.id, r.name, r.race_date::text AS race_date, r.season,
             (SELECT count(*)::int FROM race_results rr WHERE rr.race_id = r.id) AS starters,
             w.last_name, w.first_name, w.uci_id, w.club_name
        FROM races r
-       JOIN me ON me.event_id = r.event_id
+       JOIN me ON (me.event_id = r.event_id AND r.event_id IS NOT NULL) OR r.id IN (SELECT id FROM chain)
        LEFT JOIN LATERAL (
          SELECT ri.last_name, ri.first_name, ri.uci_id,
                 COALESCE(c.name, rr.club_name_raw) AS club_name
@@ -116,7 +123,6 @@ export async function getPastEditions(
           LIMIT 1
        ) w ON true
       WHERE r.id <> $1::uuid
-        AND r.event_id IS NOT NULL
         AND r.race_date < me.race_date
       ORDER BY r.race_date DESC
       LIMIT $2::int`,
@@ -303,11 +309,16 @@ export interface FieldLevel {
  */
 export async function getFieldLevel(raceId: string): Promise<FieldLevel | null> {
   const rows = (await sql(
-    `WITH me AS (SELECT event_id, race_date FROM races WHERE id = $1::uuid),
+    `WITH RECURSIVE me AS (SELECT event_id, race_date FROM races WHERE id = $1::uuid),
+     chain AS (
+       SELECT previous_race_id AS id FROM races WHERE id = $1::uuid AND previous_race_id IS NOT NULL
+       UNION
+       SELECT r.previous_race_id FROM races r JOIN chain ON r.id = chain.id WHERE r.previous_race_id IS NOT NULL
+     ),
      past AS (
        SELECT r.id
-         FROM races r JOIN me ON r.event_id = me.event_id
-        WHERE r.race_date <= me.race_date AND r.event_id IS NOT NULL
+         FROM races r JOIN me ON (r.event_id = me.event_id AND r.event_id IS NOT NULL) OR r.id IN (SELECT id FROM chain)
+        WHERE r.race_date <= me.race_date
      ),
      per_edition AS (
        SELECT rr.race_id, count(*)::int AS classified

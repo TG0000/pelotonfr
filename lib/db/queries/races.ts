@@ -70,6 +70,7 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
           }
         : null,
     clubGoing: row.club_going != null ? Number(row.club_going) : null,
+    previousFinishers: row.previous_finishers != null ? Number(row.previous_finishers) : null,
     entriesCapacity: row.entries_capacity != null ? Number(row.entries_capacity) : null,
     bibPickupPlace: (row.bib_pickup_place as string) ?? null,
     circuitM: row.circuit_m != null ? Number(row.circuit_m) : null,
@@ -213,12 +214,14 @@ export async function getRaces(
          (SELECT count(*) FROM engagements e WHERE e.race_id = r.id)  AS entrant_count,
          fc.wind_kmh AS forecast_wind_kmh, fc.gust_kmh AS forecast_gust_kmh,
          fc.wind_from_deg AS forecast_wind_from_deg, fc.rain_pct AS forecast_rain_pct,
-         fc.temp_c AS forecast_temp_c
+         fc.temp_c AS forecast_temp_c,
+         pv.finisher_count AS previous_finishers
          ${clubSelect}
          ${distanceSelect}
        FROM races r
        JOIN federations f ON f.id = r.federation_id
        LEFT JOIN race_forecast fc ON fc.race_id = r.id AND fc.for_date = r.race_date
+       LEFT JOIN races pv ON pv.id = r.previous_race_id
        WHERE ${whereClause}
      ) g
      WHERE g.sibling_rank = 1
