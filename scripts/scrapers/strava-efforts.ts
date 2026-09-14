@@ -45,10 +45,24 @@ async function main() {
 
     try {
       const found = await getActivityEffortSegments(token, Number(ride.activity_id));
+      // Tout segment traversé entre dans l'index, bosse ou pas : un circuit
+      // de course est plat une fois sur deux.
+      if (found.length > 0) {
+        await sql(
+          `INSERT INTO strava_segments (id, name, distance_m, average_grade, elevation_m, climb_category, start)
+           SELECT d.id, d.name, d.distance_m, d.average_grade, d.elevation_m, d.climb_category,
+                  CASE WHEN d.start_lat <> 0 THEN ST_MakePoint(d.start_lng, d.start_lat)::geography END
+             FROM UNNEST($1::bigint[], $2::text[], $3::numeric[], $4::numeric[], $5::numeric[], $6::smallint[], $7::float8[], $8::float8[])
+               AS d(id, name, distance_m, average_grade, elevation_m, climb_category, start_lat, start_lng)
+           ON CONFLICT (id) DO UPDATE SET crossings = strava_segments.crossings + 1, seen_at = now()`,
+          [found.map((c) => c.id), found.map((c) => c.name.slice(0, 160)), found.map((c) => c.distanceM), found.map((c) => c.averageGrade),
+           found.map((c) => c.elevationM), found.map((c) => c.climbCategory), found.map((c) => c.startLat), found.map((c) => c.startLng)]
+        );
+      }
       // Une bosse est une bosse : les portions plates et les descentes ne
       // disent rien de ce que la course va coûter.
       const climbs = found.filter((s) => s.averageGrade >= 3 && s.distanceM >= 200);
-      if (climbs.length > 0) {
+      if (climbs.length > 0 && ride.race_id) {
         await sql(
           `INSERT INTO race_segments
              (race_id, segment_id, name, distance_m, average_grade, elevation_m, climb_category, start_lat, start_lng)
@@ -70,7 +84,7 @@ async function main() {
       }
       await sql(`UPDATE strava_activities SET efforts_read_at = now() WHERE id = $1::uuid`, [ride.id]);
       written++;
-      console.log(`  ${ride.race_name.slice(0, 44).padEnd(46)} ${climbs.length} bosse${climbs.length > 1 ? "s" : ""} sur ${found.length} segments`);
+      console.log(`  ${ride.race_name.slice(0, 44).padEnd(46)} ${found.length} segments${ride.race_id ? `, ${climbs.length} bosse${climbs.length > 1 ? "s" : ""} sur la course` : ""}`);
     } catch (err) {
       if (err instanceof StravaAuthError || err instanceof StravaRateLimitError) {
         console.log(`\n${err.message} Arrêt.`);

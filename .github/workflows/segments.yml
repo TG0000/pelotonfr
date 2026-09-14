@@ -47,7 +47,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
-        run: npm run scrape:efforts -- --limit=80
+        run: npm run scrape:efforts -- --limit=250
         continue-on-error: true
 
       - name: Read the climbs around upcoming races
@@ -55,4 +55,4 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
-        run: npm run scrape:segments -- --limit=300 --reads=${{ inputs.reads || '900' }}
+        run: npm run scrape:segments:index -- --limit=300 --reads=${{ inputs.reads || '600' }}

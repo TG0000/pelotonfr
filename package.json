@@ -33,6 +33,7 @@
     "db:place": "tsx scripts/db/place-from-name.ts",
     "db:retype-cyclos": "tsx scripts/db/retype-cyclos.ts",
     "scrape:meteo": "tsx scripts/scrapers/forecast.ts",
+    "scrape:segments:index": "tsx scripts/scrapers/segment-circuits.ts",
     "scrape:efforts": "tsx scripts/scrapers/strava-efforts.ts",
     "db:link-editions": "tsx scripts/db/link-editions.ts"
   },
