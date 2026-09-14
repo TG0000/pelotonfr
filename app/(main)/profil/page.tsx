@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/session";
 import { SignInButton } from "@/components/auth";
 import { UserRound } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { StravaPanel } from "@/components/strava/StravaPanel";
 import type { StravaPanelState } from "@/components/strava/StravaPanel";
 import { currentUser } from "@/lib/session";
@@ -87,9 +86,7 @@ export default async function ProfilPage({ searchParams }: PageProps) {
           <StravaInvite />
           <div className="text-center py-6 border rounded-xl bg-card">
             <p className="font-medium mb-1">Ou connectez-vous par e-mail</p>
-            <SignInButton mode="modal">
-              <Button variant="outline">Se connecter</Button>
-            </SignInButton>
+            <SignInButton size="default" variant="outline">Se connecter</SignInButton>
           </div>
         </div>
       )}

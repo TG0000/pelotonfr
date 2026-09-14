@@ -3,7 +3,6 @@ import Link from "next/link";
 import { auth, currentUser } from "@/lib/session";
 import { SignInButton } from "@/components/auth";
 import { Bookmark, CalendarCheck, Flag, TrendingUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { getMySeason, type MySeason } from "@/lib/db/queries/my-season";
 import { RiderClaim } from "@/components/me/RiderClaim";
@@ -120,9 +119,7 @@ export default async function MaSaisonPage() {
           <p className="mb-4 text-sm text-muted-foreground">
             Le calendrier reste consultable sans compte.
           </p>
-          <SignInButton mode="modal">
-            <Button variant="outline">Se connecter</Button>
-          </SignInButton>
+          <SignInButton size="default" variant="outline">Se connecter</SignInButton>
         </div>
       </div>
     );

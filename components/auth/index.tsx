@@ -115,29 +115,47 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
   );
 }
 
-function SignInDialog({ children, title }: { children: React.ReactNode; title: string }) {
+type TriggerStyle = {
+  variant?: VariantProps<typeof buttonVariants>["variant"];
+  size?: VariantProps<typeof buttonVariants>["size"];
+  className?: string;
+};
+
+function SignInDialog({
+  children,
+  title,
+  variant,
+  size = "sm",
+  className,
+}: { children: React.ReactNode; title: string } & TriggerStyle) {
   /* Le déclencheur est rendu ici, en bouton natif habillé comme `Button`.
-     Recevoir un `<Button>` tout fait et le confier à Base UI par `render`
-     marchait dans le navigateur mais pas au rendu serveur : depuis une page
-     serveur, l'élément arrive comme référence, Base UI l'emboîte dans son
-     propre bouton, et l'hydratation refait tout — bouton vide un instant,
-     erreur en console sur chaque page. On ne garde de l'élément reçu que
-     son libellé, sa variante et sa taille. */
+     Confier un `<Button>` tout fait à Base UI par `render` marchait dans le
+     navigateur mais pas au rendu serveur : depuis une page serveur,
+     l'élément arrive comme référence, Base UI l'emboîte dans son propre
+     bouton, et l'hydratation refait tout — bouton vide un instant, erreur
+     en console sur chaque page. Une page serveur passe donc le libellé et
+     la variante en props ; un composant client peut encore passer un
+     élément, dont on ne garde que le libellé et les classes. */
   const el = React.isValidElement(children)
-    ? (children as React.ReactElement<{
-        children?: React.ReactNode;
-        variant?: VariantProps<typeof buttonVariants>["variant"];
-        size?: VariantProps<typeof buttonVariants>["size"];
-        className?: string;
-      }>)
+    ? (children as React.ReactElement<{ children?: React.ReactNode } & TriggerStyle>)
     : null;
   const label = el ? el.props.children : children;
-  const variant = el?.props.variant;
-  const size = el?.props.size ?? "sm";
-  const className = el?.props.className;
+  /* Un bouton natif reçu tel quel garde tous ses attributs (titre, aria). */
+  const native = el && typeof el.type === "string" ? (el.props as Record<string, unknown>) : null;
+  const { children: _omit, ...nativeProps } = native ?? {};
+  void _omit;
+  const classes = native
+    ? (native.className as string | undefined)
+    : cn(
+        buttonVariants({
+          variant: el?.props.variant ?? variant,
+          size: el?.props.size ?? size,
+          className: el?.props.className ?? className,
+        })
+      );
   return (
     <Dialog>
-      <DialogTrigger className={cn(buttonVariants({ variant, size, className }))}>
+      <DialogTrigger {...nativeProps} className={classes}>
         {label}
       </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
@@ -151,12 +169,18 @@ function SignInDialog({ children, title }: { children: React.ReactNode; title: s
   );
 }
 
-export function SignInButton({ children }: { children: React.ReactNode; mode?: string }) {
-  return <SignInDialog title="Se connecter">{children}</SignInDialog>;
+export function SignInButton({
+  children,
+  ...style
+}: { children: React.ReactNode; mode?: string } & TriggerStyle) {
+  return <SignInDialog title="Se connecter" {...style}>{children}</SignInDialog>;
 }
 
-export function SignUpButton({ children }: { children: React.ReactNode; mode?: string }) {
-  return <SignInDialog title="Créer un compte">{children}</SignInDialog>;
+export function SignUpButton({
+  children,
+  ...style
+}: { children: React.ReactNode; mode?: string } & TriggerStyle) {
+  return <SignInDialog title="Créer un compte" {...style}>{children}</SignInDialog>;
 }
 
 export function UserButton() {
