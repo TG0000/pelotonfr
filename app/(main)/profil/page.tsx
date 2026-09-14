@@ -56,7 +56,10 @@ export default async function ProfilPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const status = typeof params.strava === "string" ? params.strava : undefined;
   const stravaState = userId ? await loadStravaState(userId) : null;
-  const season = userId ? await getRiderSeason(userId).catch(() => null) : null;
+  const canonical = userId
+    ? await resolveUser(userId, (await currentUser())?.primaryEmailAddress?.emailAddress ?? null)
+    : null;
+  const season = canonical ? await getRiderSeason(canonical).catch(() => null) : null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 w-full">

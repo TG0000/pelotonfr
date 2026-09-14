@@ -40,6 +40,18 @@ export function rememberFilters(serialised: string): void {
   document.cookie = serialised
     ? `${FILTERS_COOKIE}=${encodeURIComponent(serialised)}; Max-Age=${FILTERS_MAX_AGE}; Path=/; SameSite=Lax`
     : `${FILTERS_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+  // Et au compte, pour la retrouver sur l'autre appareil. Sans compte, le
+  // serveur répond 401 et rien ne se passe ; sans réseau, le cookie suffit.
+  try {
+    void fetch("/api/me/filters", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ filters: serialised }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* rien */
+  }
 }
 
 /**

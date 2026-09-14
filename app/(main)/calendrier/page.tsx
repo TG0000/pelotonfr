@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { FILTERS_COOKIE, REMEMBERED_KEYS } from "@/lib/filters-memory";
+import { getUserFilters } from "@/lib/db/queries/filters";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, SearchX } from "lucide-react";
@@ -84,8 +85,21 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
      Sans filtre dans l'adresse et avec un cookie, on va droit au calendrier
      filtré : pas de page vide qui se remplit après coup, et aucun compte
      nécessaire. « Effacer » supprime le cookie, donc plus de renvoi. */
-  const remembered = (await cookies()).get(FILTERS_COOKIE)?.value;
+  let remembered = (await cookies()).get(FILTERS_COOKIE)?.value;
   const hasFilters = REMEMBERED_KEYS.some((key) => params[key] !== undefined);
+  /* Pas de cookie ici, mais un compte : la recherche retenue sur l'autre
+     appareil. Une seule lecture, et le renvoi fait écrire le cookie. */
+  if (!remembered && !hasFilters) {
+    try {
+      const user = await getAuthUser();
+      if (user) {
+        const id = await resolveUser(user.id, user.email);
+        remembered = (await getUserFilters(id)) ?? undefined;
+      }
+    } catch {
+      /* sans base, le calendrier se rend sans mémoire */
+    }
+  }
   if (remembered && !hasFilters) {
     const merged = new URLSearchParams(decodeURIComponent(remembered));
     if ([...merged.keys()].length > 0) {

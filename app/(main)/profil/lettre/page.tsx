@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { auth } from "@/lib/session";
+import { getAuthUser } from "@/lib/session";
+import { resolveUser } from "@/lib/db/queries/alerts";
 import { getRiderSeason } from "@/lib/db/queries/points";
 import { assess, downgradeLetter, isLadderCategory } from "@/lib/category-rules";
 import { CopyLetter } from "@/components/profil/CopyLetter";
@@ -15,7 +16,8 @@ export const metadata: Metadata = { title: "Lettre de demande de descente" };
  * la demande passe par le club ou par le formulaire du comité, selon la région.
  */
 export default async function LettrePage() {
-  const { userId } = await auth();
+  const user = await getAuthUser();
+  const userId = user ? await resolveUser(user.id, user.email) : null;
   const season = userId ? await getRiderSeason(userId) : null;
 
   let body: string | null = null;
