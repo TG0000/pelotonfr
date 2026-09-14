@@ -141,7 +141,7 @@ export function RaceCard({
           {/* Faute d'engagés connus, ce que l'édition d'avant a rassemblé. */}
           {!race.entrantCount && !race.entriesEngaged && race.previousFinishers != null && race.previousFinishers > 0 && (
             <span className="shrink-0 rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground" title="Classés de l'édition précédente">
-              l'an dernier : {race.previousFinishers}
+              l&apos;an dernier : {race.previousFinishers}
             </span>
           )}
           {/* La liste publiée d'abord ; à défaut, le compteur de la fiche. */}
