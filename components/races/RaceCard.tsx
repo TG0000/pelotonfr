@@ -102,6 +102,26 @@ export function RaceCard({
             categories={race.categories}
             highlight={myCategories}
           />
+          {/* La date que personne ne voit à temps : la clôture des engagements,
+              quand elle tombe dans la semaine. Déduite, elle est marquée. */}
+          {(() => {
+            if (!race.entriesCloseAt || now === null) return null;
+            const hours = (new Date(race.entriesCloseAt).getTime() - now) / 3_600_000;
+            if (hours < 0 || hours > 24 * 7) return null;
+            const days = Math.floor(hours / 24);
+            const label = hours < 24 ? `clôture ${hours < 1 ? "imminente" : `dans ${Math.floor(hours)} h`}` : `clôture dans ${days} j`;
+            return (
+              <span
+                className={cn(
+                  "shrink-0 rounded px-1.5 py-0.5 font-mono text-[11px] tabular-nums",
+                  hours < 48 ? "bg-destructive/15 text-destructive" : "bg-ufolep/15 text-ufolep"
+                )}
+                title={race.entriesCloseSource === "fiche" ? "Clôture lue sur la fiche de l'organisateur" : "Clôture déduite de l'usage — à vérifier"}
+              >
+                {label}{race.entriesCloseSource !== "fiche" ? " ?" : ""}
+              </span>
+            );
+          })()}
           {/* La liste publiée d'abord ; à défaut, le compteur de la fiche. */}
           {(() => {
             const n = race.entrantCount || race.entriesEngaged || 0;

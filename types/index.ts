@@ -42,6 +42,9 @@ export interface Race {
   entriesCapacity: number | null;
   /** Les engagés de la liste publiée par la presse, quand elle l'est. */
   entrantCount: number | null;
+  /** Clôture des engagements, ISO ; `entriesCloseSource` dit si elle est lue ou déduite. */
+  entriesCloseAt: string | null;
+  entriesCloseSource: string | null;
   bibPickupPlace: string | null;
   /** One lap, in metres, as the organiser announced it. */
   circuitM: number | null;

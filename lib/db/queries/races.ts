@@ -57,6 +57,8 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     startTime: (row.start_time as string) ?? null,
     entriesEngaged: row.entries_engaged != null ? Number(row.entries_engaged) : null,
     entrantCount: row.entrant_count != null ? Number(row.entrant_count) : null,
+    entriesCloseAt: row.entries_close_at ? new Date(row.entries_close_at as string).toISOString() : null,
+    entriesCloseSource: (row.entries_close_source as string) ?? null,
     entriesCapacity: row.entries_capacity != null ? Number(row.entries_capacity) : null,
     bibPickupPlace: (row.bib_pickup_place as string) ?? null,
     circuitM: row.circuit_m != null ? Number(row.circuit_m) : null,
