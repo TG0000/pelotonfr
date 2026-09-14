@@ -294,19 +294,22 @@ export async function rankTextures(
     text:
       `Ces ${crops.length} photos sont prises sur le même circuit de course cycliste. Compare le GRAIN du revêtement de la chaussée entre elles ` +
       `(granulosité de l'enrobé : lisse et fermé, ou ouvert avec gravillons apparents, ou enduit superficiel rugueux). Ne juge pas l'état ni la propreté, seulement le grain. ` +
-      `Réponds UNIQUEMENT par un tableau JSON, un objet par photo, dans l'ordre : [{"photo":1,"texture":3,"why":"…"}, …] avec texture de 1 (le plus lisse) à 5 (le plus granuleux). ` +
-      `Utilise toute l'échelle si les photos diffèrent ; donne la même valeur à deux photos identiques. "why" : cinq mots, en français.`,
+      `Réponds UNIQUEMENT par un tableau JSON, un objet par photo, dans l'ordre : [{"photo":1,"visible":true,"texture":3,"why":"…"}, …] avec texture de 1 (le plus lisse) à 5 (le plus granuleux). ` +
+      `"visible" : true seulement si le grain de la chaussée est réellement discernable sur la photo (chaussée proche, nette, bien éclairée) ; false si la route n'est qu'une surface grise floue, et alors texture null. ` +
+      `Utilise toute l'échelle si les photos diffèrent ; donne la même valeur à deux photos identiques. Ne devine pas : une photo de dashcam en basse définition ne montre pas le grain. "why" : cinq mots, en français.`,
   });
   const response = await client.messages.create({ model, max_tokens: 600, messages: [{ role: "user", content }] });
   const text = response.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text).join("").trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
   const textures = new Map<string, number>();
   try {
-    const arr = JSON.parse(text) as Array<{ photo?: number; texture?: number }>;
+    const arr = JSON.parse(text) as Array<{ photo?: number; visible?: boolean; texture?: number | null }>;
     for (const it of arr) {
       const i = Number(it.photo) - 1;
       const t = Number(it.texture);
-      if (crops[i] && t >= 1 && t <= 5) textures.set(crops[i].id, Math.round(t));
+      if (crops[i] && it.visible !== false && t >= 1 && t <= 5) textures.set(crops[i].id, Math.round(t));
     }
+    // Un grain seul ne se compare à rien.
+    if (textures.size < 2) textures.clear();
   } catch {
     /* réponse illisible : pas de grain cette fois */
   }
@@ -335,9 +338,17 @@ export function blindSpots(
   return out;
 }
 
+/** La date avant laquelle une photo ne dit plus rien de la route d'aujourd'hui. */
+export function recentCutoff(now = new Date()): string {
+  return new Date(now.getTime() - 5 * 365 * 86_400_000).toISOString().slice(0, 10);
+}
+
 /** Les textures d'un circuit, dites en une phrase, ou null si tout se vaut. */
-export function textureVerdict(views: Array<{ alongM: number | null; reading: RoadReading | null }>): string | null {
-  const t = views.filter((v) => v.alongM != null && v.reading?.texture != null) as Array<{ alongM: number; reading: RoadReading & { texture: number } }>;
+export function textureVerdict(views: Array<{ alongM: number | null; takenOn?: string | null; reading: RoadReading | null }>): string | null {
+  /* Un grain lu sur une dashcam de 2016 ne dit rien de la route de 2026 : on
+     ne compare que des photos de moins de cinq ans, sinon on se tait. */
+  const cutoff = recentCutoff();
+  const t = views.filter((v) => v.alongM != null && v.reading?.texture != null && (!v.takenOn || v.takenOn >= cutoff)) as Array<{ alongM: number; reading: RoadReading & { texture: number } }>;
   if (t.length < 2) return null;
   const max = Math.max(...t.map((v) => v.reading.texture));
   const min = Math.min(...t.map((v) => v.reading.texture));

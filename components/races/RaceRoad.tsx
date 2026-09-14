@@ -3,7 +3,7 @@ import { fetchRoadFeatures, readRoad, type RoadReport } from "@/lib/road";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { SectionHeading } from "./StartList";
 import type { RoadView } from "@/lib/db/queries/road";
-import { hazardsAlong, blindSpots, textureVerdict, type RoadSeen } from "@/lib/road-vision";
+import { hazardsAlong, blindSpots, textureVerdict, recentCutoff, type RoadSeen } from "@/lib/road-vision";
 import { detectLaps } from "@/lib/trace";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +48,8 @@ export function RaceRoad({
   const readable = views.filter((v) => v.reading && v.reading.surface !== "inconnu");
   const hazards = hazardsAlong(views);
   const grain = textureVerdict(views);
+  // Composant serveur : la date est lue une fois au rendu, pas à chaque ligne.
+  const cutoff = recentCutoff();
 
   /* Là où l'on est aveugle : les portions du tour sans photo, avec le point
      du milieu et son cap, pour aller voir ailleurs. */
@@ -112,7 +114,9 @@ export function RaceRoad({
                   {v.reading?.surface}
                   {v.reading?.condition && v.reading.condition !== "bon" && v.reading.condition !== "inconnu" ? `, ${v.reading.condition}` : ""}
                   {v.reading?.looseGravel ? ", gravillons" : ""}
-                  {v.reading?.texture != null && <span className="text-muted-foreground"> · grain {v.reading.texture}/5</span>}
+                  {v.reading?.texture != null && (v.takenOn ?? "") >= cutoff && (
+                    <span className="text-muted-foreground"> · grain {v.reading.texture}/5</span>
+                  )}
                   {v.reading?.coverLeft && v.reading?.coverRight && (v.orientation === "avant" || v.orientation === "arrière") && (
                     <div className="text-muted-foreground">
                       G {v.orientation === "arrière" ? v.reading.coverRight : v.reading.coverLeft} · D {v.orientation === "arrière" ? v.reading.coverLeft : v.reading.coverRight}
