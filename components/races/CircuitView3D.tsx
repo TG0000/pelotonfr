@@ -52,12 +52,28 @@ function gradientHex(pct: number): string {
   return "#d95347";
 }
 
+export interface RoadPhotoMarker {
+  id: string;
+  lng: number;
+  lat: number;
+  alongM: number;
+  /** L'image à montrer au clic : le recadrage vers l'avant. */
+  imageUrl: string;
+  /** « enrobé grenu, bon · G haie haute / D ouvert ». */
+  label: string;
+  note: string | null;
+  /** Le pire danger vu ici : 0 rien, 1 à savoir, 2 à anticiper, 3 ça fait tomber. */
+  severity: 0 | 1 | 2 | 3;
+  hazards: string[];
+}
+
 export function CircuitView3D({
   points,
   cursor,
   windFromDeg,
   windKmh,
   className,
+  photos = [],
 }: {
   points: Array<[number, number, number, number]>;
   /** Which point the profile is being read at, so the course can show where. */
@@ -65,6 +81,8 @@ export function CircuitView3D({
   windFromDeg: number | null;
   windKmh: number | null;
   className?: string;
+  /** Les photos lues sur la boucle, et les dangers qu'elles montrent. */
+  photos?: RoadPhotoMarker[];
 }) {
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -463,6 +481,72 @@ export function CircuitView3D({
       | undefined;
     source?.setData(windArrows);
   }, [windArrows]);
+
+  /* Les photos, posées là où elles ont été prises. Un point par photo, plus
+     gros et rouge quand elle montre un danger ; au clic, le recadrage et ce
+     que la vision en a dit. La source est ajoutée quand le style est prêt,
+     et poussée à chaque changement. */
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const data: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: photos.map((p) => ({
+        type: "Feature",
+        properties: { id: p.id, severity: p.severity, label: p.label, note: p.note ?? "", image: p.imageUrl, km: (p.alongM / 1000).toFixed(1).replace(".", ","), hazards: p.hazards.join(", ") },
+        geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+      })),
+    };
+    const install = () => {
+      if (m.getSource("photos")) {
+        (m.getSource("photos") as maplibregl.GeoJSONSource).setData(data);
+        return;
+      }
+      m.addSource("photos", { type: "geojson", data });
+      m.addLayer({
+        id: "photos-halo",
+        type: "circle",
+        source: "photos",
+        paint: {
+          "circle-radius": ["case", [">=", ["get", "severity"], 2], 11, 8],
+          "circle-color": ["case", [">=", ["get", "severity"], 2], "#d6402b", "#f2c94c"],
+          "circle-opacity": 0.35,
+        },
+      });
+      m.addLayer({
+        id: "photos-dot",
+        type: "circle",
+        source: "photos",
+        paint: {
+          "circle-radius": ["case", [">=", ["get", "severity"], 2], 6, 4.5],
+          "circle-color": ["case", [">=", ["get", "severity"], 2], "#d6402b", "#f2c94c"],
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 1.5,
+        },
+      });
+      m.on("mouseenter", "photos-dot", () => { m.getCanvas().style.cursor = "pointer"; });
+      m.on("mouseleave", "photos-dot", () => { m.getCanvas().style.cursor = ""; });
+      m.on("click", "photos-dot", (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const pr = f.properties as Record<string, string | number>;
+        const esc = (v: unknown) => String(v ?? "").replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
+        const html =
+          `<div style="width:260px;font:12px/1.4 system-ui,sans-serif;color:#111">` +
+          `<img src="${esc(pr.image)}" alt="" style="width:100%;border-radius:6px;display:block;margin-bottom:6px">` +
+          `<div><b>km ${esc(pr.km)}</b> · ${esc(pr.label)}</div>` +
+          (pr.hazards ? `<div style="color:#b3261e;font-weight:600;margin-top:2px">⚠ ${esc(pr.hazards)}</div>` : "") +
+          (pr.note ? `<div style="color:#555;margin-top:2px">${esc(pr.note)}</div>` : "") +
+          `</div>`;
+        new maplibregl.Popup({ maxWidth: "300px", closeButton: true })
+          .setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number])
+          .setHTML(html)
+          .addTo(m);
+      });
+    };
+    if (m.isStyleLoaded()) install();
+    else m.once("style.load", install);
+  }, [photos]);
 
   useEffect(() => {
     const m = map.current;

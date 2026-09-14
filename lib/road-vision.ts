@@ -32,6 +32,19 @@ export function shelters(c: Cover | null | undefined): boolean | null {
   return c !== "ouvert" && c !== "haie basse";
 }
 
+/** Un danger vu sur la photo, à l'endroit de la photo. */
+export type HazardKind =
+  | "virage serré" | "dévers" | "glissière" | "ralentisseur" | "îlot" | "rond-point"
+  | "chaussée rétrécie" | "gravillons" | "nid-de-poule" | "pavés" | "rails" | "plaque"
+  | "passage à niveau" | "traversée" | "descente rapide" | "autre";
+export const HAZARD_KINDS: HazardKind[] = ["virage serré", "dévers", "glissière", "ralentisseur", "îlot", "rond-point", "chaussée rétrécie", "gravillons", "nid-de-poule", "pavés", "rails", "plaque", "passage à niveau", "traversée", "descente rapide", "autre"];
+export interface Hazard {
+  kind: HazardKind;
+  /** 1 : à savoir, 2 : à anticiper, 3 : ça fait tomber. */
+  severity: 1 | 2 | 3;
+  note: string | null;
+}
+
 export interface RoadReading {
   surface: Surface;
   condition: Condition;
@@ -50,6 +63,8 @@ export interface RoadReading {
   coverRight: Cover | null;
   /** Ce qu'un coureur retiendrait, une phrase. */
   note: string | null;
+  /** Les dangers vus, pour les poser sur la carte. Vide si rien. */
+  hazards: Hazard[];
   /** 0 à 1 : la photo permet-elle vraiment de juger. */
   confidence: number;
 }
@@ -66,11 +81,13 @@ const SYSTEM = `Tu regardes une photo prise depuis la route (dashcam, téléphon
   coverRight   la même chose À DROITE de l'image
   widthM       largeur estimée de la chaussée en mètres (nombre) ou null
   note         une phrase courte, en français, que retiendrait un coureur, ou null
+  hazards      tableau, vide si rien, d'objets {kind, severity, note} : kind parmi "virage serré", "dévers", "glissière", "ralentisseur", "îlot", "rond-point", "chaussée rétrécie", "gravillons", "nid-de-poule", "pavés", "rails", "plaque", "passage à niveau", "traversée", "descente rapide", "autre" ; severity 1 (à savoir), 2 (à anticiper en peloton), 3 (ça fait tomber) ; note courte ou null
   confidence   nombre entre 0 et 1
 
 Règles :
 - "enduit gravillonné" = enduit superficiel à gravillons apparents (aspect rugueux, clair, granuleux), fréquent sur les petites routes de campagne ; "enrobé grenu" = enrobé bitumineux classique un peu rugueux ; "enrobé lisse" = enrobé récent, sombre et uni.
 - Si la route est trop loin, floue, mouillée au point de ne rien voir, ou de nuit : surface "inconnu", confidence basse. Ne devine pas.
+- Un danger n'est signalé que s'il est visible sur la chaussée ou à son bord immédiat, devant : un îlot au loin compte, une voiture garée ne compte pas, la circulation ne compte pas. Un peloton à 45 km/h dans un virage serré sur gravillons, c'est severity 3.
 - Pour coverLeft/coverRight, juge sur les cinquante premiers mètres devant la caméra, pas à l'horizon : un champ derrière une haie haute, c'est "haie haute".
 - Ne parle que de la chaussée visible et de ses bords, pas du paysage.`;
 
@@ -117,6 +134,16 @@ export async function readRoadPicture(
       coverRight: COVERS.includes(p.coverRight as Cover) ? (p.coverRight as Cover) : null,
       widthM: typeof p.widthM === "number" && p.widthM > 0 && p.widthM < 20 ? p.widthM : null,
       note: typeof p.note === "string" && p.note.trim() ? p.note.trim() : null,
+      hazards: Array.isArray(p.hazards)
+        ? (p.hazards as Array<Record<string, unknown>>)
+            .filter((h) => h && typeof h === "object")
+            .map((h) => ({
+              kind: HAZARD_KINDS.includes(h.kind as HazardKind) ? (h.kind as HazardKind) : ("autre" as HazardKind),
+              severity: (h.severity === 3 ? 3 : h.severity === 2 ? 2 : 1) as 1 | 2 | 3,
+              note: typeof h.note === "string" && h.note.trim() ? h.note.trim() : null,
+            }))
+            .slice(0, 4)
+        : [],
       confidence: typeof p.confidence === "number" ? Math.max(0, Math.min(1, p.confidence)) : 0,
     };
     return { reading, ...cost };
@@ -149,6 +176,7 @@ export function summarise(readings: RoadReading[]): RoadSeen | null {
   for (const r of usable) if (order.indexOf(r.condition) > order.indexOf(worst)) worst = r.condition;
   const gravelSpots = usable.filter((r) => r.looseGravel).length;
   const potholeSpots = usable.filter((r) => r.potholes).length;
+  const severe = usable.flatMap((r) => r.hazards ?? []).filter((h) => h.severity >= 2);
 
   const parts: string[] = [];
   if (surface === "enduit gravillonné") parts.push("enduit gravillonné : ça roule mal et ça glisse en virage");
@@ -159,8 +187,9 @@ export function summarise(readings: RoadReading[]): RoadSeen | null {
   if (worst === "dégradé") parts.push("par endroits dégradé");
   if (gravelSpots > 0) parts.push(`gravillons vus sur ${gravelSpots} photo${gravelSpots > 1 ? "s" : ""}`);
   if (potholeSpots > 0) parts.push(`nids-de-poule sur ${potholeSpots}`);
+  if (severe.length > 0) parts.push(`${severe.length} danger${severe.length > 1 ? "s" : ""} à anticiper (${[...new Set(severe.map((h) => h.kind))].join(", ")})`);
   const verdict =
-    surface === "enrobé grenu" && worst === "bon" && gravelSpots === 0 && potholeSpots === 0
+    surface === "enrobé grenu" && worst === "bon" && gravelSpots === 0 && potholeSpots === 0 && severe.length === 0
       ? null
       : `Revêtement vu en photo : ${parts.join(", ")}.`;
   return { pictures: usable.length, surface, worst, gravelSpots, potholeSpots, verdict };
@@ -218,4 +247,16 @@ export function windShelter(
     spots,
     verdict: `Bordure possible ${where} : vent de travers ${side === "des deux côtés" ? side : `par la ${side}`}, bas-côté ouvert de ce côté. Sois placé devant avant.`,
   };
+}
+
+/** Les dangers de toutes les photos, placés au kilomètre, les pires d'abord. */
+export function hazardsAlong(
+  views: Array<{ alongM: number | null; reading: RoadReading | null }>
+): Array<Hazard & { alongM: number }> {
+  const out: Array<Hazard & { alongM: number }> = [];
+  for (const v of views) {
+    if (v.alongM == null || !v.reading) continue;
+    for (const h of v.reading.hazards ?? []) out.push({ ...h, alongM: v.alongM });
+  }
+  return out.sort((a, b) => b.severity - a.severity || a.alongM - b.alongM);
 }

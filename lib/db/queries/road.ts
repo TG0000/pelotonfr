@@ -5,6 +5,8 @@ import { summarise, type RoadReading, type RoadSeen } from "@/lib/road-vision";
 export interface RoadView {
   pictureId: string;
   alongM: number | null;
+  lat: number;
+  lng: number;
   takenOn: string | null;
   url: string;
   producer: string | null;
@@ -18,13 +20,15 @@ export interface RoadView {
 /** Les photos lues sur le tracé d'une course, et ce qu'elles disent ensemble. */
 export async function getRoadViews(raceId: string): Promise<{ views: RoadView[]; seen: RoadSeen | null }> {
   const rows = await sql(
-    `SELECT picture_id, along_m, taken_on, url, producer, reading, bearing, orientation, (crop IS NOT NULL) AS has_crop
+    `SELECT picture_id, along_m, taken_on, url, producer, reading, bearing, orientation, (crop IS NOT NULL) AS has_crop, lat, lng
        FROM road_views WHERE race_id = $1::uuid AND ok ORDER BY along_m`,
     [raceId]
   );
   const views = rows.map((r) => ({
     pictureId: r.picture_id as string,
     alongM: r.along_m != null ? Number(r.along_m) : null,
+    lat: Number(r.lat ?? 0),
+    lng: Number(r.lng ?? 0),
     takenOn: r.taken_on ? toDateOnly(r.taken_on as string | Date) : null,
     url: r.url as string,
     producer: (r.producer as string) ?? null,

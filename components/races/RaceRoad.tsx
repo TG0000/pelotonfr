@@ -3,7 +3,7 @@ import { fetchRoadFeatures, readRoad, type RoadReport } from "@/lib/road";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { SectionHeading } from "./StartList";
 import type { RoadView } from "@/lib/db/queries/road";
-import type { RoadSeen } from "@/lib/road-vision";
+import { hazardsAlong, type RoadSeen } from "@/lib/road-vision";
 import { cn } from "@/lib/utils";
 
 /**
@@ -38,6 +38,7 @@ export function RaceRoad({
   if (!report && views.length === 0) return null;
   const shown = report?.stretches.slice(0, 6) ?? [];
   const readable = views.filter((v) => v.reading && v.reading.surface !== "inconnu");
+  const hazards = hazardsAlong(views);
   const latestIso = readable.map((v) => v.takenOn ?? "").filter(Boolean).sort().at(-1);
   const latest = latestIso
     ? new Date(`${latestIso}T12:00:00Z`).toLocaleDateString("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" })
@@ -57,6 +58,18 @@ export function RaceRoad({
             {seen?.verdict ?? "Revêtement vu en photo : enrobé ordinaire en bon état."}
             <span className="text-muted-foreground"> D&rsquo;après {readable.length} photo{readable.length > 1 ? "s" : ""} prise{readable.length > 1 ? "s" : ""} sur la boucle.</span>
           </p>
+          {hazards.length > 0 && (
+            <ul className="mb-3 flex flex-col gap-1 text-sm">
+              {hazards.map((h, i) => (
+                <li key={`${h.alongM}-${h.kind}-${i}`} className="flex items-baseline gap-2">
+                  <span className={cn("mt-1 size-2 shrink-0 rounded-full", h.severity >= 3 ? "bg-destructive" : h.severity === 2 ? "bg-accent" : "bg-muted-foreground")} aria-hidden />
+                  <span className="font-mono text-xs tabular-nums text-muted-foreground">km {(h.alongM / 1000).toFixed(1).replace(".", ",")}</span>
+                  <span className="font-medium">{h.kind}</span>
+                  {h.note && <span className="text-muted-foreground">{h.note}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="flex gap-2 overflow-x-auto pb-1">
             {readable.map((v) => (
               <a

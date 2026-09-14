@@ -48,7 +48,7 @@ async function main() {
       WHERE t.race_id IS NULL AND r.location IS NOT NULL AND r.discipline = 'route'
         AND r.race_date >= CURRENT_DATE AND r.race_date <= CURRENT_DATE + 120
         AND EXISTS (SELECT 1 FROM strava_segments s WHERE s.distance_m BETWEEN 1500 AND 30000
-                      AND ST_DWithin(s.start, r.location, 3000))
+                      AND ST_DWithin(s.start, r.location, 6000))
       ORDER BY r.race_date
       LIMIT $1::int`,
     [limit]
@@ -60,7 +60,7 @@ async function main() {
     if (await isPointToPoint(sql, String(race.name))) continue;
     const candidates = (await sql(
       `SELECT id, name, polyline, distance_m FROM strava_segments
-        WHERE distance_m BETWEEN 1500 AND 30000 AND ST_DWithin(start, ST_MakePoint($1::float8, $2::float8)::geography, 3000)
+        WHERE distance_m BETWEEN 1500 AND 30000 AND ST_DWithin(start, ST_MakePoint($1::float8, $2::float8)::geography, 6000)
         ORDER BY crossings DESC, distance_m DESC LIMIT 40`,
       [race.lng, race.lat]
     )) as Array<Record<string, unknown>>;

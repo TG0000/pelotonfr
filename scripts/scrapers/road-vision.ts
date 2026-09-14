@@ -11,6 +11,8 @@
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "./utils/db";
 import { findRoadPictures } from "../../lib/panoramax";
+import { findMapillaryPictures, mapillaryConfigured } from "../../lib/mapillary";
+import { detectLaps } from "../../lib/trace";
 import { readRoadPicture } from "../../lib/road-vision";
 import { orientPicture } from "../../lib/road-picture";
 import sharp from "sharp";
@@ -51,7 +53,15 @@ async function main() {
     if (read >= limit) break;
     const [{ n }] = (await sql(`SELECT count(*) AS n FROM road_views WHERE race_id = $1::uuid`, [race.race_id])) as Array<{ n: string }>;
     if (Number(n) >= PER_RACE) continue;
-    const pics = await findRoadPictures(race.points as Array<[number, number, number, number]>, PER_RACE);
+    const track = race.points as Array<[number, number, number, number]>;
+    let pics = await findRoadPictures(track, PER_RACE);
+    // Panoramax d'abord ; Mapillary quand il n'y a presque rien (Louvigné : une photo).
+    if (pics.length < 3 && mapillaryConfigured()) {
+      const lap = detectLaps(track).lap ?? track;
+      const lngs = lap.map((p) => p[0]); const lats = lap.map((p) => p[1]);
+      const more = await findMapillaryPictures(lap, { west: Math.min(...lngs), south: Math.min(...lats), east: Math.max(...lngs), north: Math.max(...lats) }, PER_RACE - pics.length);
+      pics = [...pics, ...more];
+    }
     seen += pics.length;
     for (const p of pics) {
       if (read >= limit) break;
@@ -68,10 +78,10 @@ async function main() {
         if (!out) throw new Error("pas de lecture");
         tokensIn += out.inputTokens; tokensOut += out.outputTokens; read++;
         await sql(
-          `INSERT INTO road_views (picture_id, race_id, along_m, taken_on, url, producer, ok, reading, model, input_tokens, output_tokens, bearing, orientation, crop)
-           VALUES ($1, $2::uuid, $3::int, $4::date, $5, $6, $7::boolean, $8::jsonb, $9, $10::int, $11::int, $12::smallint, $13, $14::bytea)
+          `INSERT INTO road_views (picture_id, race_id, along_m, taken_on, url, producer, ok, reading, model, input_tokens, output_tokens, bearing, orientation, crop, lat, lng)
+           VALUES ($1, $2::uuid, $3::int, $4::date, $5, $6, $7::boolean, $8::jsonb, $9, $10::int, $11::int, $12::smallint, $13, $14::bytea, $15::float8, $16::float8)
            ON CONFLICT (picture_id) DO NOTHING`,
-          [p.id, race.race_id, Math.round(p.alongM), p.takenOn || null, p.url, p.producer, out.reading !== null, out.reading ? JSON.stringify(out.reading) : null, MODEL, out.inputTokens, out.outputTokens, p.bearing, orientation, await shrink(bytes)]
+          [p.id, race.race_id, Math.round(p.alongM), p.takenOn || null, p.url, p.producer, out.reading !== null, out.reading ? JSON.stringify(out.reading) : null, MODEL, out.inputTokens, out.outputTokens, p.bearing, orientation, await shrink(bytes), p.lat, p.lng]
         );
         const r = out.reading;
         console.log(`  ${String(race.name).slice(0, 28).padEnd(30)} km ${(p.alongM / 1000).toFixed(1)}  ${orientation} ${r ? `${r.surface}, ${r.condition}${r.looseGravel ? ", gravillons" : ""} · G ${r.coverLeft ?? "?"} / D ${r.coverRight ?? "?"}${r.note ? ` — ${r.note}` : ""}` : "illisible"}`);

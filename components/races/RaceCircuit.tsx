@@ -6,6 +6,7 @@ import { Download, Route } from "lucide-react";
 import { ElevationProfile } from "./ElevationProfile";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { detectLaps } from "@/lib/trace";
+import type { RoadPhotoMarker } from "./CircuitView3D";
 import { useNearViewport } from "@/components/common/useNearViewport";
 
 /* The relief view when the ground has been read, the flat map otherwise. Both
@@ -59,12 +60,14 @@ export function RaceCircuit({
   raceId,
   windFromDeg,
   windKmh,
+  photos = [],
 }: {
   trace: RaceTrace;
   raceId: string;
   /** Where the wind comes from on the day, when the forecast reaches. */
   windFromDeg?: number | null;
   windKmh?: number | null;
+  photos?: RoadPhotoMarker[];
 }) {
   const [cursor, setCursor] = useState<number | null>(null);
   const [whole, setWhole] = useState(false);
@@ -132,6 +135,7 @@ export function RaceCircuit({
               windFromDeg={windFromDeg ?? null}
               windKmh={windKmh ?? null}
               className="h-full w-full"
+              photos={photos}
             />
           ) : (
             <div className="h-full w-full bg-surface-2" />

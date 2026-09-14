@@ -335,6 +335,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
               lng={race.lng}
               date={race.raceDate}
               timing={timing}
+              views={roadViews.views}
             />
           </Suspense>
         )}
