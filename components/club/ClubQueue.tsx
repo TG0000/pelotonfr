@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Check, CheckCircle2, Clock, RotateCcw, Users } from "lucide-react";
+import { Check, CheckCircle2, Clock, Copy, RotateCcw, Users } from "lucide-react";
 import type { QueuedRace } from "@/lib/db/queries/club";
 import { annulerEngage, marquerEngage } from "@/app/(main)/club/actions";
 import { displayRaceName } from "@/lib/race-name";
@@ -24,6 +24,32 @@ export function ClubQueue({
 }) {
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState<Record<string, string>>({});
+  const [copied, setCopied] = useState(false);
+
+  /* Le tableur partagé du club sert surtout à être collé dans le groupe
+     WhatsApp le mardi soir. Voilà ce collage, sans le tableur. */
+  async function copyForWhatsApp() {
+    const line = (r: QueuedRace) => {
+      const day = new Date(`${r.raceDate}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+      const who = r.riders.map((x) => x.name).join(", ") || "personne";
+      const close = r.hoursLeft == null ? "" : r.hoursLeft < 0 ? " · clôturé" : r.hoursLeft < 24 ? ` · ferme dans ${Math.round(r.hoursLeft)} h` : ` · ferme dans ${Math.round(r.hoursLeft / 24)} j`;
+      return `${r.handled ? "✅" : "🕒"} ${day} — ${displayRaceName(r.name)}${r.city ? ` (${r.city})` : ""}${r.handled ? "" : close}\n   ${who}`;
+    };
+    const text = [
+      "Engagements du club",
+      ...races.filter((r) => !r.handled).map(line),
+      ...(races.some((r) => r.handled) ? ["", "Déjà engagés", ...races.filter((r) => r.handled).map(line)] : []),
+      "",
+      "Pour être de la liste : passe la course en « programmée » sur pelotonfr.vercel.app",
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* refus du navigateur : rien à copier, le bouton reste muet */
+    }
+  }
 
   const waiting = races.filter((r) => !r.handled);
   const done = races.filter((r) => r.handled);
@@ -40,6 +66,15 @@ export function ClubQueue({
 
   return (
     <div className="flex flex-col gap-8">
+      <button
+        type="button"
+        onClick={copyForWhatsApp}
+        className="inline-flex items-center gap-1.5 self-start rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+      >
+        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        {copied ? "Copié, colle-le dans le groupe" : "Copier pour WhatsApp"}
+      </button>
+
       {waiting.length > 0 && (
         <section>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
