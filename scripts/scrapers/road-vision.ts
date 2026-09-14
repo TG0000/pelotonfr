@@ -12,6 +12,7 @@ import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "./utils/db";
 import { findRoadPictures } from "../../lib/panoramax";
 import { readRoadPicture } from "../../lib/road-vision";
+import { orientPicture } from "../../lib/road-picture";
 import { startRun } from "../lib/track-run";
 
 loadEnv();
@@ -53,18 +54,21 @@ async function main() {
       try {
         const res = await fetch(p.url, { signal: AbortSignal.timeout(30_000) });
         if (!res.ok) throw new Error(`image ${res.status}`);
-        const bytes = new Uint8Array(await res.arrayBuffer());
+        const raw = new Uint8Array(await res.arrayBuffer());
+        // Une sphérique est recadrée dans le sens de la course avant lecture :
+        // la gauche de l'image devient la gauche du coureur.
+        const { bytes, orientation } = await orientPicture(raw, p);
         const out = await readRoadPicture(bytes, apiKey, MODEL);
         if (!out) throw new Error("pas de lecture");
         tokensIn += out.inputTokens; tokensOut += out.outputTokens; read++;
         await sql(
-          `INSERT INTO road_views (picture_id, race_id, along_m, taken_on, url, producer, ok, reading, model, input_tokens, output_tokens)
-           VALUES ($1, $2::uuid, $3::int, $4::date, $5, $6, $7::boolean, $8::jsonb, $9, $10::int, $11::int)
+          `INSERT INTO road_views (picture_id, race_id, along_m, taken_on, url, producer, ok, reading, model, input_tokens, output_tokens, bearing, orientation)
+           VALUES ($1, $2::uuid, $3::int, $4::date, $5, $6, $7::boolean, $8::jsonb, $9, $10::int, $11::int, $12::smallint, $13)
            ON CONFLICT (picture_id) DO NOTHING`,
-          [p.id, race.race_id, Math.round(p.alongM), p.takenOn || null, p.url, p.producer, out.reading !== null, out.reading ? JSON.stringify(out.reading) : null, MODEL, out.inputTokens, out.outputTokens]
+          [p.id, race.race_id, Math.round(p.alongM), p.takenOn || null, p.url, p.producer, out.reading !== null, out.reading ? JSON.stringify(out.reading) : null, MODEL, out.inputTokens, out.outputTokens, p.bearing, orientation]
         );
         const r = out.reading;
-        console.log(`  ${String(race.name).slice(0, 28).padEnd(30)} km ${(p.alongM / 1000).toFixed(1)}  ${r ? `${r.surface}, ${r.condition}${r.looseGravel ? ", gravillons" : ""}${r.note ? ` — ${r.note}` : ""}` : "illisible"}`);
+        console.log(`  ${String(race.name).slice(0, 28).padEnd(30)} km ${(p.alongM / 1000).toFixed(1)}  ${orientation} ${r ? `${r.surface}, ${r.condition}${r.looseGravel ? ", gravillons" : ""} · G ${r.coverLeft ?? "?"} / D ${r.coverRight ?? "?"}${r.note ? ` — ${r.note}` : ""}` : "illisible"}`);
       } catch (err) {
         console.error(`  ${String(race.name).slice(0, 28)} : ${err instanceof Error ? err.message : String(err)}`);
       }

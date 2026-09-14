@@ -11,7 +11,8 @@ import {
 } from "@/lib/db/queries/race-detail";
 import type { Race } from "@/types";
 import type { RoadReport } from "@/lib/road";
-import type { RoadSeen } from "@/lib/road-vision";
+import { windShelter, type RoadSeen } from "@/lib/road-vision";
+import type { RoadView } from "@/lib/db/queries/road";
 import { SectionHeading } from "./StartList";
 
 /**
@@ -29,6 +30,7 @@ export async function RaceBrief({
   daysLeft,
   road,
   seen,
+  views,
 }: {
   race: Race;
   trace: RaceTrace | null;
@@ -36,6 +38,7 @@ export async function RaceBrief({
   daysLeft: number;
   road: RoadReport | null;
   seen: RoadSeen | null;
+  views: RoadView[];
 }) {
   const offRoad = groundMatters(race.discipline);
   const [climbs, field, past, weather, ground] = await Promise.all([
@@ -70,6 +73,10 @@ export async function RaceBrief({
     ground,
     road,
     seen,
+    shelter:
+      weather && weather.windVerdict !== "calme" && views.length > 0
+        ? windShelter(views, weather.atStart.windDirectionDeg).verdict
+        : null,
     now: new Date(),
   });
 

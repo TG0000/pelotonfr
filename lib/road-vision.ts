@@ -23,6 +23,15 @@ export type Surface =
 
 export type Condition = "bon" | "moyen" | "dégradé" | "inconnu";
 
+/** Ce qui borde la route d'un côté, vu dans le sens de la course. */
+export type Cover = "ouvert" | "haie basse" | "haie haute" | "arbres" | "bâti" | "talus" | "inconnu";
+export const COVERS: Cover[] = ["ouvert", "haie basse", "haie haute", "arbres", "bâti", "talus", "inconnu"];
+/** Ce qui abrite vraiment d'un vent de travers. */
+export function shelters(c: Cover | null | undefined): boolean | null {
+  if (!c || c === "inconnu") return null;
+  return c !== "ouvert" && c !== "haie basse";
+}
+
 export interface RoadReading {
   surface: Surface;
   condition: Condition;
@@ -36,6 +45,9 @@ export interface RoadReading {
   shoulders: string | null;
   /** Largeur estimée en mètres, ou null. */
   widthM: number | null;
+  /** Bas-côté gauche et droit, dans le sens de la course. */
+  coverLeft: Cover | null;
+  coverRight: Cover | null;
   /** Ce qu'un coureur retiendrait, une phrase. */
   note: string | null;
   /** 0 à 1 : la photo permet-elle vraiment de juger. */
@@ -50,6 +62,8 @@ const SYSTEM = `Tu regardes une photo prise depuis la route (dashcam, téléphon
   potholes     true si nids-de-poule, fissures larges ou affaissements visibles
   markings     true si un marquage au sol (axe ou rive) est visible
   shoulders    "propres", "herbe", "terre", "gravier", ou null si invisible
+  coverLeft    ce qui borde la route À GAUCHE de l'image : "ouvert" (champ, vue dégagée), "haie basse" (sous 1,5 m), "haie haute", "arbres", "bâti" (maisons, murs), "talus", ou "inconnu"
+  coverRight   la même chose À DROITE de l'image
   widthM       largeur estimée de la chaussée en mètres (nombre) ou null
   note         une phrase courte, en français, que retiendrait un coureur, ou null
   confidence   nombre entre 0 et 1
@@ -57,7 +71,8 @@ const SYSTEM = `Tu regardes une photo prise depuis la route (dashcam, téléphon
 Règles :
 - "enduit gravillonné" = enduit superficiel à gravillons apparents (aspect rugueux, clair, granuleux), fréquent sur les petites routes de campagne ; "enrobé grenu" = enrobé bitumineux classique un peu rugueux ; "enrobé lisse" = enrobé récent, sombre et uni.
 - Si la route est trop loin, floue, mouillée au point de ne rien voir, ou de nuit : surface "inconnu", confidence basse. Ne devine pas.
-- Ne parle que de la chaussée visible, pas du paysage.`;
+- Pour coverLeft/coverRight, juge sur les cinquante premiers mètres devant la caméra, pas à l'horizon : un champ derrière une haie haute, c'est "haie haute".
+- Ne parle que de la chaussée visible et de ses bords, pas du paysage.`;
 
 export async function readRoadPicture(
   imageBytes: Uint8Array,
@@ -98,6 +113,8 @@ export async function readRoadPicture(
       potholes: p.potholes === true,
       markings: p.markings === true,
       shoulders: typeof p.shoulders === "string" ? p.shoulders : null,
+      coverLeft: COVERS.includes(p.coverLeft as Cover) ? (p.coverLeft as Cover) : null,
+      coverRight: COVERS.includes(p.coverRight as Cover) ? (p.coverRight as Cover) : null,
       widthM: typeof p.widthM === "number" && p.widthM > 0 && p.widthM < 20 ? p.widthM : null,
       note: typeof p.note === "string" && p.note.trim() ? p.note.trim() : null,
       confidence: typeof p.confidence === "number" ? Math.max(0, Math.min(1, p.confidence)) : 0,
@@ -147,4 +164,58 @@ export function summarise(readings: RoadReading[]): RoadSeen | null {
       ? null
       : `Revêtement vu en photo : ${parts.join(", ")}.`;
   return { pictures: usable.length, surface, worst, gravelSpots, potholeSpots, verdict };
+}
+
+/**
+ * Le vent posé sur les bas-côtés.
+ *
+ * Un vent de trois quarts ne casse un peloton que là où rien ne l'arrête :
+ * champ ouvert du côté d'où il vient. Pour chaque photo on sait le sens de la
+ * course et ce qui borde la route de chaque côté ; le vent dit de quel côté il
+ * frappe. Une photo qui regardait en arrière a ses côtés inversés, une photo
+ * de travers ne compte pas.
+ */
+export interface ShelterSpot {
+  alongM: number;
+  /** "gauche" ou "droite" : d'où le vent frappe, pour le coureur. */
+  side: "gauche" | "droite";
+  /** Force du travers, 0 (face ou dos) à 1 (plein travers). */
+  cross: number;
+  cover: Cover;
+  exposed: boolean;
+}
+
+export function windShelter(
+  views: Array<{ alongM: number | null; bearing: number | null; orientation: string | null; reading: RoadReading | null }>,
+  windFromDeg: number
+): { spots: ShelterSpot[]; verdict: string | null } {
+  const spots: ShelterSpot[] = [];
+  for (const v of views) {
+    if (v.alongM == null || v.bearing == null || !v.reading) continue;
+    if (v.orientation !== "avant" && v.orientation !== "arrière") continue;
+    let left = v.reading.coverLeft;
+    let right = v.reading.coverRight;
+    if (v.orientation === "arrière") [left, right] = [right, left];
+    const rel = ((windFromDeg - v.bearing) % 360 + 540) % 360 - 180; // ]-180,180]
+    const cross = Math.abs(Math.sin((rel * Math.PI) / 180));
+    if (cross < 0.5) continue; // vent de face ou de dos : les bas-côtés ne comptent pas
+    const side: "gauche" | "droite" = rel > 0 ? "droite" : "gauche";
+    const cover = side === "droite" ? right : left;
+    const sh = shelters(cover);
+    if (sh == null || !cover) continue;
+    spots.push({ alongM: v.alongM, side, cross, cover, exposed: !sh });
+  }
+  if (spots.length === 0) return { spots, verdict: null };
+  const exposed = spots.filter((s) => s.exposed);
+  const km = (m: number) => (m / 1000).toFixed(1).replace(".", ",");
+  if (exposed.length === 0) {
+    return { spots, verdict: `Vent de travers, mais les bas-côtés abritent là où on a vu la route (${spots.map((s) => `km ${km(s.alongM)} : ${s.cover}`).join(", ")}).` };
+  }
+  const sides = new Set(exposed.map((s) => s.side));
+  const where = exposed.map((s) => `km ${km(s.alongM)}`).join(", ");
+  const side = sides.size === 1 ? [...sides][0] : "des deux côtés";
+  return {
+    spots,
+    verdict: `Bordure possible ${where} : vent de travers ${side === "des deux côtés" ? side : `par la ${side}`}, bas-côté ouvert de ce côté. Sois placé devant avant.`,
+  };
 }

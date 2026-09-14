@@ -47,6 +47,8 @@ export interface BriefInput {
   road: RoadReport | null;
   /** Le revêtement lu sur les photos Panoramax, quand il y en a. */
   seen: RoadSeen | null;
+  /** Le vent posé sur les bas-côtés vus en photo, ou null. */
+  shelter: string | null;
   /** Aujourd'hui, ISO local, pour la clôture. */
   now: Date;
 }
@@ -193,6 +195,7 @@ export function composeBrief(input: BriefInput): Brief {
     lines.push(input.seen.verdict);
     sources++;
   }
+  if (input.shelter) lines.push(input.shelter);
 
   const onCourse = input.climbs.filter((c) => c.onCourse);
   // Une « bosse » de 300 m à 3 % ne décide rien ; on ne la nomme pas.

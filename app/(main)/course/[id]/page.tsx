@@ -279,7 +279,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
 
       {!isPast && !race.isCancelled && (
         <Suspense fallback={null}>
-          <RaceBrief race={race} trace={trace} timing={timing} daysLeft={daysLeft} road={road} seen={roadViews.seen} />
+          <RaceBrief race={race} trace={trace} timing={timing} daysLeft={daysLeft} road={road} seen={roadViews.seen} views={roadViews.views} />
         </Suspense>
       )}
 

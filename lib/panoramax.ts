@@ -25,6 +25,21 @@ export interface RoadPicture {
   /** Image en définition « sd », suffisante pour lire la route. */
   url: string;
   producer: string | null;
+  /** Cap de la photo (0 = nord), tel que Panoramax le donne. */
+  azimuth: number | null;
+  /** 360 pour une caméra sphérique, sinon l'angle de champ ou null. */
+  fov: number | null;
+  /** Sens de la course à cet endroit du tracé, en degrés depuis le nord. */
+  bearing: number;
+}
+
+/** Cap du tracé autour d'un point, en degrés depuis le nord, sens de la course. */
+function bearingAt(points: Array<[number, number, number, number]>, idx: number): number {
+  const a = points[Math.max(0, idx - 2)];
+  const b = points[Math.min(points.length - 1, idx + 2)];
+  const dLng = (b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180);
+  const deg = (Math.atan2(dLng, b[1] - a[1]) * 180) / Math.PI;
+  return (deg + 360) % 360;
 }
 
 interface Feature {
@@ -89,12 +104,25 @@ export async function findRoadPictures(
     const [lng, lat] = f.geometry.coordinates;
     let bestD = ON_TRACE_M;
     let along = -1;
-    for (const p of points) {
+    let idx = -1;
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
       if (Math.abs(p[1] - lat) > 0.0003 || Math.abs(p[0] - lng) > 0.0004) continue;
       const d = metresBetween([lat, lng], [p[1], p[0]]);
-      if (d < bestD) { bestD = d; along = p[3]; }
+      if (d < bestD) { bestD = d; along = p[3]; idx = i; }
     }
     if (along < 0) continue;
+    const io = f.properties["pers:interior_orientation"] as { field_of_view?: number } | undefined;
+    const az = f.properties["view:azimuth"];
+    // La voiture doit rouler sur la route de la course, pas la croiser : à
+    // vingt mètres d'un carrefour, une photo prise sur la route perpendiculaire
+    // montre une haie et rien de la chaussée qu'on cherche. Le cap de la photo
+    // et celui du tracé doivent s'accorder, à 35° près, dans un sens ou l'autre.
+    const bearing = bearingAt(points, idx);
+    if (typeof az === "number") {
+      const x = (((az - bearing) % 180) + 180) % 180;
+      if (Math.min(x, 180 - x) > 35) continue;
+    }
     const url = f.assets?.sd?.href ?? f.assets?.hd?.href;
     if (!url) continue;
     candidates.push({
@@ -105,6 +133,9 @@ export async function findRoadPictures(
       takenOn: String(f.properties.datetime ?? "").slice(0, 10),
       url,
       producer: (f.properties["geovisio:producer"] as string) ?? null,
+      azimuth: typeof az === "number" ? az : null,
+      fov: typeof io?.field_of_view === "number" ? io.field_of_view : null,
+      bearing: Math.round(bearing),
     });
   }
 

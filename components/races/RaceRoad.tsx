@@ -74,12 +74,17 @@ export function RaceRoad({
                   {v.reading?.surface}
                   {v.reading?.condition && v.reading.condition !== "bon" && v.reading.condition !== "inconnu" ? `, ${v.reading.condition}` : ""}
                   {v.reading?.looseGravel ? ", gravillons" : ""}
+                  {v.reading?.coverLeft && v.reading?.coverRight && (v.orientation === "avant" || v.orientation === "arrière") && (
+                    <div className="text-muted-foreground">
+                      G {v.orientation === "arrière" ? v.reading.coverRight : v.reading.coverLeft} · D {v.orientation === "arrière" ? v.reading.coverLeft : v.reading.coverRight}
+                    </div>
+                  )}
                 </div>
               </a>
             ))}
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Photos Panoramax, prises par des contributeurs{latest ? ` (la plus récente en ${latest})` : ""}, lues une fois par vision. La route a pu être refaite depuis.
+            Photos Panoramax, prises par des contributeurs{latest ? ` (la plus récente en ${latest})` : ""}, lues une fois par vision dans le sens de la course (G et D : ce qui borde à gauche et à droite du coureur). La route a pu être refaite depuis.
           </p>
         </div>
       )}
