@@ -554,3 +554,74 @@ export async function getRaceStages(raceId: string): Promise<RaceStage[]> {
     kind: (r.kind as "ligne" | "clm" | null) ?? null,
   }));
 }
+
+export interface ProbablePlace {
+  /** « ≈ 12ᵉ » — la place à laquelle ce classement national arrive dans ce plateau. */
+  place: number;
+  /** Sur combien de coureurs classés au national. */
+  of: number;
+  /** D'où vient le plateau : la liste publiée, ou les classés des éditions passées. */
+  basis: "engages" | "editions";
+}
+
+/**
+ * Où ce coureur arriverait, à en croire les classements nationaux.
+ *
+ * Sur la liste d'engagés quand elle est publiée : ceux qui ont un meilleur
+ * rang national que le lecteur sont devant lui, les autres derrière. Sinon,
+ * sur les classés des éditions passées de la même réunion. Ce n'est pas une
+ * prédiction de course — une échappée n'a pas de rang — c'est la photo du
+ * plateau, ramenée à une place.
+ */
+export async function getProbablePlace(
+  raceId: string,
+  riderRank: number
+): Promise<ProbablePlace | null> {
+  const rows = (await sql(
+    `WITH engages AS (
+       SELECT ri.current_rank
+         FROM engagements e JOIN riders ri ON ri.id = e.rider_id
+        WHERE e.race_id = $1::uuid AND ri.current_rank IS NOT NULL
+     ),
+     me AS (SELECT event_id, race_date FROM races WHERE id = $1::uuid),
+     past AS (
+       SELECT r.id AS race_id, ri.current_rank
+         FROM races r JOIN me ON r.event_id = me.event_id
+         JOIN race_results rr ON rr.race_id = r.id
+         JOIN riders ri ON ri.id = rr.rider_id
+        WHERE r.race_date < me.race_date AND ri.current_rank IS NOT NULL
+     )
+     SELECT
+       (SELECT count(*)::int FROM engages) AS n_engages,
+       (SELECT count(*)::int FROM engages WHERE current_rank < $2::int) AS better_engages,
+       (SELECT count(*)::int FROM past) AS n_past,
+       (SELECT count(DISTINCT race_id)::int FROM past) AS past_editions,
+       (SELECT count(*)::int FROM past WHERE current_rank < $2::int) AS better_past`,
+    [raceId, riderRank]
+  )) as Array<Record<string, unknown>>;
+  const r = rows[0];
+  if (!r) return null;
+  const nEngages = Number(r.n_engages ?? 0);
+  if (nEngages >= 8) {
+    return { place: Number(r.better_engages) + 1, of: nEngages + 1, basis: "engages" };
+  }
+  const nPast = Number(r.n_past ?? 0);
+  if (nPast >= 15) {
+    // Plusieurs éditions cumulées : la part de mieux classés vaut pour chacune,
+    // ramenée à la taille d'une édition.
+    const editions = Math.max(1, Number(r.past_editions ?? 1));
+    const perEdition = Math.max(1, Math.round(nPast / editions));
+    const share = Number(r.better_past) / nPast;
+    return { place: Math.max(1, Math.round(share * perEdition) + 1), of: perEdition + 1, basis: "editions" };
+  }
+  return null;
+}
+
+/** Le rang national du lecteur, s'il a relié sa licence. */
+export async function getViewerRank(userId: string): Promise<number | null> {
+  const rows = (await sql(
+    `SELECT ri.current_rank FROM users u JOIN riders ri ON ri.id = u.rider_id WHERE u.id = $1::uuid`,
+    [userId]
+  )) as Array<{ current_rank: number | null }>;
+  return rows[0]?.current_rank ?? null;
+}

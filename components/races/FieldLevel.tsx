@@ -1,5 +1,7 @@
 import { Gauge } from "lucide-react";
-import { getFieldLevel } from "@/lib/db/queries/race-detail";
+import { getFieldLevel, getProbablePlace, getViewerRank, type ProbablePlace } from "@/lib/db/queries/race-detail";
+import { getAuthUser } from "@/lib/session";
+import { resolveUser } from "@/lib/db/queries/alerts";
 import { SectionHeading } from "./StartList";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +54,20 @@ function Figure({
   );
 }
 
+async function probableForViewer(raceId: string): Promise<ProbablePlace | null> {
+  try {
+    const me = await getAuthUser();
+    if (!me) return null;
+    const rank = await getViewerRank(await resolveUser(me.id, me.email));
+    if (rank === null) return null;
+    return await getProbablePlace(raceId, rank);
+  } catch {
+    return null;
+  }
+}
+
 export async function FieldLevel({ raceId }: { raceId: string }) {
+  const probable = await probableForViewer(raceId);
   let level: Awaited<ReturnType<typeof getFieldLevel>> = null;
   try {
     level = await getFieldLevel(raceId);
@@ -113,7 +128,22 @@ export async function FieldLevel({ raceId }: { raceId: string }) {
               unit="km/h"
             />
           )}
+          {probable && (
+            <Figure
+              label="Votre place probable"
+              value={`≈ ${probable.place}ᵉ`}
+              unit={`sur ${probable.of}`}
+              tone={probable.place <= probable.of / 3 ? "good" : undefined}
+            />
+          )}
         </div>
+        {probable && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {probable.basis === "engages"
+              ? "D'après les classements nationaux des engagés : ceux qui sont mieux classés que vous sont comptés devant. Une échappée n'a pas de rang."
+              : "D'après les classés des éditions passées, ramenés à une édition."}
+          </p>
+        )}
 
         <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
           Établi sur les coureurs classés aux éditions précédentes.
