@@ -34,6 +34,10 @@ export async function saveRideTrace(
 
   const trace = summariseTrace(streams.latlng, streams.altitude, streams.distance);
   if (!trace) return "unavailable";
+  /* L'échauffement est aussi une sortie du jour, au même endroit : 13 km en
+     25 minutes avant le départ. Il a pris la place de la course trois fois.
+     En dessous de quinze kilomètres, une sortie n'est pas une épreuve. */
+  if (source === "strava" && trace.distanceM < 15_000) return "kept";
 
   const centreLng = (trace.bounds.west + trace.bounds.east) / 2;
   const centreLat = (trace.bounds.south + trace.bounds.north) / 2;
@@ -58,6 +62,8 @@ export async function saveRideTrace(
       -- Un tracé déposé ou couru le jour J prime : on ne remplace qu'une
       -- reconnaissance automatique parmi les segments.
       WHERE race_traces.source = 'segment'
+         OR (race_traces.source IN ('strava', 'parcouru')
+             AND race_traces.distance_m * 2 < EXCLUDED.distance_m)
       RETURNING race_id`,
     [
       raceId,

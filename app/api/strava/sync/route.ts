@@ -109,19 +109,26 @@ export async function POST() {
       linked++;
     }
 
+    // Une seule sortie par course, la plus longue : l'échauffement du matin est
+    // aussi « le jour J au même endroit », et il a pris la place de la course
+    // trois fois. Une sortie déjà tracée cède à une deux fois plus longue.
     // The link says which race the ride was; the ride says what the course is.
     // Newest first, because a rider syncs after racing and the parcours they
     // just rode is the one somebody is about to look up. Races already carrying
     // a rider's trace are left alone.
     const untraced = await sql(
-      `SELECT a.activity_id, a.race_id
-         FROM strava_activities a
-    LEFT JOIN race_traces t ON t.race_id = a.race_id
-        WHERE a.user_id = $1::uuid
-          AND a.race_id IS NOT NULL
-          AND (t.race_id IS NULL OR t.source = 'segment')
-        ORDER BY a.local_date DESC
-        LIMIT $2::int`,
+      `SELECT activity_id, race_id FROM (
+         SELECT DISTINCT ON (a.race_id) a.activity_id, a.race_id, a.local_date
+           FROM strava_activities a
+      LEFT JOIN race_traces t ON t.race_id = a.race_id
+          WHERE a.user_id = $1::uuid
+            AND a.race_id IS NOT NULL
+            AND (t.race_id IS NULL OR t.source = 'segment'
+                 OR (t.source IN ('strava', 'parcouru') AND t.distance_m * 2 < a.distance_m))
+          ORDER BY a.race_id, a.distance_m DESC
+       ) best
+       ORDER BY local_date DESC
+       LIMIT $2::int`,
       [id, TRACES_PER_SYNC]
     );
 
