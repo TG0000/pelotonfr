@@ -362,3 +362,35 @@ export async function getActivityEffortSegments(
   }
   return [...seen.values()];
 }
+
+export interface StravaRoute {
+  id: number;
+  name: string;
+  distance: number;
+  elevation_gain: number;
+  /** Tracé résumé, encodé en polyline. */
+  map?: { summary_polyline?: string | null; polyline?: string | null };
+}
+
+/**
+ * Les itinéraires qu'un coureur a dessinés dans Strava.
+ *
+ * Avant une course, on trace souvent la boucle pour la charger sur le
+ * compteur : « Circuit Buais », « Gastines 2026 ». C'est un tracé sans
+ * sortie, nommé comme la course, et il reste ouvert quand l'explorateur de
+ * segments ne l'est plus.
+ */
+export async function listRoutes(accessToken: string, athleteId: number): Promise<StravaRoute[]> {
+  const routes: StravaRoute[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const res = await fetch(`${STRAVA_API}/athletes/${athleteId}/routes?per_page=100&page=${page}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(25_000),
+    });
+    if (!res.ok) return routes;
+    const batch = (await res.json()) as StravaRoute[];
+    routes.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return routes;
+}

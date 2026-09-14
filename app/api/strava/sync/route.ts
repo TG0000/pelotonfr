@@ -8,7 +8,9 @@ import {
   saveActivities,
   saveFitness,
 } from "@/lib/db/queries/strava";
-import { listActivities, getAthleteSummary } from "@/lib/strava/client";
+import { listActivities, getAthleteSummary, listRoutes } from "@/lib/strava/client";
+import { saveRouteTrace } from "@/lib/strava/ingest-route";
+import { decodePolyline } from "@/lib/polyline";
 import { matchRideToRace } from "@/lib/strava/match-races";
 import { saveRideTrace } from "@/lib/strava/ingest-trace";
 import { matchRideToCircuit } from "@/lib/strava/match-circuit";
@@ -223,11 +225,34 @@ export async function POST() {
       }
     }
 
+    /* Les itinéraires dessinés dans Strava, nommés comme une course et
+       partant d'à côté : la boucle chargée sur le compteur avant de partir. */
+    let routes = 0;
+    try {
+      const [athlete] = await sql(`SELECT athlete_id FROM strava_connections WHERE user_id = $1::uuid`, [id]);
+      if (athlete?.athlete_id) {
+        for (const r of await listRoutes(token, Number(athlete.athlete_id))) {
+          const poly = r.map?.polyline ?? r.map?.summary_polyline;
+          // Un itinéraire de huit kilomètres nommé « 8KM caen » n'est pas la
+          // course de Caen : il faut la longueur d'une épreuve et un nom sûr.
+          if (!poly || r.distance < 15_000 || r.distance > 200_000) continue;
+          const first = decodePolyline(poly)[0];
+          if (!first) continue;
+          const donor = await matchRideToCircuit(sql, { name: r.name, localDate: "1970-01-01", lat: first[0], lng: first[1], distanceM: Math.max(r.distance, 25_000) });
+          if (!donor || donor.by === "jour_et_lieu" || donor.score < 0.85) continue;
+          if ((await saveRouteTrace(sql, donor.raceId, { id: r.id, name: r.name, polyline: poly, distanceM: r.distance })) === "stored") routes++;
+        }
+      }
+    } catch {
+      /* Les itinéraires sont un bonus : leur échec ne casse pas la synchronisation. */
+    }
+
     return NextResponse.json({
       synced: saved,
       linked,
       traced,
       circuits,
+      routes,
       backfill: firstTime,
     });
   } catch (err) {

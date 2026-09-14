@@ -188,7 +188,11 @@ export function RaceCircuit({
             ? "Boucle enregistrée par un coureur qui l'a parcourue — pas nécessairement le jour de la course."
             : trace.source === "depose"
               ? "Circuit déposé à la main, depuis un segment Strava."
-              : "Tracé relevé par un coureur ayant disputé l'épreuve."}
+              : trace.source === "route"
+                ? "Itinéraire dessiné dans Strava par un coureur et nommé comme la course, relief relu sur le terrain public."
+                : trace.source === "guide"
+                ? "Parcours reconstruit depuis le guide technique : points de passage placés et reliés par la route, relief relu. Une reconstruction, pas un relevé."
+                : "Tracé relevé par un coureur ayant disputé l'épreuve."}
         {trace.source !== "parcouru" && !trace.sameDay && trace.tracedOn && (
           <> Relevé sur l&apos;édition du {formatEditionDate(trace.tracedOn)}.</>
         )}
