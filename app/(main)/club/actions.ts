@@ -9,6 +9,7 @@ import {
   leaveClub,
   markEntered,
   unmarkEntered,
+  setViewerGroups,
 } from "@/lib/db/queries/club";
 
 /**
@@ -75,4 +76,14 @@ export async function annulerEngage(raceId: string) {
   await unmarkEntered(membership.clubId, raceId);
   revalidatePath("/club");
   return { ok: true as const, message: "Remise dans la file." };
+}
+
+/** Les groupes dans lesquels le lecteur s'aligne. */
+export async function saveGroups(groups: string[]): Promise<void> {
+  const { userId } = await auth();
+  if (!userId) return;
+  const user = await currentUser();
+  const id = await resolveUser(userId, user?.primaryEmailAddress?.emailAddress);
+  await setViewerGroups(id, groups);
+  revalidatePath("/club");
 }

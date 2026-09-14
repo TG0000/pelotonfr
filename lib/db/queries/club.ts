@@ -1,5 +1,6 @@
 import { sql } from "../index";
 import { toDateOnly } from "@/lib/date";
+import { groupOf, isGroup, raceFitsGroups } from "@/lib/groups";
 
 /**
  * Le club, et ce que le responsable doit faire avant que la porte se ferme.
@@ -210,24 +211,6 @@ const MATE_NAME_SQL = `
     'un coéquipier'
   )`;
 
-/**
- * Les catégories qui courent ensemble.
- *
- * Un Open 2 s'aligne sur une course « Open 1-2-3 », un Access 3 sur une
- * « Access 1-2-3-4 » : ce sont des familles, pas des cases. Ce qui compte,
- * c'est d'être au départ avec ses coéquipiers — donc la famille.
- */
-const FAMILIES: string[][] = [
-  ["elite", "open1", "open2", "open3"],
-  ["access1", "access2", "access3", "access4"],
-  ["fsgt1", "fsgt2", "fsgt3", "fsgt4", "fsgt5", "fsgt6"],
-];
-
-function sameFamily(mine: string, raceCategories: string[]): boolean {
-  const family = FAMILIES.find((f) => f.includes(mine)) ?? [mine];
-  return raceCategories.some((c) => family.includes(c));
-}
-
 export interface ClubPlan {
   raceId: string;
   raceName: string;
@@ -256,7 +239,7 @@ export interface ClubPlan {
 export async function getClubPlans(
   clubId: string,
   viewerId: string,
-  viewerCategory: string | null
+  viewerGroups: string[]
 ): Promise<ClubPlan[]> {
   const rows = (await sql(
     `SELECT r.id::text AS race_id, r.name, r.race_date::text, r.race_date_end::text,
@@ -292,7 +275,7 @@ export async function getClubPlans(
       going: (row.going as string[]) ?? [],
       considering: (row.considering as string[]) ?? [],
       mine: (row.mine as "programmee" | "envisagee" | null) ?? null,
-      fitsMe: viewerCategory ? sameFamily(viewerCategory, categories) : true,
+      fitsMe: viewerGroups.length > 0 ? raceFitsGroups(categories, viewerGroups) : true,
     };
   });
 }
@@ -328,8 +311,17 @@ export async function getClubmatesOnRace(
   };
 }
 
-/** La catégorie que le lecteur s'est donnée, pour trier ce qui le concerne. */
-export async function getViewerCategory(userId: string): Promise<string | null> {
-  const rows = (await sql(`SELECT category FROM users WHERE id = $1::uuid`, [userId])) as Array<{ category: string | null }>;
-  return rows[0]?.category ?? null;
+/**
+ * Les groupes que le lecteur a cochés — à défaut, celui de sa catégorie.
+ */
+export async function getViewerGroups(userId: string): Promise<string[]> {
+  const rows = (await sql(`SELECT groups, category FROM users WHERE id = $1::uuid`, [userId])) as Array<{ groups: string[] | null; category: string | null }>;
+  const chosen = (rows[0]?.groups ?? []).filter(isGroup);
+  if (chosen.length > 0) return chosen;
+  const derived = groupOf(rows[0]?.category ?? null);
+  return derived ? [derived] : [];
+}
+
+export async function setViewerGroups(userId: string, groups: string[]): Promise<void> {
+  await sql(`UPDATE users SET groups = $2::text[] WHERE id = $1::uuid`, [userId, groups.filter(isGroup)]);
 }

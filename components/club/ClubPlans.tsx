@@ -4,8 +4,8 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import type { ClubPlan } from "@/lib/db/queries/club";
 import { displayRaceName } from "@/lib/race-name";
-import { categoryLabel } from "@/lib/categories";
 import { FederationMark } from "@/components/races/RacePrimitives";
+import { GroupPicker } from "./GroupPicker";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,14 +18,15 @@ import { cn } from "@/lib/utils";
  */
 export function ClubPlans({
   plans,
-  viewerCategory,
+  viewerGroups,
   onlyMine,
 }: {
   plans: ClubPlan[];
-  viewerCategory: string | null;
+  viewerGroups: string[];
   onlyMine: boolean;
 }) {
-  const shown = onlyMine && viewerCategory ? plans.filter((p) => p.fitsMe) : plans;
+  const hasGroups = viewerGroups.length > 0;
+  const shown = onlyMine && hasGroups ? plans.filter((p) => p.fitsMe) : plans;
 
   return (
     <section className="mb-8">
@@ -42,25 +43,25 @@ export function ClubPlans({
           >
             Tout le club
           </Link>
-          {viewerCategory ? (
+          {hasGroups ? (
             <Link
               href="/club?cat=moi"
               className={cn("rounded-full border px-2.5 py-1", onlyMine ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-surface-2")}
             >
-              Ma famille · {categoryLabel(viewerCategory)}
+              Mes groupes
             </Link>
-          ) : (
-            <Link href="/profil" className="rounded-full border border-dashed border-border px-2.5 py-1 text-muted-foreground hover:bg-surface-2">
-              Dire ma catégorie
-            </Link>
-          )}
+          ) : null}
         </div>
+      </div>
+
+      <div className="mb-3">
+        <GroupPicker chosen={viewerGroups} />
       </div>
 
       {shown.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
           {onlyMine
-            ? "Aucun coéquipier sur une course où vous pourriez vous aligner, pour l'instant."
+            ? "Aucun coéquipier sur une course de vos groupes, pour l'instant."
             : "Personne n'a encore mis de course à son calendrier. Programmez-en une : elle apparaîtra ici pour les autres."}
         </p>
       ) : (
@@ -85,7 +86,7 @@ export function ClubPlans({
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                   <FederationMark slug={p.federationSlug} />
                   {p.city && <span>{p.city}{p.departmentCode ? ` (${p.departmentCode})` : ""}</span>}
-                  {viewerCategory && p.fitsMe && (
+                  {hasGroups && p.fitsMe && (
                     <span className="rounded bg-accent/15 px-1.5 py-0.5 font-medium text-accent">avec moi</span>
                   )}
                 </div>
