@@ -27,6 +27,13 @@ export interface RoadPicture {
   producer: string | null;
   /** Cap de la photo (0 = nord), tel que Panoramax le donne. */
   azimuth: number | null;
+  /**
+   * Sens de déplacement de la voiture, lu sur les photos voisines de la même
+   * séquence. Sert à écarter les photos prises en tournant ou à l'arrêt, et
+   * à savoir si une photo plate regarde devant ou derrière. Null quand la
+   * séquence est inconnue.
+   */
+  travel: number | null;
   /** 360 pour une caméra sphérique, sinon l'angle de champ ou null. */
   fov: number | null;
   /** Sens de la course à cet endroit du tracé, en degrés depuis le nord. */
@@ -44,9 +51,52 @@ function bearingAt(points: Array<[number, number, number, number]>, idx: number)
 
 interface Feature {
   id: string;
+  collection?: string;
   geometry: { type: string; coordinates: [number, number] };
   properties: Record<string, unknown>;
   assets?: Record<string, { href?: string }>;
+}
+
+function headingBetween(a: [number, number], b: [number, number]): number {
+  const dLng = (b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180);
+  return ((Math.atan2(dLng, b[1] - a[1]) * 180) / Math.PI + 360) % 360;
+}
+
+/**
+ * Le sens de déplacement à chaque photo, et s'il tient d'une photo à l'autre.
+ * Une voiture qui tourne ou fait demi-tour donne une image dont le cap ne
+ * vaut rien : ces photos-là sont écartées.
+ */
+function travelHeadings(features: Feature[]): Map<string, { travel: number; steady: boolean }> {
+  const out = new Map<string, { travel: number; steady: boolean }>();
+  const byCol = new Map<string, Feature[]>();
+  for (const f of features) {
+    if (!f.collection || f.geometry?.type !== "Point") continue;
+    const list = byCol.get(f.collection) ?? [];
+    list.push(f);
+    byCol.set(f.collection, list);
+  }
+  for (const list of byCol.values()) {
+    list.sort((a, b) => Number(a.properties["geovisio:rank_in_collection"] ?? 0) - Number(b.properties["geovisio:rank_in_collection"] ?? 0));
+    const rank = (f: Feature) => Number(f.properties["geovisio:rank_in_collection"] ?? 0);
+    for (let i = 0; i < list.length; i++) {
+      const prev = list[i - 1];
+      const next = list[i + 1];
+      if (!prev || !next) continue;
+      if (rank(next) - rank(prev) > 6) continue; // voisins trop loin dans la séquence
+      const travel = headingBetween(prev.geometry.coordinates, next.geometry.coordinates);
+      // Stable si, trois photos avant et trois après, la voiture allait tout
+      // droit : une entrée de ferme, un demi-tour, un arrêt se voient là.
+      let steady = true;
+      for (let j = Math.max(1, i - 3); j <= Math.min(list.length - 2, i + 3); j++) {
+        if (rank(list[j + 1]) - rank(list[j - 1]) > 6) continue;
+        const h = headingBetween(list[j - 1].geometry.coordinates, list[j + 1].geometry.coordinates);
+        if (Math.abs((((h - travel) % 360) + 540) % 360 - 180) > 25) { steady = false; break; }
+      }
+      out.set(list[i].id, { travel, steady });
+    }
+  }
+  return out;
 }
 
 /** Un morceau de tracé, et la boîte serrée qui l'entoure. */
@@ -96,6 +146,7 @@ export async function findRoadPictures(
     }
   }
   if (features.length === 0) return [];
+  const travels = travelHeadings(features);
 
   // Chaque photo : son point de tracé le plus proche.
   const candidates: RoadPicture[] = [];
@@ -119,8 +170,11 @@ export async function findRoadPictures(
     // montre une haie et rien de la chaussée qu'on cherche. Le cap de la photo
     // et celui du tracé doivent s'accorder, à 35° près, dans un sens ou l'autre.
     const bearing = bearingAt(points, idx);
-    if (typeof az === "number") {
-      const x = (((az - bearing) % 180) + 180) % 180;
+    const tr = travels.get(f.id);
+    if (tr && !tr.steady) continue;
+    const heading = tr ? tr.travel : typeof az === "number" ? az : null;
+    if (heading != null) {
+      const x = (((heading - bearing) % 180) + 180) % 180;
       if (Math.min(x, 180 - x) > 35) continue;
     }
     const url = f.assets?.sd?.href ?? f.assets?.hd?.href;
@@ -134,6 +188,7 @@ export async function findRoadPictures(
       url,
       producer: (f.properties["geovisio:producer"] as string) ?? null,
       azimuth: typeof az === "number" ? az : null,
+      travel: tr ? Math.round(tr.travel) : null,
       fov: typeof io?.field_of_view === "number" ? io.field_of_view : null,
       bearing: Math.round(bearing),
     });

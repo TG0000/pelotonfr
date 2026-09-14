@@ -14,7 +14,7 @@ async function main() {
     const raw = new Uint8Array(await (await fetch(p.url)).arrayBuffer());
     const { bytes, orientation } = await orientPicture(raw, p);
     writeFileSync(`${dir}/crop${i}.jpg`, bytes);
-    console.log(i, Math.round(p.alongM), p.takenOn, `fov=${p.fov} az=${p.azimuth} cap=${p.bearing}`, orientation, bytes.length);
+    console.log(i, Math.round(p.alongM), p.takenOn, `fov=${p.fov} az=${p.azimuth} trav=${p.travel} cap=${p.bearing}`, orientation, bytes.length);
   }
 }
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

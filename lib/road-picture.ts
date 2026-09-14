@@ -24,7 +24,11 @@ export async function orientPicture(
   bytes: Uint8Array,
   pic: RoadPicture
 ): Promise<{ bytes: Uint8Array; orientation: Orientation }> {
-  if (pic.fov === 360 && pic.azimuth != null) {
+  // Le centre de l'image est au cap `view:azimuth` — vérifié sur des photos
+  // où la route file droit devant. Le sens de déplacement ne sert qu'à
+  // écarter les photos prises en tournant.
+  const centreHeading = pic.azimuth;
+  if (pic.fov === 360 && centreHeading != null) {
     const img = sharp(Buffer.from(bytes));
     const meta = await img.metadata();
     const W = meta.width ?? 0;
@@ -32,27 +36,30 @@ export async function orientPicture(
     if (W < 200 || H < 100) return { bytes, orientation: "inconnu" };
     // Colonne au cap voulu : le centre de l'image est au cap `azimuth`.
     const FOV = 100;
-    const centre = ((headingDelta(pic.bearing, pic.azimuth) / 360) * W + W / 2 + W) % W;
+    const centre = ((headingDelta(pic.bearing, centreHeading) / 360) * W + W / 2 + W) % W;
     const cropW = Math.round((FOV / 360) * W);
-    const top = Math.round(H * 0.28);
-    const cropH = Math.round(H * 0.44);
+    // Regarder vers l'arrière de la voiture, c'est avoir son toit en bas de
+    // l'image : la bande est remontée d'un cran dans ce cas.
+    const rearward = Math.abs(headingDelta(pic.bearing, centreHeading)) > 90;
+    const top = Math.round(H * (rearward ? 0.22 : 0.28));
+    const cropH = Math.round(H * (rearward ? 0.38 : 0.44));
+    // L'horizon boucle : l'image est doublée côte à côte, et la fenêtre ne
+    // chevauche plus jamais un bord.
+    const src = Buffer.from(bytes);
+    const doubled = await sharp({ create: { width: W * 2, height: H, channels: 3, background: "#000" } })
+      .composite([{ input: src, left: 0, top: 0 }, { input: src, left: W, top: 0 }])
+      .jpeg({ quality: 92 })
+      .toBuffer();
     let left = Math.round(centre - cropW / 2);
-    let out: Buffer;
-    if (left >= 0 && left + cropW <= W) {
-      out = await img.extract({ left, top, width: cropW, height: cropH }).resize({ width: 1024 }).jpeg({ quality: 82 }).toBuffer();
-    } else {
-      // La fenêtre chevauche le bord : deux morceaux recollés.
-      left = ((left % W) + W) % W;
-      const first = Math.min(cropW, W - left);
-      const a = await sharp(Buffer.from(bytes)).extract({ left, top, width: first, height: cropH }).toBuffer();
-      const b = await sharp(Buffer.from(bytes)).extract({ left: 0, top, width: cropW - first, height: cropH }).toBuffer();
-      out = await sharp({ create: { width: cropW, height: cropH, channels: 3, background: "#000" } })
-        .composite([{ input: a, left: 0, top: 0 }, { input: b, left: first, top: 0 }])
-        .resize({ width: 1024 }).jpeg({ quality: 82 }).toBuffer();
-    }
+    if (left < 0) left += W;
+    const out = await sharp(doubled)
+      .extract({ left, top, width: cropW, height: cropH })
+      .resize({ width: 1024 })
+      .jpeg({ quality: 82 })
+      .toBuffer();
     return { bytes: new Uint8Array(out), orientation: "avant" };
   }
-  if (pic.azimuth == null) return { bytes, orientation: "inconnu" };
-  const d = Math.abs(headingDelta(pic.azimuth, pic.bearing));
+  if (centreHeading == null) return { bytes, orientation: "inconnu" };
+  const d = Math.abs(headingDelta(centreHeading, pic.bearing));
   return { bytes, orientation: d < 60 ? "avant" : d > 120 ? "arrière" : "travers" };
 }
