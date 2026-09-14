@@ -532,13 +532,15 @@ export function CircuitView3D({
         const pr = f.properties as Record<string, string | number>;
         const esc = (v: unknown) => String(v ?? "").replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
         const html =
-          `<div style="width:260px;font:12px/1.4 system-ui,sans-serif;color:#111">` +
-          `<img src="${esc(pr.image)}" alt="" style="width:100%;border-radius:6px;display:block;margin-bottom:6px">` +
+          `<div style="width:230px;font:12px/1.35 system-ui,sans-serif;color:#111">` +
+          `<img src="${esc(pr.image)}" alt="" style="width:100%;height:110px;object-fit:cover;border-radius:6px;display:block;margin-bottom:5px">` +
           `<div><b>km ${esc(pr.km)}</b> · ${esc(pr.label)}</div>` +
           (pr.hazards ? `<div style="color:#b3261e;font-weight:600;margin-top:2px">⚠ ${esc(pr.hazards)}</div>` : "") +
           (pr.note ? `<div style="color:#555;margin-top:2px">${esc(pr.note)}</div>` : "") +
           `</div>`;
-        new maplibregl.Popup({ maxWidth: "300px", closeButton: true })
+        // Une seule fenêtre à la fois, et au-dessus des légendes de la carte.
+        document.querySelectorAll(".maplibregl-popup").forEach((el) => el.remove());
+        new maplibregl.Popup({ maxWidth: "260px", closeButton: true, className: "photo-popup" })
           .setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number])
           .setHTML(html)
           .addTo(m);

@@ -224,3 +224,7 @@
     border-radius: 999px;
   }
 }
+
+/* La fenêtre d'une photo de route, par-dessus les légendes de la carte. */
+.maplibregl-popup.photo-popup { z-index: 30; }
+.maplibregl-popup.photo-popup .maplibregl-popup-content { padding: 8px; border-radius: 8px; }
