@@ -10,13 +10,15 @@ export interface RoadView {
   producer: string | null;
   bearing: number | null;
   orientation: string | null;
+  /** Vrai quand le recadrage vers l'avant est gardé et peut être montré. */
+  hasCrop: boolean;
   reading: RoadReading | null;
 }
 
 /** Les photos lues sur le tracé d'une course, et ce qu'elles disent ensemble. */
 export async function getRoadViews(raceId: string): Promise<{ views: RoadView[]; seen: RoadSeen | null }> {
   const rows = await sql(
-    `SELECT picture_id, along_m, taken_on, url, producer, reading, bearing, orientation
+    `SELECT picture_id, along_m, taken_on, url, producer, reading, bearing, orientation, (crop IS NOT NULL) AS has_crop
        FROM road_views WHERE race_id = $1::uuid AND ok ORDER BY along_m`,
     [raceId]
   );
@@ -28,6 +30,7 @@ export async function getRoadViews(raceId: string): Promise<{ views: RoadView[];
     producer: (r.producer as string) ?? null,
     bearing: r.bearing != null ? Number(r.bearing) : null,
     orientation: (r.orientation as string) ?? null,
+    hasCrop: Boolean(r.has_crop),
     reading: (r.reading as RoadReading) ?? null,
   }));
   const seen = summarise(views.map((v) => v.reading).filter((r): r is RoadReading => r !== null));

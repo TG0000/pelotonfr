@@ -13,6 +13,12 @@ import { createSql } from "./utils/db";
 import { findRoadPictures } from "../../lib/panoramax";
 import { readRoadPicture } from "../../lib/road-vision";
 import { orientPicture } from "../../lib/road-picture";
+import sharp from "sharp";
+
+/** La vignette gardée en base : 900 px de large, assez pour lire la route. */
+async function shrink(bytes: Uint8Array): Promise<Buffer> {
+  return sharp(Buffer.from(bytes)).resize({ width: 900, withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
+}
 import { startRun } from "../lib/track-run";
 
 loadEnv();
@@ -62,10 +68,10 @@ async function main() {
         if (!out) throw new Error("pas de lecture");
         tokensIn += out.inputTokens; tokensOut += out.outputTokens; read++;
         await sql(
-          `INSERT INTO road_views (picture_id, race_id, along_m, taken_on, url, producer, ok, reading, model, input_tokens, output_tokens, bearing, orientation)
-           VALUES ($1, $2::uuid, $3::int, $4::date, $5, $6, $7::boolean, $8::jsonb, $9, $10::int, $11::int, $12::smallint, $13)
+          `INSERT INTO road_views (picture_id, race_id, along_m, taken_on, url, producer, ok, reading, model, input_tokens, output_tokens, bearing, orientation, crop)
+           VALUES ($1, $2::uuid, $3::int, $4::date, $5, $6, $7::boolean, $8::jsonb, $9, $10::int, $11::int, $12::smallint, $13, $14::bytea)
            ON CONFLICT (picture_id) DO NOTHING`,
-          [p.id, race.race_id, Math.round(p.alongM), p.takenOn || null, p.url, p.producer, out.reading !== null, out.reading ? JSON.stringify(out.reading) : null, MODEL, out.inputTokens, out.outputTokens, p.bearing, orientation]
+          [p.id, race.race_id, Math.round(p.alongM), p.takenOn || null, p.url, p.producer, out.reading !== null, out.reading ? JSON.stringify(out.reading) : null, MODEL, out.inputTokens, out.outputTokens, p.bearing, orientation, await shrink(bytes)]
         );
         const r = out.reading;
         console.log(`  ${String(race.name).slice(0, 28).padEnd(30)} km ${(p.alongM / 1000).toFixed(1)}  ${orientation} ${r ? `${r.surface}, ${r.condition}${r.looseGravel ? ", gravillons" : ""} · G ${r.coverLeft ?? "?"} / D ${r.coverRight ?? "?"}${r.note ? ` — ${r.note}` : ""}` : "illisible"}`);
