@@ -122,6 +122,14 @@ jobs:
           npm run scrape:guides:vision -- --limit=40
         continue-on-error: true
 
+      # The weather at the start, for the coming week, so the list can show it.
+      - name: Forecast the coming week
+        if: ${{ !inputs.federation }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run scrape:meteo
+        continue-on-error: true
+
       # Categories for FSGT and UFOLEP, which their own calendar never states.
       - name: Enrich categories
         if: ${{ !inputs.federation }}

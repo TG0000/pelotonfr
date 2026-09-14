@@ -59,6 +59,17 @@ function buildRaceFromRow(row: Record<string, unknown>): Race {
     entrantCount: row.entrant_count != null ? Number(row.entrant_count) : null,
     entriesCloseAt: row.entries_close_at ? new Date(row.entries_close_at as string).toISOString() : null,
     entriesCloseSource: (row.entries_close_source as string) ?? null,
+    forecast:
+      row.forecast_wind_kmh != null
+        ? {
+            windKmh: Number(row.forecast_wind_kmh),
+            gustKmh: row.forecast_gust_kmh != null ? Number(row.forecast_gust_kmh) : null,
+            windFromDeg: row.forecast_wind_from_deg != null ? Number(row.forecast_wind_from_deg) : null,
+            rainPct: row.forecast_rain_pct != null ? Number(row.forecast_rain_pct) : null,
+            tempC: row.forecast_temp_c != null ? Number(row.forecast_temp_c) : null,
+          }
+        : null,
+    clubGoing: row.club_going != null ? Number(row.club_going) : null,
     entriesCapacity: row.entries_capacity != null ? Number(row.entries_capacity) : null,
     bibPickupPlace: (row.bib_pickup_place as string) ?? null,
     circuitM: row.circuit_m != null ? Number(row.circuit_m) : null,
@@ -87,6 +98,7 @@ export async function getRaces(
     q = "",
     page = 1,
     sortBy = "date_asc",
+    clubId = null,
   } = filters;
 
   const today = todayISO();
@@ -178,7 +190,15 @@ export async function getRaces(
 
   const pageParams = [...params, PAGE_SIZE, offset];
   const limitParam = `$${pageParams.length - 1}`;
-  const offsetParam = `$${pageParams.length}`;
+  /* Le club du lecteur : combien de coéquipiers ont la course au calendrier.
+     Un paramètre de plus, placé après ceux de la page. */
+  let clubSelect = "";
+  if (clubId) {
+    pageParams.push(clubId);
+    clubSelect = `, (SELECT count(*) FROM user_favorites uf JOIN club_members cm ON cm.user_id = uf.user_id
+                     WHERE cm.club_id = $${pageParams.length}::uuid AND uf.race_id = r.id) AS club_going`;
+  }
+  const offsetParam = `$${pageParams.length - (clubId ? 1 : 0)}`;
 
   const rows = await sql(
     `SELECT * FROM (
@@ -190,14 +210,21 @@ export async function getRaces(
          ROW_NUMBER() OVER (PARTITION BY ${SIBLING_KEY} ORDER BY r.id) AS sibling_rank,
          COUNT(*)     OVER (PARTITION BY ${SIBLING_KEY})               AS sibling_count,
          -- La liste publiée par la presse : le vrai compte des engagés.
-         (SELECT count(*) FROM engagements e WHERE e.race_id = r.id)  AS entrant_count
+         (SELECT count(*) FROM engagements e WHERE e.race_id = r.id)  AS entrant_count,
+         fc.wind_kmh AS forecast_wind_kmh, fc.gust_kmh AS forecast_gust_kmh,
+         fc.wind_from_deg AS forecast_wind_from_deg, fc.rain_pct AS forecast_rain_pct,
+         fc.temp_c AS forecast_temp_c
+         ${clubSelect}
          ${distanceSelect}
        FROM races r
        JOIN federations f ON f.id = r.federation_id
+       LEFT JOIN race_forecast fc ON fc.race_id = r.id AND fc.for_date = r.race_date
        WHERE ${whereClause}
      ) g
      WHERE g.sibling_rank = 1
      ORDER BY ${distanceOrder} ${
+       sortBy === "club" && clubId ? "g.club_going DESC," : ""
+     } ${
        // « Les plus courues » : le compteur d'engagés de la fiche, les inconnues à la fin.
        sortBy === "engages"
          ? "GREATEST(COALESCE(g.entrant_count, 0), COALESCE(g.entries_engaged, 0)) DESC,"

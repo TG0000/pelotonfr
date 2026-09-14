@@ -122,6 +122,22 @@ export function RaceCard({
               </span>
             );
           })()}
+          {race.clubGoing != null && race.clubGoing > 0 && (
+            <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-primary" title="Coéquipiers qui ont cette course au calendrier">
+              {race.clubGoing} du club
+            </span>
+          )}
+          {/* Le temps prévu au départ, quand la course est dans la semaine. */}
+          {race.forecast && (
+            <span
+              className="shrink-0 rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground"
+              title={`Au départ : vent ${Math.round(race.forecast.windKmh)} km/h${race.forecast.gustKmh ? `, rafales ${Math.round(race.forecast.gustKmh)}` : ""}${race.forecast.rainPct != null ? `, pluie ${race.forecast.rainPct} %` : ""}${race.forecast.tempC != null ? `, ${Math.round(race.forecast.tempC)} °C` : ""}`}
+            >
+              {Math.round(race.forecast.windKmh)} km/h
+              {race.forecast.rainPct != null && race.forecast.rainPct >= 30 ? ` · ${race.forecast.rainPct} % pluie` : ""}
+              {race.forecast.tempC != null ? ` · ${Math.round(race.forecast.tempC)} °` : ""}
+            </span>
+          )}
           {/* La liste publiée d'abord ; à défaut, le compteur de la fiche. */}
           {(() => {
             const n = race.entrantCount || race.entriesEngaged || 0;

@@ -29,7 +29,8 @@
     "postinstall": "node scripts/build/copy-maplibre-worker.mjs",
     "prebuild": "node scripts/build/copy-maplibre-worker.mjs",
     "db:place": "tsx scripts/db/place-from-name.ts",
-    "db:retype-cyclos": "tsx scripts/db/retype-cyclos.ts"
+    "db:retype-cyclos": "tsx scripts/db/retype-cyclos.ts",
+    "scrape:meteo": "tsx scripts/scrapers/forecast.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

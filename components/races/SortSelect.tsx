@@ -9,12 +9,14 @@ const SORT_OPTIONS = [
   { value: "date_desc", label: "Date (décroissante)" },
   // Le compteur d'engagés de la fiche fédérale : qui y va, avant la liste.
   { value: "engages", label: "Les plus courues" },
+  // Les courses où le club va, d'abord — pour un membre seulement.
+  { value: "club", label: "Mon club y va", needsClub: true },
   // Offered only once a location is set: there is nothing to measure from
   // otherwise, and an option that silently does nothing is worse than none.
   { value: "distance", label: "Distance", needsLocation: true },
 ] as const;
 
-export function SortSelect() {
+export function SortSelect({ hasClub = false }: { hasClub?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -24,7 +26,7 @@ export function SortSelect() {
     searchParams.get("lat") && searchParams.get("lng")
   );
   const options = SORT_OPTIONS.filter(
-    (o) => !("needsLocation" in o && o.needsLocation) || hasLocation
+    (o) => (!("needsLocation" in o && o.needsLocation) || hasLocation) && (!("needsClub" in o && o.needsClub) || hasClub)
   );
 
   const handleChange = useCallback(

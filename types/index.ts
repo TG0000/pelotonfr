@@ -45,6 +45,10 @@ export interface Race {
   /** Clôture des engagements, ISO ; `entriesCloseSource` dit si elle est lue ou déduite. */
   entriesCloseAt: string | null;
   entriesCloseSource: string | null;
+  /** Prévue au départ, quand la course est dans la semaine. */
+  forecast: { windKmh: number; gustKmh: number | null; windFromDeg: number | null; rainPct: number | null; tempC: number | null } | null;
+  /** Membres du club du lecteur qui y vont — connu seulement pour un membre. */
+  clubGoing: number | null;
   bibPickupPlace: string | null;
   /** One lap, in metres, as the organiser announced it. */
   circuitM: number | null;
@@ -67,7 +71,9 @@ export interface RaceFilters {
   radius: number;
   q: string;
   page: number;
-  sortBy: "date_asc" | "date_desc" | "distance" | "engages";
+  sortBy: "date_asc" | "date_desc" | "distance" | "engages" | "club";
+  /** Le club du lecteur, pour compter qui y va et trier dessus. */
+  clubId?: string | null;
 }
 
 export interface PaginatedRaces {

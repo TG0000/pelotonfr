@@ -1,3 +1,6 @@
+import { getAuthUser } from "@/lib/session";
+import { resolveUser } from "@/lib/db/queries/alerts";
+import { getMembership } from "@/lib/db/queries/club";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -98,6 +101,19 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
   const view: RaceView = isView(viewParam) ? viewParam : "calendrier";
 
   const today = todayISO();
+
+  /* Le club du lecteur, s'il en a un : la liste compte alors qui du club a
+     chaque course au calendrier, et peut trier dessus. */
+  let clubId: string | null = null;
+  try {
+    const me = await getAuthUser();
+    if (me) {
+      const membership = await getMembership(await resolveUser(me.id, me.email));
+      clubId = membership?.clubId ?? null;
+    }
+  } catch {
+    clubId = null;
+  }
   const dateFrom = ISO_DATE.test(getString(params.dateFrom))
     ? getString(params.dateFrom)
     : "";
@@ -106,8 +122,8 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
     : "";
 
   const sortParam = getString(params.sortBy);
-  const sortBy: "date_asc" | "date_desc" | "distance" | "engages" =
-    sortParam === "date_desc" || sortParam === "distance" || sortParam === "engages"
+  const sortBy: "date_asc" | "date_desc" | "distance" | "engages" | "club" =
+    sortParam === "date_desc" || sortParam === "distance" || sortParam === "engages" || sortParam === "club"
       ? sortParam
       : "date_asc";
 
@@ -152,6 +168,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
     } else if (view === "liste") {
       listResult = await getRaces({
         ...shared,
+        clubId,
         dateFrom,
         dateTo,
         page: Number(getString(params.page)) || 1,
@@ -265,7 +282,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
           )}
           {view === "liste" && (
             <Suspense fallback={null}>
-              <SortSelect />
+              <SortSelect hasClub={clubId !== null} />
             </Suspense>
           )}
           <Suspense fallback={null}>
