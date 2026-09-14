@@ -7,6 +7,7 @@ import { authClient, useSession, signOut } from "@/lib/auth-client";
 import { GoogleButton } from "./GoogleButton";
 import { StravaButton } from "./StravaButton";
 import { buttonVariants } from "@/lib/button-variants";
+import type { VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
@@ -115,12 +116,30 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
 }
 
 function SignInDialog({ children, title }: { children: React.ReactNode; title: string }) {
+  /* Le déclencheur est rendu ici, en bouton natif habillé comme `Button`.
+     Recevoir un `<Button>` tout fait et le confier à Base UI par `render`
+     marchait dans le navigateur mais pas au rendu serveur : depuis une page
+     serveur, l'élément arrive comme référence, Base UI l'emboîte dans son
+     propre bouton, et l'hydratation refait tout — bouton vide un instant,
+     erreur en console sur chaque page. On ne garde de l'élément reçu que
+     son libellé, sa variante et sa taille. */
+  const el = React.isValidElement(children)
+    ? (children as React.ReactElement<{
+        children?: React.ReactNode;
+        variant?: VariantProps<typeof buttonVariants>["variant"];
+        size?: VariantProps<typeof buttonVariants>["size"];
+        className?: string;
+      }>)
+    : null;
+  const label = el ? el.props.children : children;
+  const variant = el?.props.variant;
+  const size = el?.props.size ?? "sm";
+  const className = el?.props.className;
   return (
     <Dialog>
-      {/* Base UI compose par `render` : l'élément reçu devient le déclencheur. */}
-      <DialogTrigger
-        render={React.isValidElement(children) ? (children as React.ReactElement) : <button type="button">{children}</button>}
-      />
+      <DialogTrigger className={cn(buttonVariants({ variant, size, className }))}>
+        {label}
+      </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

@@ -21,7 +21,7 @@ const SIBLING_KEY =
   "COALESCE(r.event_id::text, r.id::text), r.race_date, r.name, " +
   "r.categories::text, r.discipline";
 
-function buildRaceFromRow(row: Record<string, unknown>): Race {
+export function buildRaceFromRow(row: Record<string, unknown>): Race {
   return {
     id: row.id as string,
     externalId: row.external_id as string,
