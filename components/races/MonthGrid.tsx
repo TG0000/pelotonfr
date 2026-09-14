@@ -3,6 +3,26 @@ import { MapPin } from "lucide-react";
 import { calendarName, displayRaceName } from "@/lib/race-name";
 import { cn } from "@/lib/utils";
 import type { Race, RaceMarker } from "@/types";
+
+/**
+ * Ce qu'une case de la grille lit d'une course — et rien d'autre.
+ *
+ * La grille du mois sérialise mille quatre cents courses pour dessiner le mois :
+ * envoyées avec leurs catégories et leur discipline, elles pesaient 680 Ko de
+ * données pour 120 cases. Le nom, le jour, la fédération, la commune : c'est
+ * tout ce qu'une case affiche.
+ */
+export type GridRace = Pick<
+  RaceMarker,
+  "id" | "name" | "raceDate" | "raceDateEnd" | "federationSlug" | "city" | "departmentCode" | "departmentName"
+>;
+
+export function toGridRace(r: RaceMarker | Race): GridRace {
+  return {
+    id: r.id, name: r.name, raceDate: r.raceDate, raceDateEnd: r.raceDateEnd,
+    federationSlug: r.federationSlug, city: r.city, departmentCode: r.departmentCode, departmentName: r.departmentName,
+  };
+}
 import {
   CategorySummary,
   FEDERATION_BG,
@@ -52,10 +72,10 @@ export function monthGrid(year: number, month: number): string[] {
  */
 const MAX_SPAN_DAYS = 14;
 
-export function racesByDay(races: RaceMarker[]): Map<string, RaceMarker[]> {
-  const byDay = new Map<string, RaceMarker[]>();
+export function racesByDay(races: GridRace[]): Map<string, GridRace[]> {
+  const byDay = new Map<string, GridRace[]>();
 
-  const push = (day: string, race: RaceMarker) => {
+  const push = (day: string, race: GridRace) => {
     const list = byDay.get(day);
     if (list) list.push(race);
     else byDay.set(day, [race]);
@@ -81,6 +101,8 @@ export function racesByDay(races: RaceMarker[]): Map<string, RaceMarker[]> {
 
 /** Quatre courses lisibles valent mieux que trois et un « +90 » plus tôt. */
 const CELL_RACES = 4;
+/** Sur téléphone, six courses par jour suffisent à décider ; le reste est à un lien. */
+const MOBILE_PER_DAY = 6;
 
 /** Les jours, sept par sept. */
 function weeksOf(days: string[]): string[][] {
@@ -90,8 +112,8 @@ function weeksOf(days: string[]): string[][] {
 }
 
 /** Les courses qui durent plusieurs jours, sans doublon — une par identité. */
-function spanningRaces(byDay: Map<string, RaceMarker[]>): Map<string, RaceMarker> {
-  const out = new Map<string, RaceMarker>();
+function spanningRaces(byDay: Map<string, GridRace[]>): Map<string, GridRace> {
+  const out = new Map<string, GridRace>();
   for (const races of byDay.values()) {
     for (const race of races) {
       if (!race.raceDateEnd || race.raceDateEnd === race.raceDate) continue;
@@ -107,7 +129,7 @@ function spanningRaces(byDay: Map<string, RaceMarker[]>): Map<string, RaceMarker
 }
 
 interface Bar {
-  race: RaceMarker;
+  race: GridRace;
   /** Colonnes de la semaine, de 0 à 6, incluses. */
   from: number;
   to: number;
@@ -120,7 +142,7 @@ interface Bar {
  * Les barres d'une semaine, rangées en couloirs pour ne pas se chevaucher.
  * La plus longue prend le premier couloir : c'est elle qu'on lit d'abord.
  */
-function barsForWeek(week: string[], spanning: Map<string, RaceMarker>): Bar[] {
+function barsForWeek(week: string[], spanning: Map<string, GridRace>): Bar[] {
   const first = week[0];
   const last = week[week.length - 1];
   const bars: Bar[] = [];
@@ -156,7 +178,7 @@ interface MonthGridProps {
   year: number;
   month: number;
   days: string[];
-  byDay: Map<string, RaceMarker[]>;
+  byDay: Map<string, GridRace[]>;
   /** Les courses du jour choisi, entières : leur carte en a besoin. */
   selectedRaces: Race[];
   today: string;
@@ -344,8 +366,11 @@ export function MonthGrid({
 
       {/* Mobile: an agenda, because a 7-column grid on a phone is unreadable. */}
       <div className="flex flex-col gap-4 md:hidden">
+        {/* Sur téléphone, la liste part d'aujourd'hui — les jours passés du
+            mois n'intéressent personne — et montre six courses par jour ; le
+            reste est à un lien. Quatre cent cinquante kilo-octets de moins. */}
         {days
-          .filter((d) => Number(d.slice(5, 7)) - 1 === month && byDay.has(d))
+          .filter((d) => Number(d.slice(5, 7)) - 1 === month && d >= today && byDay.has(d))
           .map((day) => (
             <div key={day}>
               <div className="mb-1.5 flex items-center gap-2">
@@ -360,7 +385,7 @@ export function MonthGrid({
                 )}
               </div>
               <div className="divide-y divide-border/60 rounded-xl border border-border">
-                {(byDay.get(day) ?? []).map((race) => (
+                {(byDay.get(day) ?? []).slice(0, MOBILE_PER_DAY).map((race) => (
                   <Link
                     key={race.id}
                     href={`/course/${race.id}`}
@@ -384,6 +409,14 @@ export function MonthGrid({
                     </div>
                   </Link>
                 ))}
+                {(byDay.get(day)?.length ?? 0) > MOBILE_PER_DAY && (
+                  <Link
+                    href={`${dayHref(day)}#jour`}
+                    className="block px-3 py-2 text-center text-sm text-primary"
+                  >
+                    +{(byDay.get(day)?.length ?? 0) - MOBILE_PER_DAY} autres ce jour-là
+                  </Link>
+                )}
               </div>
             </div>
           ))}

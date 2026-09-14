@@ -24,6 +24,7 @@ import {
   dayKey,
   monthGrid,
   racesByDay,
+  toGridRace,
 } from "@/components/races/MonthGrid";
 import { todayISO } from "@/lib/date";
 import { toRaceMarker, type Race, type PaginatedRaces } from "@/types";
@@ -189,7 +190,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
     // DB not configured
   }
 
-  const byDay = racesByDay(calendarRaces.map(toRaceMarker));
+  const byDay = racesByDay(calendarRaces.map(toGridRace));
   const selectedDay = ISO_DATE.test(getString(params.jour))
     ? getString(params.jour)
     : "";
