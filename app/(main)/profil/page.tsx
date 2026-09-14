@@ -10,6 +10,8 @@ import { resolveUser } from "@/lib/db/queries/alerts";
 import { getConnection } from "@/lib/db/queries/strava";
 import { authorizeUrl, stravaConfigured } from "@/lib/strava/client";
 import { getSiteUrl } from "@/lib/site-url";
+import { getRiderSeason } from "@/lib/db/queries/points";
+import { PointsCounter } from "@/components/profil/PointsCounter";
 
 /**
  * Whether this rider has linked Strava, resolved before the page renders.
@@ -54,6 +56,7 @@ export default async function ProfilPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const status = typeof params.strava === "string" ? params.strava : undefined;
   const stravaState = userId ? await loadStravaState(userId) : null;
+  const season = userId ? await getRiderSeason(userId).catch(() => null) : null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 w-full">
@@ -69,7 +72,10 @@ export default async function ProfilPage({ searchParams }: PageProps) {
       </header>
 
       {stravaState ? (
-        <StravaPanel initialState={stravaState} initialStatus={status} />
+        <div className="flex flex-col gap-6">
+          <PointsCounter season={season} />
+          <StravaPanel initialState={stravaState} initialStatus={status} />
+        </div>
       ) : (
         <div className="text-center py-12 border rounded-xl bg-card">
           <p className="font-medium mb-1">Connectez-vous pour lier Strava</p>
