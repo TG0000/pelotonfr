@@ -129,6 +129,7 @@ async function main() {
       // Un itinéraire de huit kilomètres nommé « 8KM caen » n'est pas la
       // course de Caen : il faut la longueur d'une épreuve et un nom sûr.
       if (!poly || r.distance < 15_000 || r.distance > 200_000) continue;
+      if (!/circuit|course|parcours|prix|\bgp\b|race|tour|boucle|étape|etape|clm|chrono/i.test(r.name)) continue; // « Caen 5 » est une sortie du dimanche
       const first = decodePolyline(poly)[0];
       if (!first) continue;
       const donor = await matchRideToCircuit(sql, { name: r.name, localDate: "1970-01-01", lat: first[0], lng: first[1], distanceM: Math.max(r.distance, 25_000) });
