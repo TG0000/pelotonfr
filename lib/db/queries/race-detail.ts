@@ -565,3 +565,33 @@ export async function getRaceStages(raceId: string): Promise<RaceStage[]> {
     kind: (r.kind as "ligne" | "clm" | null) ?? null,
   }));
 }
+
+export interface StageTrace {
+  stageNumber: number;
+  points: Array<[number, number, number, number]>;
+  distanceM: number;
+  elevationGainM: number;
+  minElevationM: number;
+  maxElevationM: number;
+  guideKm: number | null;
+  waypoints: Array<{ km: number | null; place: string; label: string; lat: number; lng: number }>;
+}
+
+/** Les parcours d'étape reconstruits depuis le guide technique. */
+export async function getRaceStageTraces(raceId: string): Promise<StageTrace[]> {
+  const rows = (await sql(
+    `SELECT stage_number, points, distance_m, elevation_gain_m, min_elevation_m, max_elevation_m, guide_km, waypoints
+       FROM race_stage_traces WHERE race_id = $1::uuid ORDER BY stage_number`,
+    [raceId]
+  )) as Array<Record<string, unknown>>;
+  return rows.map((r) => ({
+    stageNumber: Number(r.stage_number),
+    points: r.points as StageTrace["points"],
+    distanceM: Number(r.distance_m ?? 0),
+    elevationGainM: Number(r.elevation_gain_m ?? 0),
+    minElevationM: Number(r.min_elevation_m ?? 0),
+    maxElevationM: Number(r.max_elevation_m ?? 0),
+    guideKm: r.guide_km != null ? Number(r.guide_km) : null,
+    waypoints: (r.waypoints as StageTrace["waypoints"]) ?? [],
+  }));
+}

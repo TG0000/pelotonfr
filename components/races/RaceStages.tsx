@@ -1,5 +1,7 @@
 import { Flag, Timer } from "lucide-react";
-import { getRaceStages } from "@/lib/db/queries/race-detail";
+import { getRaceStages, getRaceStageTraces, type StageTrace } from "@/lib/db/queries/race-detail";
+import { ElevationProfile } from "./ElevationProfile";
+import { Download } from "lucide-react";
 import { SectionHeading } from "./StartList";
 import { displayRaceName } from "@/lib/race-name";
 import { format } from "date-fns";
@@ -17,13 +19,24 @@ import { fr } from "date-fns/locale";
  */
 export async function RaceStages({ raceId }: { raceId: string }) {
   let stages: Awaited<ReturnType<typeof getRaceStages>> = [];
+  let traces: StageTrace[] = [];
   try {
-    stages = await getRaceStages(raceId);
+    [stages, traces] = await Promise.all([getRaceStages(raceId), getRaceStageTraces(raceId).catch(() => [])]);
   } catch {
     return null;
   }
 
-  if (stages.length < 2) return null;
+  // Un guide peut décrire une étape que la fédération n'a pas détaillée :
+  // elle apparaît quand même, avec son parcours.
+  for (const t of traces) {
+    if (!stages.some((s) => s.number === t.stageNumber)) {
+      stages.push({ number: t.stageNumber, day: null, from: null, to: null, distanceKm: null, kind: null });
+    }
+  }
+  stages.sort((a, b) => a.number - b.number);
+  const traceOf = (n: number) => traces.find((t) => t.stageNumber === n) ?? null;
+
+  if (stages.length < 2 && traces.length === 0) return null;
 
   const total = stages.reduce((sum, s) => sum + (s.distanceKm ?? 0), 0);
 
@@ -97,6 +110,40 @@ export async function RaceStages({ raceId }: { raceId: string }) {
           </li>
         ))}
       </ol>
+
+      {/* Les parcours reconstruits depuis le guide technique : points de
+          passage placés, reliés par la route, relief relu. Une
+          reconstruction, pas un relevé, et la page le dit. */}
+      {traces.length > 0 && (
+        <div className="mt-4 flex flex-col gap-4">
+          {stages.map((stage) => {
+            const t = traceOf(stage.number);
+            if (!t) return null;
+            return (
+              <div key={stage.number} className="rounded-xl border border-border bg-surface-1 p-4">
+                <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                  <span className="font-medium">Étape {stage.number}</span>
+                  <span className="font-mono tabular-nums">{km(t.distanceM / 1000)} km</span>
+                  <span className="font-mono tabular-nums">{t.elevationGainM} m D+</span>
+                  <span className="text-muted-foreground">altitude {t.minElevationM}–{t.maxElevationM} m</span>
+                  <a
+                    href={`/api/course/${raceId}/gpx?etape=${stage.number}`}
+                    download
+                    className="ml-auto inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <Download className="size-3" /> GPX
+                  </a>
+                </div>
+                <ElevationProfile points={t.points} minElevationM={t.minElevationM} maxElevationM={t.maxElevationM} />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Parcours reconstruit depuis le guide technique : {t.waypoints.length} points de passage placés et reliés par la route
+                  {t.guideKm != null ? `, ${km(t.guideKm)} km annoncés` : ""}. Une reconstruction, pas un relevé : les rues du départ et de l&rsquo;arrivée peuvent différer.
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { fileSlug } from "@/lib/slug";
 import { NextRequest, NextResponse } from "next/server";
 import { getRaceById } from "@/lib/db/queries/races";
-import { getRaceTrace } from "@/lib/db/queries/race-detail";
+import { getRaceTrace, getRaceStageTraces } from "@/lib/db/queries/race-detail";
 import { detectLaps } from "@/lib/trace";
 import { displayRaceName } from "@/lib/race-name";
 
@@ -43,6 +43,30 @@ export async function GET(
 
   if (!race) {
     return NextResponse.json({ error: "Course introuvable" }, { status: 404 });
+  }
+
+  /* `?etape=2` : le parcours d'une étape, reconstruit depuis le guide. */
+  const stageParam = request.nextUrl.searchParams.get("etape");
+  if (stageParam) {
+    const stages = await getRaceStageTraces(id).catch(() => []);
+    const stage = stages.find((s) => s.stageNumber === Number(stageParam));
+    if (!stage) return NextResponse.json({ error: "Aucun parcours pour cette étape" }, { status: 404 });
+    const name = `${displayRaceName(race.name)} — étape ${stage.stageNumber}`;
+    const body =
+      `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<gpx version="1.1" creator="PelotonFR" xmlns="http://www.topografix.com/GPX/1/1">\n` +
+      `  <metadata>\n    <name>${escapeXml(name)}</name>\n` +
+      `    <desc>Parcours reconstruit depuis le guide technique : points de passage placés et reliés par la route.</desc>\n  </metadata>\n` +
+      `  <trk>\n    <name>${escapeXml(name)}</name>\n    <trkseg>\n` +
+      stage.points.map(([lng, lat, ele]) => `      <trkpt lat="${lat.toFixed(6)}" lon="${lng.toFixed(6)}"><ele>${Math.round(ele)}</ele></trkpt>`).join("\n") +
+      `\n    </trkseg>\n  </trk>\n</gpx>\n`;
+    return new NextResponse(body, {
+      headers: {
+        "Content-Type": "application/gpx+xml; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${fileSlug(race.name)}-${race.raceDate}-etape${stage.stageNumber}.gpx"`,
+        "Cache-Control": "public, max-age=3600",
+      },
+    });
   }
   if (!trace) {
     return NextResponse.json(
