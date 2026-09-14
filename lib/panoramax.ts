@@ -1,4 +1,5 @@
 import { metresBetween } from "@/lib/polyline";
+import { detectLaps } from "@/lib/trace";
 
 /**
  * Panoramax : le Street View libre, tenu par l'IGN et OpenStreetMap France,
@@ -55,9 +56,12 @@ function chunks(points: Array<[number, number, number, number]>, lengthM = 400, 
 }
 
 export async function findRoadPictures(
-  points: Array<[number, number, number, number]>,
+  track: Array<[number, number, number, number]>,
   max = 8
 ): Promise<RoadPicture[]> {
+  // Une sortie enregistrée fait douze fois le tour : on lit un seul tour, pour
+  // que « km 3,4 » veuille dire quelque chose sur la boucle.
+  const points = detectLaps(track).lap ?? track;
   // Une boîte par tronçon plutôt qu'une sur toute la boucle : sur une boîte
   // large, les 500 premières photos rendues sont celles de la nationale
   // voisine, et le circuit n'en reçoit aucune.
