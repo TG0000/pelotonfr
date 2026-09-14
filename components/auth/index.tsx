@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, UserRound } from "lucide-react";
 import { authClient, useSession, signOut } from "@/lib/auth-client";
+import { GoogleButton } from "./GoogleButton";
 import { buttonVariants } from "@/lib/button-variants";
 import { cn } from "@/lib/utils";
 import {
@@ -85,13 +86,14 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
         {state === "sending" ? "Envoi…" : "Recevoir mon lien de connexion"}
       </button>
       {google && (
-        <button
-          type="button"
-          onClick={() => authClient.signIn.social({ provider: "google", callbackURL })}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full")}
-        >
-          Continuer avec Google
-        </button>
+        <>
+          <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            ou
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <GoogleButton callbackURL={callbackURL} />
+        </>
       )}
       <p className="text-[11px] text-muted-foreground">
         Pas de mot de passe : un lien par e-mail, et un compte se crée au premier.
