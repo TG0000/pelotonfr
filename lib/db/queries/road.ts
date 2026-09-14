@@ -1,4 +1,5 @@
 import { sql } from "../index";
+import { toDateOnly } from "@/lib/date";
 import { summarise, type RoadReading, type RoadSeen } from "@/lib/road-vision";
 
 export interface RoadView {
@@ -20,7 +21,7 @@ export async function getRoadViews(raceId: string): Promise<{ views: RoadView[];
   const views = rows.map((r) => ({
     pictureId: r.picture_id as string,
     alongM: r.along_m != null ? Number(r.along_m) : null,
-    takenOn: r.taken_on ? String(r.taken_on).slice(0, 10) : null,
+    takenOn: r.taken_on ? toDateOnly(r.taken_on as string | Date) : null,
     url: r.url as string,
     producer: (r.producer as string) ?? null,
     reading: (r.reading as RoadReading) ?? null,

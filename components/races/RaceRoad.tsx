@@ -38,6 +38,10 @@ export function RaceRoad({
   if (!report && views.length === 0) return null;
   const shown = report?.stretches.slice(0, 6) ?? [];
   const readable = views.filter((v) => v.reading && v.reading.surface !== "inconnu");
+  const latestIso = readable.map((v) => v.takenOn ?? "").filter(Boolean).sort().at(-1);
+  const latest = latestIso
+    ? new Date(`${latestIso}T12:00:00Z`).toLocaleDateString("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" })
+    : null;
 
   return (
     <section>
@@ -75,7 +79,7 @@ export function RaceRoad({
             ))}
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Photos Panoramax, prises par des contributeurs{readable[0]?.takenOn ? ` (la plus récente le ${readable.map((v) => v.takenOn ?? "").sort().at(-1)})` : ""}, lues une fois par vision. La route a pu être refaite depuis.
+            Photos Panoramax, prises par des contributeurs{latest ? ` (la plus récente en ${latest})` : ""}, lues une fois par vision. La route a pu être refaite depuis.
           </p>
         </div>
       )}
