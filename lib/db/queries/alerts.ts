@@ -83,14 +83,27 @@ export async function resolveUser(
      est la même. Une ligne qui porte cette adresse sous l'ancien identifiant
      est la même personne — sa saison, son club, ses alertes la suivent. */
   if (email) {
+    /* L'adresse principale, ou l'une des secondaires : Gmail par Google,
+       iCloud par lien — la même personne. La ligne prend le nouvel identifiant
+       et garde son adresse principale. */
     const moved = await sql(
       `UPDATE users SET clerk_id = $1::varchar
-        WHERE lower(email) = lower($2::varchar) AND clerk_id <> $1::varchar
+        WHERE (lower(email) = lower($2::varchar) OR lower($2::varchar) = ANY(SELECT lower(a) FROM unnest(alias_emails) a))
+          AND clerk_id <> $1::varchar
           AND NOT EXISTS (SELECT 1 FROM users u2 WHERE u2.clerk_id = $1::varchar)
         RETURNING id`,
       [authId, email]
     );
     if (moved.length > 0) return moved[0].id as string;
+    /* Déjà rattachée sous cet identifiant, ou identifiée par une adresse
+       secondaire : ne pas créer de doublon avec l'adresse du jour. */
+    const known = await sql(
+      `SELECT id FROM users WHERE clerk_id = $1::varchar
+          OR lower($2::varchar) = ANY(SELECT lower(a) FROM unnest(alias_emails) a)
+        LIMIT 1`,
+      [authId, email]
+    );
+    if (known.length > 0) return known[0].id as string;
   }
   const rows = await sql(
     `INSERT INTO users (clerk_id, email)

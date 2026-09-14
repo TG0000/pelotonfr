@@ -47,7 +47,7 @@ export function ClubPlans({
               href="/club?cat=moi"
               className={cn("rounded-full border px-2.5 py-1", onlyMine ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-surface-2")}
             >
-              Ma catégorie · {categoryLabel(viewerCategory)}
+              Ma famille · {categoryLabel(viewerCategory)}
             </Link>
           ) : (
             <Link href="/profil" className="rounded-full border border-dashed border-border px-2.5 py-1 text-muted-foreground hover:bg-surface-2">
@@ -60,7 +60,7 @@ export function ClubPlans({
       {shown.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
           {onlyMine
-            ? "Aucun coéquipier sur une course de votre catégorie pour l'instant."
+            ? "Aucun coéquipier sur une course où vous pourriez vous aligner, pour l'instant."
             : "Personne n'a encore mis de course à son calendrier. Programmez-en une : elle apparaîtra ici pour les autres."}
         </p>
       ) : (
@@ -86,7 +86,7 @@ export function ClubPlans({
                   <FederationMark slug={p.federationSlug} />
                   {p.city && <span>{p.city}{p.departmentCode ? ` (${p.departmentCode})` : ""}</span>}
                   {viewerCategory && p.fitsMe && (
-                    <span className="rounded bg-accent/15 px-1.5 py-0.5 font-medium text-accent">ma catégorie</span>
+                    <span className="rounded bg-accent/15 px-1.5 py-0.5 font-medium text-accent">avec moi</span>
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">

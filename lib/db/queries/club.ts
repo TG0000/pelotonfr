@@ -210,6 +210,24 @@ const MATE_NAME_SQL = `
     'un coéquipier'
   )`;
 
+/**
+ * Les catégories qui courent ensemble.
+ *
+ * Un Open 2 s'aligne sur une course « Open 1-2-3 », un Access 3 sur une
+ * « Access 1-2-3-4 » : ce sont des familles, pas des cases. Ce qui compte,
+ * c'est d'être au départ avec ses coéquipiers — donc la famille.
+ */
+const FAMILIES: string[][] = [
+  ["elite", "open1", "open2", "open3"],
+  ["access1", "access2", "access3", "access4"],
+  ["fsgt1", "fsgt2", "fsgt3", "fsgt4", "fsgt5", "fsgt6"],
+];
+
+function sameFamily(mine: string, raceCategories: string[]): boolean {
+  const family = FAMILIES.find((f) => f.includes(mine)) ?? [mine];
+  return raceCategories.some((c) => family.includes(c));
+}
+
 export interface ClubPlan {
   raceId: string;
   raceName: string;
@@ -274,7 +292,7 @@ export async function getClubPlans(
       going: (row.going as string[]) ?? [],
       considering: (row.considering as string[]) ?? [],
       mine: (row.mine as "programmee" | "envisagee" | null) ?? null,
-      fitsMe: viewerCategory ? categories.includes(viewerCategory) : true,
+      fitsMe: viewerCategory ? sameFamily(viewerCategory, categories) : true,
     };
   });
 }
