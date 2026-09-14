@@ -1,4 +1,5 @@
 import type { RaceWeather } from "@/lib/weather";
+import type { Ground } from "@/lib/ground";
 import { cardinal } from "@/lib/weather";
 import { formatHour } from "@/lib/race-timing";
 
@@ -38,6 +39,8 @@ export interface BriefInput {
   field: { editions: number; medianClassified: number; bestRank: number | null; medianRank: number | null } | null;
   lastEdition: { date: string; starters: number; winner: { name: string; club: string | null } | null } | null;
   weather: RaceWeather | null;
+  /** Le sol, pour le cyclo-cross, le VTT et le gravel ; null sur route. */
+  ground: Ground | null;
   /** Aujourd'hui, ISO local, pour la clôture. */
   now: Date;
 }
@@ -189,8 +192,34 @@ export function composeBrief(input: BriefInput): Brief {
     sources++;
   }
 
-  // 5. Le vent et la pluie, posés sur la boucle quand on l'a.
-  if (input.weather) {
+  // 5a. Hors bitume, c'est le sol qui commande : la pluie de la semaine,
+  //     pas le vent de l'après-midi.
+  if (input.ground) {
+    const g = input.ground;
+    const rain =
+      g.rain3dMm > 0
+        ? `${g.rain3dMm.toString().replace(".", ",")} mm de pluie sur les trois derniers jours`
+        : g.rain7dMm > 0
+          ? `${g.rain7dMm.toString().replace(".", ",")} mm sur la semaine, rien depuis trois jours`
+          : "pas une goutte depuis une semaine";
+    lines.push(
+      `${rain[0].toUpperCase()}${rain.slice(1)}${g.observed ? "" : " (prévision)"}` +
+        `${g.rainDayMm >= 2 ? `, ${g.rainDayMm.toString().replace(".", ",")} mm attendus le jour même` : ""}. ${g.verdict}`
+    );
+    if (g.frost && g.minC != null) {
+      lines.push(`${Math.round(g.minC)} °C la nuit d'avant : gel possible au départ, le sol durcit puis dégèle en surface.`);
+    }
+    sources++;
+  }
+
+  // 5b. Le vent et la pluie, posés sur la boucle quand on l'a. Hors bitume,
+  //     seulement s'il souffle vraiment : sur un circuit en sous-bois il
+  //     n'a pas voix au chapitre.
+  if (input.weather && input.ground && input.weather.windVerdict !== "calme" && input.weather.windVerdict !== "sensible") {
+    const w = input.weather;
+    lines.push(`Vent ${de(cardinal(w.atStart.windDirectionDeg))} à ${w.atStart.windKmh} km/h, rafales à ${w.peakGustKmh} : les parties dégagées seront dures, abrite-toi dans les portions rapides.`);
+    if (w.atStart.temperatureC <= 5) lines.push(`${Math.round(w.atStart.temperatureC)} °C au départ : échauffe-toi sur home-trainer, le premier tour part à bloc.`);
+  } else if (input.weather && !input.ground) {
     const w = input.weather;
     const from = cardinal(w.atStart.windDirectionDeg);
     let s: string;

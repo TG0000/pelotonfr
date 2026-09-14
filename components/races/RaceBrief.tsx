@@ -1,6 +1,7 @@
 import { Megaphone } from "lucide-react";
 import { composeBrief } from "@/lib/race-brief";
 import { getRaceWeather } from "@/lib/weather";
+import { getGround, groundMatters } from "@/lib/ground";
 import type { RaceTiming } from "@/lib/race-timing";
 import {
   getFieldLevel,
@@ -30,12 +31,16 @@ export async function RaceBrief({
   timing: RaceTiming;
   daysLeft: number;
 }) {
-  const [climbs, field, past, weather] = await Promise.all([
+  const offRoad = groundMatters(race.discipline);
+  const [climbs, field, past, weather, ground] = await Promise.all([
     getRaceClimbs(race.id).catch(() => []),
     getFieldLevel(race.id).catch(() => null),
     getPastEditions(race.id, 1).catch(() => []),
     race.lat != null && race.lng != null && daysLeft <= 10
       ? getRaceWeather(race.lat, race.lng, race.raceDate, timing).catch(() => null)
+      : Promise.resolve(null),
+    offRoad && race.lat != null && race.lng != null && daysLeft <= 15
+      ? getGround(race.lat, race.lng, race.raceDate).catch(() => null)
       : Promise.resolve(null),
   ]);
 
@@ -56,6 +61,7 @@ export async function RaceBrief({
     field,
     lastEdition: past[0] ?? null,
     weather,
+    ground,
     now: new Date(),
   });
 
