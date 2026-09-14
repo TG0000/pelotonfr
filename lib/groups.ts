@@ -1,4 +1,4 @@
-import { CATEGORY_DEFS } from "@/lib/categories";
+import { CATEGORIES } from "@/lib/categories";
 
 /**
  * Les groupes qui courent ensemble.
@@ -19,7 +19,7 @@ export const GROUPS: RaceGroup[] = [
   { value: "open", label: "Élite / Open", categories: ["elite", "open1", "open2", "open3"] },
   { value: "access", label: "Access", categories: ["access1", "access2", "access3", "access4"] },
   { value: "fsgt", label: "FSGT / UFOLEP", categories: ["fsgt1", "fsgt2", "fsgt3", "fsgt4", "fsgt5", "fsgt6"] },
-  { value: "jeunes", label: "Jeunes", categories: CATEGORY_DEFS.filter((c) => c.group === "youth").map((c) => c.value) },
+  { value: "jeunes", label: "Jeunes", categories: CATEGORIES.filter((c) => c.group === "youth").map((c) => c.value) },
   { value: "feminines", label: "Féminines", categories: ["feminines"] },
 ];
 
