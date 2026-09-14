@@ -162,6 +162,8 @@ export interface SiteKpis {
   views24h: number;
   views7d: number;
   users: number;
+  /** Athlètes Strava reliés — le palier d'API Strava se franchit à dix. */
+  stravaAthletes: number;
   favourites: number;
 }
 
@@ -184,7 +186,8 @@ export async function getSiteKpis(): Promise<SiteKpis> {
        (SELECT count(*) FROM page_views WHERE seen_at > now() - interval '7 days' AND NOT operator) AS views_7d,
        (SELECT count(*) FROM users u WHERE NOT (lower(u.email) = ANY($1::text[]) OR u.alias_emails && $1::text[])) AS users,
        (SELECT count(*) FROM user_favorites f JOIN users u ON u.id = f.user_id
-         WHERE NOT (lower(u.email) = ANY($1::text[]) OR u.alias_emails && $1::text[])) AS favourites`,
+         WHERE NOT (lower(u.email) = ANY($1::text[]) OR u.alias_emails && $1::text[])) AS favourites,
+       (SELECT count(DISTINCT athlete_id) FROM strava_connections) AS strava_athletes`,
     [operatorEmails()]
   )) as Array<Record<string, unknown>>;
   const n = (k: string) => Number(r?.[k] ?? 0);
@@ -193,6 +196,6 @@ export async function getSiteKpis(): Promise<SiteKpis> {
     withBriefing: n("with_briefing"), withPoster: n("with_poster"), withStages: n("with_stages"),
     withoutPlace: n("without_place"), entrants30d: n("entrants_30d"), resultsLast7d: n("results_7d"),
     reportsOpen: n("reports_open"), reportsCircuit: n("reports_circuit"),
-    views24h: n("views_24h"), views7d: n("views_7d"), users: n("users"), favourites: n("favourites"),
+    views24h: n("views_24h"), views7d: n("views_7d"), users: n("users"), stravaAthletes: n("strava_athletes"), favourites: n("favourites"),
   };
 }

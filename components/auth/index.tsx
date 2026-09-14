@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, UserRound } from "lucide-react";
 import { authClient, useSession, signOut } from "@/lib/auth-client";
 import { GoogleButton } from "./GoogleButton";
+import { StravaButton } from "./StravaButton";
 import { buttonVariants } from "@/lib/button-variants";
 import { cn } from "@/lib/utils";
 import {
@@ -63,6 +64,17 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
+      {/* Strava d'abord : c'est là que sont les coureurs, et le compte se
+          crée avec les sorties déjà reliées. */}
+      <StravaButton callbackURL="/profil?strava=ok" className="w-full" />
+      <p className="text-[11px] text-muted-foreground">
+        Vos sorties sont reliées à vos courses ; nous ne publions rien sur Strava.
+      </p>
+      <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        ou par e-mail
+        <span className="h-px flex-1 bg-border" />
+      </div>
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Votre e-mail

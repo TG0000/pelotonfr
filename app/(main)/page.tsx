@@ -7,6 +7,7 @@ import { RaceCard } from "@/components/races/RaceCard";
 import { HomeSearch } from "@/components/races/HomeSearch";
 import { getUpcomingRaces, getRaceStats } from "@/lib/db/queries/races";
 import { FEDERATIONS } from "@/lib/constants";
+import { StravaInvite } from "@/components/strava/StravaInvite";
 import { cn } from "@/lib/utils";
 import type { Race } from "@/types";
 import type { RaceStats } from "@/lib/db/queries/races";
@@ -123,6 +124,10 @@ export default async function HomePage() {
 
       {/* Features */}
       <section className="mx-auto max-w-7xl px-4 py-14 w-full">
+        <div className="mb-14">
+          <StravaInvite />
+        </div>
+
         <div className="grid sm:grid-cols-3 gap-5 mb-14">
           {[
             {

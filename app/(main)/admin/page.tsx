@@ -123,6 +123,7 @@ export default async function AdminPage() {
             <div><span className="font-mono text-base font-bold tabular-nums text-foreground">{kpis.views24h}</span><br />vues 24 h</div>
             <div><span className="font-mono text-base font-bold tabular-nums text-foreground">{kpis.views7d}</span><br />vues 7 j</div>
             <div><span className="font-mono text-base font-bold tabular-nums text-foreground">{kpis.users}</span><br />comptes</div>
+            <div><span className={cn("font-mono text-base font-bold tabular-nums", kpis.stravaAthletes >= 10 ? "text-accent" : "text-foreground")}>{kpis.stravaAthletes}<span className="text-muted-foreground"> / 10</span></span><br />athlètes Strava</div>
             <div><span className="font-mono text-base font-bold tabular-nums text-foreground">{kpis.favourites}</span><br />courses planifiées</div>
           </div>
         </div>
