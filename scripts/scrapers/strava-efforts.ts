@@ -21,16 +21,21 @@ async function main() {
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : 60;
 
+  /* Les sorties reliées à une course d'abord (leurs bosses vont sur la
+     course), puis toutes les autres de plus de vingt-cinq kilomètres : elles
+     ne disent rien d'une course en particulier, mais chacune nomme les
+     segments qu'elle a traversés, et c'est l'index qui remplace l'explorateur. */
   const rides = (await sql(
-    `SELECT a.id::text, a.activity_id, a.user_id::text, a.race_id::text, r.name AS race_name
-       FROM strava_activities a JOIN races r ON r.id = a.race_id
-      WHERE a.race_id IS NOT NULL AND a.efforts_read_at IS NULL
-      ORDER BY a.local_date DESC
+    `SELECT a.id::text, a.activity_id, a.user_id::text, a.race_id::text, COALESCE(r.name, a.name) AS race_name
+       FROM strava_activities a LEFT JOIN races r ON r.id = a.race_id
+      WHERE a.efforts_read_at IS NULL
+        AND (a.race_id IS NOT NULL OR (a.sport_type IN ('Ride', 'GravelRide') AND a.distance_m >= 25000))
+      ORDER BY (a.race_id IS NOT NULL) DESC, a.local_date DESC
       LIMIT $1::int`,
     [limit]
-  )) as Array<{ id: string; activity_id: number; user_id: string; race_id: string; race_name: string }>;
+  )) as Array<{ id: string; activity_id: number; user_id: string; race_id: string | null; race_name: string }>;
 
-  console.log(`${rides.length} sorties reliées à une course, jamais lues.`);
+  console.log(`${rides.length} sorties jamais lues.`);
   const tokens = new Map<string, string | null>();
   let written = 0;
   let segments = 0;

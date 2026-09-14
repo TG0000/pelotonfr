@@ -87,7 +87,7 @@ const SYSTEM = `Tu regardes une photo prise depuis la route (dashcam, téléphon
 Règles :
 - "enduit gravillonné" = enduit superficiel à gravillons apparents (aspect rugueux, clair, granuleux), fréquent sur les petites routes de campagne ; "enrobé grenu" = enrobé bitumineux classique un peu rugueux ; "enrobé lisse" = enrobé récent, sombre et uni.
 - Si la route est trop loin, floue, mouillée au point de ne rien voir, ou de nuit : surface "inconnu", confidence basse. Ne devine pas.
-- Un danger n'est signalé que s'il est visible sur la chaussée ou à son bord immédiat, devant : un îlot au loin compte, une voiture garée ne compte pas, la circulation ne compte pas. Un peloton à 45 km/h dans un virage serré sur gravillons, c'est severity 3.
+- Un danger n'est signalé que s'il est visible sur la chaussée ou à son bord immédiat, devant : un îlot au loin compte, une voiture garée ne compte pas, la circulation ne compte pas, un passage piéton ne compte pas. « virage serré » seulement si la route tourne franchement (plus de 60°) ou si la visibilité est coupée ; un léger virage n'est pas un danger, ne le signale pas. Une glissière compte parce qu'un peloton n'a plus d'échappatoire de ce côté. Un peloton à 45 km/h dans un virage serré sur gravillons, c'est severity 3. En cas de doute, ne signale rien.
 - Pour coverLeft/coverRight, juge sur les cinquante premiers mètres devant la caméra, pas à l'horizon : un champ derrière une haie haute, c'est "haie haute".
 - Ne parle que de la chaussée visible et de ses bords, pas du paysage.`;
 

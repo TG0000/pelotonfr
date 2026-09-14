@@ -33,7 +33,7 @@ export async function RaceResults({ raceId }: { raceId: string }) {
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         {podium.map((r, i) => (
           <div
-            key={`${r.lastName}-${r.rank}`}
+            key={`${r.lastName}-${r.rank}-${i}`}
             className={cn(
               "rounded-xl border p-3",
               i === 0
@@ -57,8 +57,8 @@ export async function RaceResults({ raceId }: { raceId: string }) {
         <div className="scroll-x max-h-96 overflow-y-auto rounded-xl border border-border bg-surface-1">
           <table className="w-full text-sm">
             <tbody className="divide-y divide-border">
-              {rest.map((r) => (
-                <tr key={`${r.lastName}-${r.rank}`}>
+              {rest.map((r, i) => (
+                <tr key={`${r.lastName}-${r.rank}-${i}`}>
                   <td className="w-12 px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">
                     {r.rank ?? "—"}
                   </td>
