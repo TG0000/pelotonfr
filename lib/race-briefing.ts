@@ -128,9 +128,18 @@ export function parseBriefing(pageText: string): Briefing {
 
   /* Le compteur d'engagés, tel que la fédération l'affiche : les places
      restantes sur le total. Engagés = total − restantes. */
-  const places = /(\d{1,4})\s*\/\s*(\d{1,4})\s*places?\s+disponibles?/i.exec(text);
-  const placesLeft = places ? Number(places[1]) : null;
-  const placesTotal = places ? Number(places[2]) : null;
+  /* La fiche l'écrit par épreuve — « Places restantes193/200 », sans espace —
+     et autrefois « 74/150 places disponibles ». Une réunion a plusieurs
+     épreuves : on somme, c'est l'affluence de la journée. */
+  let placesLeft: number | null = null;
+  let placesTotal: number | null = null;
+  for (const m of text.matchAll(/(?:places?\s+restantes?\s*(\d{1,4})\s*\/\s*(\d{1,4}))|(?:(\d{1,4})\s*\/\s*(\d{1,4})\s*places?\s+disponibles?)/gi)) {
+    const left = Number(m[1] ?? m[3]);
+    const total = Number(m[2] ?? m[4]);
+    if (!Number.isFinite(left) || !Number.isFinite(total) || total <= 0 || left > total) continue;
+    placesLeft = (placesLeft ?? 0) + left;
+    placesTotal = (placesTotal ?? 0) + total;
+  }
 
   return { bibPickupTime, bibPickupPlace, circuitM, lapCount, entriesCloseAt, placesLeft, placesTotal };
 }
