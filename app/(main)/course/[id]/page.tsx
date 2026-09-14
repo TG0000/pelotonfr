@@ -22,6 +22,7 @@ import { ShareButton } from "@/components/races/ShareButton";
 import { ReportButton } from "@/components/races/ReportButton";
 import { ClubmatesOnRace } from "@/components/club/ClubmatesOnRace";
 import { RaceClimbs } from "@/components/races/RaceClimbs";
+import { DepositCircuit } from "@/components/races/DepositCircuit";
 import { RaceStages } from "@/components/races/RaceStages";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
 import { estimateTiming, type RaceTiming } from "@/lib/race-timing";
@@ -318,6 +319,11 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
             />
           </Suspense>
         )}
+
+        {/* Sans tracé, la page le dit et tend la main : le circuit d'une
+            course de village n'existe qu'en segment Strava, chez ceux qui
+            l'ont couru. */}
+        {!trace && !isPast && <DepositCircuit raceId={race.id} />}
 
         {/* Après la course, la seule question. En premier, donc, avant le
             relief et le peloton qu'on attendait. */}
