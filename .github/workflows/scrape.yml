@@ -117,9 +117,18 @@ jobs:
         if: ${{ !inputs.federation }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           NEXT_PUBLIC_SITE_URL: https://pelotonfr.vercel.app
         run: npm run alerts:send
+      - name: Send closing notices
+        if: ${{ !inputs.federation }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NEXT_PUBLIC_SITE_URL: https://pelotonfr.vercel.app
+        run: npm run alerts:closing
 
       # The collectors now record every run, so a step that is skipped or
       # never reached shows up as an ageing source rather than as silence.

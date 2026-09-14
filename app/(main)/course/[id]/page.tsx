@@ -24,6 +24,7 @@ import { ClubmatesOnRace } from "@/components/club/ClubmatesOnRace";
 import { RaceClimbs } from "@/components/races/RaceClimbs";
 import { DepositCircuit } from "@/components/races/DepositCircuit";
 import { RaceBrief } from "@/components/races/RaceBrief";
+import { RaceRoad, getRoadReport } from "@/components/races/RaceRoad";
 import { RaceStages } from "@/components/races/RaceStages";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
 import { estimateTiming, type RaceTiming } from "@/lib/race-timing";
@@ -113,6 +114,11 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
   } catch {
     // A missing trace is the normal case, not a fault.
   }
+
+  // La route sous le tracé, lue une fois ici : le brief la cite, la section
+  // la détaille. L'IGN répond en une seconde et la réponse est mise en cache
+  // trente jours, une route ne change pas de largeur entre deux éditions.
+  const road = trace ? await getRoadReport(trace) : null;
 
   /* Measured beats estimated: there is no reason to guess a start time when
      somebody has already ridden the race with a computer running. */
@@ -270,7 +276,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
 
       {!isPast && !race.isCancelled && (
         <Suspense fallback={null}>
-          <RaceBrief race={race} trace={trace} timing={timing} daysLeft={daysLeft} />
+          <RaceBrief race={race} trace={trace} timing={timing} daysLeft={daysLeft} road={road} />
         </Suspense>
       )}
 
@@ -329,6 +335,8 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
             />
           </Suspense>
         )}
+
+        {trace && <RaceRoad report={road} />}
 
         {/* Sans tracé, la page le dit et tend la main : le circuit d'une
             course de village n'existe qu'en segment Strava, chez ceux qui

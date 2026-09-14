@@ -1,5 +1,6 @@
 import type { RaceWeather } from "@/lib/weather";
 import type { Ground } from "@/lib/ground";
+import type { RoadReport } from "@/lib/road";
 import { cardinal } from "@/lib/weather";
 import { formatHour } from "@/lib/race-timing";
 
@@ -41,6 +42,8 @@ export interface BriefInput {
   weather: RaceWeather | null;
   /** Le sol, pour le cyclo-cross, le VTT et le gravel ; null sur route. */
   ground: Ground | null;
+  /** La route sous le tracé, quand l'IGN l'a reconnue. */
+  road: RoadReport | null;
   /** Aujourd'hui, ISO local, pour la clôture. */
   now: Date;
 }
@@ -179,8 +182,16 @@ export function composeBrief(input: BriefInput): Brief {
     lines.push(s + ".");
     sources++;
   }
+  if (input.road && input.road.verdict !== "Route de largeur ordinaire, sans surprise.") {
+    lines.push(input.road.verdict);
+    sources++;
+  }
+
   const onCourse = input.climbs.filter((c) => c.onCourse);
-  const climbs = onCourse.length > 0 ? onCourse : input.climbs.slice(0, 2);
+  // Une « bosse » de 300 m à 3 % ne décide rien ; on ne la nomme pas.
+  const climbs = (onCourse.length > 0 ? onCourse : input.climbs.slice(0, 2)).filter(
+    (c) => c.distanceM * c.averageGrade >= 1500
+  );
   if (climbs.length > 0) {
     const main = [...climbs].sort((a, b) => b.distanceM * b.averageGrade - a.distanceM * a.averageGrade)[0];
     const grade = main.averageGrade.toFixed(1).replace(".", ",");

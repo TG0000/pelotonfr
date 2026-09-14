@@ -26,6 +26,7 @@
     "scrape:guides:vision": "tsx scripts/scrapers/guide-vision.ts",
     "alerts:club": "tsx scripts/alerts/club-reminder.ts",
     "alerts:send": "tsx scripts/alerts/send-digest.ts",
+    "alerts:closing": "tsx scripts/alerts/send-closing.ts",
     "postinstall": "node scripts/build/copy-maplibre-worker.mjs",
     "prebuild": "node scripts/build/copy-maplibre-worker.mjs",
     "db:place": "tsx scripts/db/place-from-name.ts",

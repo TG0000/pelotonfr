@@ -8,6 +8,7 @@ import { sql } from "@/lib/db";
 
 export const REPORT_KINDS = [
   { value: "circuit", label: "Le circuit affiché n'est pas le bon" },
+  { value: "route", label: "La route : gravillons, enrobé, largeur, bas-côtés" },
   { value: "engages", label: "La liste des engagés manque ou est fausse" },
   { value: "horaire", label: "Horaire, dossards ou lieu manquants ou faux" },
   { value: "annulation", label: "Course annulée ou reportée" },
