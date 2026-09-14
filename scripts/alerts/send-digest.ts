@@ -12,10 +12,11 @@
  * hears about a race once. That table is also what makes the job safe to re-run
  * after a failure — nothing is sent twice.
  *
- * Sending needs RESEND_API_KEY. Without it the job still runs and reports what
+ * Sending needs BREVO_API_KEY (or RESEND_API_KEY). Without it the job still runs and reports what
  * it would have sent, which is what makes it testable before an account exists.
  */
 
+import { sendMail } from "../../lib/mail";
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "../scrapers/utils/db";
 import { toDateOnly } from "../../lib/date";
@@ -25,7 +26,7 @@ loadEnv();
 const DATABASE_URL = requireEnv("DATABASE_URL");
 const sql = createSql(DATABASE_URL);
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const MAILER = Boolean(process.env.BREVO_API_KEY || process.env.RESEND_API_KEY);
 /**
  * Resend refuses any sender on an unverified domain. Its shared test address
  * works immediately but only delivers to the account owner, so it is the
@@ -153,31 +154,22 @@ async function send(
   html: string,
   text: string
 ): Promise<boolean> {
-  if (!RESEND_API_KEY) return false;
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from: FROM, to, subject, html, text }),
-    signal: AbortSignal.timeout(20_000),
-  });
-
-  if (!res.ok) {
-    console.error(`  envoi refusé (${res.status}): ${await res.text()}`);
+  if (!MAILER) return false;
+  try {
+    await sendMail({ to, subject, html, text, from: FROM });
+    return true;
+  } catch (err) {
+    console.error(`  envoi refusé : ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
-  return true;
 }
 
 async function main() {
-  const dryRun = process.argv.includes("--dry-run") || !RESEND_API_KEY;
+  const dryRun = process.argv.includes("--dry-run") || !MAILER;
 
-  if (!RESEND_API_KEY) {
+  if (!MAILER) {
     console.log(
-      "RESEND_API_KEY absente — exécution à blanc : les correspondances sont " +
+      "Aucun service d'e-mail (BREVO_API_KEY ou RESEND_API_KEY) — exécution à blanc : les correspondances sont " +
         "calculées et affichées, rien n'est envoyé ni marqué comme livré.\n"
     );
   }

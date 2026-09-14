@@ -1,3 +1,4 @@
+import { sendMail } from "@/lib/mail";
 import { NextRequest, NextResponse } from "next/server";
 import { getCollectorHealth } from "@/lib/db/queries/collectors";
 import { describeAge } from "@/lib/collectors";
@@ -27,26 +28,22 @@ function escapeHtml(value: string): string {
 
 async function notify(subject: string, lines: string[]): Promise<boolean> {
   const to = process.env.WATCHDOG_EMAIL;
-  if (!process.env.RESEND_API_KEY || !to) return false;
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: FROM,
+  if (!(process.env.BREVO_API_KEY || process.env.RESEND_API_KEY) || !to) return false;
+  try {
+    await sendMail({
       to,
       subject,
+      from: FROM,
       text: lines.join("\n"),
       html:
         `<p style="font-family:system-ui;font-size:15px">` +
         lines.map((l) => escapeHtml(l)).join("<br>") +
         `</p>`,
-    }),
-  });
-  return res.ok;
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function GET(request: NextRequest) {

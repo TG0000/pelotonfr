@@ -1,3 +1,4 @@
+import { sendMail } from "@/lib/mail";
 import type { SqlLike } from "@/lib/strava/types";
 import { displayRaceName } from "@/lib/race-name";
 import { toDateOnly } from "@/lib/date";
@@ -166,7 +167,7 @@ export async function sendClubReminders(
   } = {}
 ): Promise<ReminderResult> {
   const withinHours = options.withinHours ?? 48;
-  const apiKey = options.apiKey ?? process.env.RESEND_API_KEY;
+  const apiKey = options.apiKey ?? process.env.BREVO_API_KEY ?? process.env.RESEND_API_KEY;
   const dryRun = options.dryRun || !apiKey;
   const from =
     options.from ?? process.env.ALERT_FROM_EMAIL ?? "PelotonFR <onboarding@resend.dev>";
@@ -201,18 +202,10 @@ export async function sendClubReminders(
 
     if (dryRun) continue;
 
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from, to: races[0].email, subject, html, text }),
-      signal: AbortSignal.timeout(20_000),
-    });
-
-    if (!res.ok) {
-      lines.push(`  envoi refusé (${res.status})`);
+    try {
+      await sendMail({ to: races[0].email, subject, html, text, from });
+    } catch (err) {
+      lines.push(`  envoi refusé : ${err instanceof Error ? err.message : String(err)}`);
       continue;
     }
 
