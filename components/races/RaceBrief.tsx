@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/queries/race-detail";
 import type { Race } from "@/types";
 import type { RoadReport } from "@/lib/road";
+import type { RoadSeen } from "@/lib/road-vision";
 import { SectionHeading } from "./StartList";
 
 /**
@@ -27,12 +28,14 @@ export async function RaceBrief({
   timing,
   daysLeft,
   road,
+  seen,
 }: {
   race: Race;
   trace: RaceTrace | null;
   timing: RaceTiming;
   daysLeft: number;
   road: RoadReport | null;
+  seen: RoadSeen | null;
 }) {
   const offRoad = groundMatters(race.discipline);
   const [climbs, field, past, weather, ground] = await Promise.all([
@@ -66,6 +69,7 @@ export async function RaceBrief({
     weather,
     ground,
     road,
+    seen,
     now: new Date(),
   });
 

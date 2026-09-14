@@ -2,6 +2,8 @@ import { Ruler } from "lucide-react";
 import { fetchRoadFeatures, readRoad, type RoadReport } from "@/lib/road";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { SectionHeading } from "./StartList";
+import type { RoadView } from "@/lib/db/queries/road";
+import type { RoadSeen } from "@/lib/road-vision";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,9 +26,18 @@ function km(m: number): string {
   return `${(m / 1000).toFixed(1).replace(".", ",")} km`;
 }
 
-export function RaceRoad({ report }: { report: RoadReport | null }) {
-  if (!report) return null;
-  const shown = report.stretches.slice(0, 6);
+export function RaceRoad({
+  report,
+  views = [],
+  seen = null,
+}: {
+  report: RoadReport | null;
+  views?: RoadView[];
+  seen?: RoadSeen | null;
+}) {
+  if (!report && views.length === 0) return null;
+  const shown = report?.stretches.slice(0, 6) ?? [];
+  const readable = views.filter((v) => v.reading && v.reading.surface !== "inconnu");
 
   return (
     <section>
@@ -36,6 +47,39 @@ export function RaceRoad({ report }: { report: RoadReport | null }) {
           largeur et nature, lues sur la BD TOPO de l&rsquo;IGN
         </span>
       </SectionHeading>
+      {readable.length > 0 && (
+        <div className="mb-4 rounded-xl border border-border bg-surface-1 p-4">
+          <p className="mb-3 text-sm">
+            {seen?.verdict ?? "Revêtement vu en photo : enrobé ordinaire en bon état."}
+            <span className="text-muted-foreground"> D&rsquo;après {readable.length} photo{readable.length > 1 ? "s" : ""} prise{readable.length > 1 ? "s" : ""} sur la boucle.</span>
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {readable.map((v) => (
+              <a
+                key={v.pictureId}
+                href={`https://api.panoramax.xyz/#focus=pic&pic=${v.pictureId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-44 shrink-0"
+                title={v.reading?.note ?? undefined}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={v.url} alt={v.reading?.note ?? "Photo de la route"} loading="lazy" className="h-24 w-44 rounded-lg border border-border object-cover" />
+                <div className="mt-1 text-xs">
+                  <span className="font-mono tabular-nums text-muted-foreground">km {((v.alongM ?? 0) / 1000).toFixed(1).replace(".", ",")}</span>{" "}
+                  {v.reading?.surface}
+                  {v.reading?.condition && v.reading.condition !== "bon" && v.reading.condition !== "inconnu" ? `, ${v.reading.condition}` : ""}
+                  {v.reading?.looseGravel ? ", gravillons" : ""}
+                </div>
+              </a>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Photos Panoramax, prises par des contributeurs{readable[0]?.takenOn ? ` (la plus récente le ${readable.map((v) => v.takenOn ?? "").sort().at(-1)})` : ""}, lues une fois par vision. La route a pu être refaite depuis.
+          </p>
+        </div>
+      )}
+      {report && (
       <div className="rounded-xl border border-border bg-surface-1 p-4">
         <p className="mb-3 text-sm">{report.verdict}</p>
         <div className="grid grid-cols-3 gap-3 text-sm">
@@ -73,11 +117,11 @@ export function RaceRoad({ report }: { report: RoadReport | null }) {
           </tbody>
         </table>
         <p className="mt-3 text-xs text-muted-foreground">
-          L&rsquo;IGN mesure la chaussée, pas son état. Gravillons, enrobé refait,
-          bas-côtés sales : si tu l&rsquo;as roulée, dis-le avec « Une info manque »
-          en haut de page, choix « La route ».
+          L&rsquo;IGN mesure la chaussée ; les photos disent l&rsquo;état. Si tu l&rsquo;as
+          roulée depuis et que ça a changé, dis-le avec « Une info manque », choix « La route ».
         </p>
       </div>
+      )}
     </section>
   );
 }

@@ -25,6 +25,7 @@ import { RaceClimbs } from "@/components/races/RaceClimbs";
 import { DepositCircuit } from "@/components/races/DepositCircuit";
 import { RaceBrief } from "@/components/races/RaceBrief";
 import { RaceRoad, getRoadReport } from "@/components/races/RaceRoad";
+import { getRoadViews } from "@/lib/db/queries/road";
 import { RaceStages } from "@/components/races/RaceStages";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
 import { estimateTiming, type RaceTiming } from "@/lib/race-timing";
@@ -118,7 +119,9 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
   // La route sous le tracé, lue une fois ici : le brief la cite, la section
   // la détaille. L'IGN répond en une seconde et la réponse est mise en cache
   // trente jours, une route ne change pas de largeur entre deux éditions.
-  const road = trace ? await getRoadReport(trace) : null;
+  const [road, roadViews] = trace
+    ? await Promise.all([getRoadReport(trace), getRoadViews(race.id).catch(() => ({ views: [], seen: null }))])
+    : [null, { views: [], seen: null }];
 
   /* Measured beats estimated: there is no reason to guess a start time when
      somebody has already ridden the race with a computer running. */
@@ -276,7 +279,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
 
       {!isPast && !race.isCancelled && (
         <Suspense fallback={null}>
-          <RaceBrief race={race} trace={trace} timing={timing} daysLeft={daysLeft} road={road} />
+          <RaceBrief race={race} trace={trace} timing={timing} daysLeft={daysLeft} road={road} seen={roadViews.seen} />
         </Suspense>
       )}
 
@@ -336,7 +339,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
           </Suspense>
         )}
 
-        {trace && <RaceRoad report={road} />}
+        {trace && <RaceRoad report={road} views={roadViews.views} seen={roadViews.seen} />}
 
         {/* Sans tracé, la page le dit et tend la main : le circuit d'une
             course de village n'existe qu'en segment Strava, chez ceux qui

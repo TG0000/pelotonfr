@@ -1,6 +1,7 @@
 import type { RaceWeather } from "@/lib/weather";
 import type { Ground } from "@/lib/ground";
 import type { RoadReport } from "@/lib/road";
+import type { RoadSeen } from "@/lib/road-vision";
 import { cardinal } from "@/lib/weather";
 import { formatHour } from "@/lib/race-timing";
 
@@ -44,6 +45,8 @@ export interface BriefInput {
   ground: Ground | null;
   /** La route sous le tracé, quand l'IGN l'a reconnue. */
   road: RoadReport | null;
+  /** Le revêtement lu sur les photos Panoramax, quand il y en a. */
+  seen: RoadSeen | null;
   /** Aujourd'hui, ISO local, pour la clôture. */
   now: Date;
 }
@@ -184,6 +187,10 @@ export function composeBrief(input: BriefInput): Brief {
   }
   if (input.road && input.road.verdict !== "Route de largeur ordinaire, sans surprise.") {
     lines.push(input.road.verdict);
+    sources++;
+  }
+  if (input.seen?.verdict) {
+    lines.push(input.seen.verdict);
     sources++;
   }
 

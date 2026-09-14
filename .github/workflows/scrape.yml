@@ -210,6 +210,7 @@ jobs:
           npm run scrape:affiches -- --limit=30
           npm run scrape:guides -- --limit=30
           npm run scrape:guides:vision -- --limit=40
+          npm run scrape:road:vision -- --limit=40
         continue-on-error: true
 
       # The weather at the start, for the coming week, so the list can show it.
