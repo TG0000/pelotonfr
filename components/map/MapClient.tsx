@@ -32,6 +32,8 @@ const RaceMap = dynamic(
   }
 );
 
+const PANEL_PAGE = 80;
+
 interface MapClientProps {
   races: RaceMarker[];
   /** Le sélecteur de jour, dans le volet : la carte garde sa largeur. */
@@ -95,6 +97,10 @@ export function MapClient({ races, dayPicker }: MapClientProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [visibleIds, setVisibleIds] = useState<string[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  /* Le volet ne dessine pas mille sept cents lignes d'un coup : la page en
+     pesait 1,8 Mo. Quatre-vingts d'abord — la carte, une fois chargée, ne
+     garde de toute façon que ce qui est dans la vue. */
+  const [shown, setShown] = useState(PANEL_PAGE);
 
   /* Re-frame the map when the filters change, not when React happens to hand
      down a new array. */
@@ -152,7 +158,7 @@ export function MapClient({ races, dayPicker }: MapClientProps) {
           />
         ) : (
           <div className="divide-y divide-border/60">
-            {visible.map((race) => (
+            {visible.slice(0, shown).map((race) => (
               <ResultRow
                 key={race.id}
                 race={race}
@@ -160,6 +166,18 @@ export function MapClient({ races, dayPicker }: MapClientProps) {
                 onSelect={() => setSelectedId(race.id)}
               />
             ))}
+            {visible.length > shown && (
+              <button
+                type="button"
+                onClick={() => setShown((n) => n + PANEL_PAGE)}
+                className="w-full px-4 py-3 text-sm text-primary hover:bg-surface-2"
+              >
+                Afficher {Math.min(PANEL_PAGE, visible.length - shown)} courses de plus
+                <span className="ml-1 font-mono text-xs tabular-nums text-muted-foreground">
+                  ({visible.length - shown} restantes)
+                </span>
+              </button>
+            )}
           </div>
         )}
       </div>

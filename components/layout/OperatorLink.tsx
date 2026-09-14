@@ -18,10 +18,7 @@ export function OperatorLink() {
   const [operator, setOperator] = useState(false);
 
   useEffect(() => {
-    if (!isSignedIn) {
-      setOperator(false);
-      return;
-    }
+    if (!isSignedIn) return;
     let live = true;
     fetch("/api/me/operator")
       .then((r) => (r.ok ? r.json() : { operator: false }))
@@ -36,7 +33,8 @@ export function OperatorLink() {
     };
   }, [isSignedIn]);
 
-  if (!operator) return null;
+  // Déconnecté, le lien disparaît sans qu'un effet ait à le dire.
+  if (!isSignedIn || !operator) return null;
   return (
     <Link
       href="/admin"
