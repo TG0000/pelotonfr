@@ -4,12 +4,12 @@ import { useEffect, useRef } from "react";
 // Depuis lib/maplibre : MapLibre 6 y reçoit l'URL de son worker avant toute carte.
 import { maplibregl } from "@/lib/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { Race } from "@/types";
+import type { RaceMarker } from "@/types";
 import { FRANCE_CENTER, FRANCE_ZOOM } from "@/lib/constants";
 import { oklchToHex } from "@/lib/color";
 
 interface RaceMapProps {
-  races: Race[];
+  races: RaceMarker[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   /** The races currently inside the viewport, so the list can follow the map. */
@@ -88,7 +88,7 @@ function federationPalette(): Record<string, string> {
 }
 
 function racesToGeoJSON(
-  races: Race[],
+  races: RaceMarker[],
   palette: Record<string, string>
 ): GeoJSON.FeatureCollection {
   return {

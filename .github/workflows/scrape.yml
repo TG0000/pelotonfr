@@ -19,8 +19,10 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    # Twenty-six minutes on a normal night; the rest is margin, not budget.
-    timeout-minutes: 60
+    # Calendar, results, rankings, start lists, categories, alerts: forty
+    # minutes on a normal night. Everything that only enriches a race runs in
+    # its own job below, so that nothing here waits on a slow read.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -96,40 +98,6 @@ jobs:
       # two hours, and for sixteen nights that step was killed by this job's
       # timeout — taking the categories and the alert digests down with it.
 
-      # What the organiser wrote on their own page: dossards, circuit, stages.
-      # A page is read once, so a night's work is the new races only.
-      - name: Read organiser pages
-        if: ${{ !inputs.federation }}
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          npm run scrape:briefing -- --limit=150
-          # The entries counter moves every day until entries close: re-read
-          # the next ten days for that number alone.
-          npm run scrape:briefing -- --places --limit=800
-        continue-on-error: true
-
-      # Posters and technical guides, read by a vision model. Each image is
-      # read once and stored for good; the scripts do nothing without the key.
-      - name: Read posters and technical guides
-        if: ${{ !inputs.federation }}
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          npm run scrape:affiches -- --limit=30
-          npm run scrape:guides -- --limit=30
-          npm run scrape:guides:vision -- --limit=40
-        continue-on-error: true
-
-      # The weather at the start, for the coming week, so the list can show it.
-      - name: Forecast the coming week
-        if: ${{ !inputs.federation }}
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npm run scrape:meteo
-        continue-on-error: true
-
       # Categories for FSGT and UFOLEP, which their own calendar never states.
       - name: Enrich categories
         if: ${{ !inputs.federation }}
@@ -184,3 +152,55 @@ jobs:
               ].join('\n'),
               labels: ['bug', 'scraper'],
             });
+
+  # What only enriches a race — organiser pages, posters, guides, weather —
+  # runs beside the calendar job, not behind it: a slow read here must never
+  # delay the alerts. It reads the races the calendar knew last night, which
+  # is a night late for a brand-new race and correct for every other.
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: ${{ !inputs.federation }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # What the organiser wrote on their own page: dossards, circuit, stages.
+      # A page is read once, so a night's work is the new races only.
+      - name: Read organiser pages
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          npm run scrape:briefing -- --limit=150
+          # The entries counter moves every day until entries close: re-read
+          # the next ten days for that number alone.
+          npm run scrape:briefing -- --places --limit=800
+        continue-on-error: true
+
+      # Posters and technical guides, read by a vision model. Each image is
+      # read once and stored for good; the scripts do nothing without the key.
+      - name: Read posters and technical guides
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          npm run scrape:affiches -- --limit=30
+          npm run scrape:guides -- --limit=30
+          npm run scrape:guides:vision -- --limit=40
+        continue-on-error: true
+
+      # The weather at the start, for the coming week, so the list can show it.
+      - name: Forecast the coming week
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run scrape:meteo
+        continue-on-error: true
+

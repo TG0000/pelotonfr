@@ -100,3 +100,26 @@ export interface User {
   homeCity: string | null;
   defaultRadiusKm: number;
 }
+
+/**
+ * Une course telle que la carte et la grille du mois la dessinent.
+ *
+ * La carte reçoit mille sept cents courses d'un coup : envoyées entières —
+ * notes, contacts, prévision, clôture — elles pesaient 3,9 Mo de page. Un
+ * point sur une carte n'a besoin que de ce qui se lit dessus.
+ */
+export type RaceMarker = Pick<
+  Race,
+  | "id" | "name" | "raceDate" | "raceDateEnd" | "lat" | "lng"
+  | "federationSlug" | "categories" | "city" | "departmentCode" | "departmentName"
+  | "discipline" | "raceType"
+>;
+
+export function toRaceMarker(r: Race): RaceMarker {
+  return {
+    id: r.id, name: r.name, raceDate: r.raceDate, raceDateEnd: r.raceDateEnd,
+    lat: r.lat, lng: r.lng, federationSlug: r.federationSlug, categories: r.categories,
+    city: r.city, departmentCode: r.departmentCode, departmentName: r.departmentName,
+    discipline: r.discipline, raceType: r.raceType,
+  };
+}

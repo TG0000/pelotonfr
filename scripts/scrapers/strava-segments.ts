@@ -17,6 +17,7 @@ import { createSql } from "./utils/db";
 import { getAccessToken } from "../../lib/db/queries/strava";
 import {
   exploreSegments,
+  StravaAuthError,
   StravaRateLimitError,
   type StravaSegment,
 } from "../../lib/strava/client";
@@ -372,6 +373,11 @@ async function main() {
         [race.id]
       );
     } catch (err) {
+      if (err instanceof StravaAuthError) {
+        // Un refus n'est pas un secteur vide : on s'arrête sans rien marquer.
+        console.log(`\n${err.message} Arrêt ; ${races.length - read} courses gardent leur tour.`);
+        break;
+      }
       if (err instanceof StravaRateLimitError) {
         // Stop rather than carry on marking races as read that were never
         // looked at. The rest keep their null timestamp and are picked up by

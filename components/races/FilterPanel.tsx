@@ -143,6 +143,7 @@ export function FilterPanel() {
           <button
             type="button"
             onClick={() => fold(false)}
+            aria-label="Afficher les filtres"
             aria-expanded={false}
             title="Afficher les filtres"
             className="flex flex-col items-center gap-2 rounded-lg border border-border bg-surface-1 px-2 py-3 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"

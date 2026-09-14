@@ -2,7 +2,7 @@ import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { calendarName, displayRaceName } from "@/lib/race-name";
 import { cn } from "@/lib/utils";
-import type { Race } from "@/types";
+import type { Race, RaceMarker } from "@/types";
 import {
   CategorySummary,
   FEDERATION_BG,
@@ -52,10 +52,10 @@ export function monthGrid(year: number, month: number): string[] {
  */
 const MAX_SPAN_DAYS = 14;
 
-export function racesByDay(races: Race[]): Map<string, Race[]> {
-  const byDay = new Map<string, Race[]>();
+export function racesByDay(races: RaceMarker[]): Map<string, RaceMarker[]> {
+  const byDay = new Map<string, RaceMarker[]>();
 
-  const push = (day: string, race: Race) => {
+  const push = (day: string, race: RaceMarker) => {
     const list = byDay.get(day);
     if (list) list.push(race);
     else byDay.set(day, [race]);
@@ -90,8 +90,8 @@ function weeksOf(days: string[]): string[][] {
 }
 
 /** Les courses qui durent plusieurs jours, sans doublon — une par identité. */
-function spanningRaces(byDay: Map<string, Race[]>): Map<string, Race> {
-  const out = new Map<string, Race>();
+function spanningRaces(byDay: Map<string, RaceMarker[]>): Map<string, RaceMarker> {
+  const out = new Map<string, RaceMarker>();
   for (const races of byDay.values()) {
     for (const race of races) {
       if (!race.raceDateEnd || race.raceDateEnd === race.raceDate) continue;
@@ -107,7 +107,7 @@ function spanningRaces(byDay: Map<string, Race[]>): Map<string, Race> {
 }
 
 interface Bar {
-  race: Race;
+  race: RaceMarker;
   /** Colonnes de la semaine, de 0 à 6, incluses. */
   from: number;
   to: number;
@@ -120,7 +120,7 @@ interface Bar {
  * Les barres d'une semaine, rangées en couloirs pour ne pas se chevaucher.
  * La plus longue prend le premier couloir : c'est elle qu'on lit d'abord.
  */
-function barsForWeek(week: string[], spanning: Map<string, Race>): Bar[] {
+function barsForWeek(week: string[], spanning: Map<string, RaceMarker>): Bar[] {
   const first = week[0];
   const last = week[week.length - 1];
   const bars: Bar[] = [];
@@ -156,7 +156,9 @@ interface MonthGridProps {
   year: number;
   month: number;
   days: string[];
-  byDay: Map<string, Race[]>;
+  byDay: Map<string, RaceMarker[]>;
+  /** Les courses du jour choisi, entières : leur carte en a besoin. */
+  selectedRaces: Race[];
   today: string;
   selectedDay: string;
   /** Builds the href for a day cell, so the page owns URL shape. */
@@ -168,12 +170,12 @@ export function MonthGrid({
   month,
   days,
   byDay,
+  selectedRaces,
   today,
   selectedDay,
   dayHref,
   closeHref,
 }: MonthGridProps) {
-  const selectedRaces = selectedDay ? (byDay.get(selectedDay) ?? []) : [];
   const weeks = weeksOf(days);
   const spanning = spanningRaces(byDay);
 

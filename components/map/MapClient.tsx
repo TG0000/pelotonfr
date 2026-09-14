@@ -18,7 +18,7 @@ import {
 import { EmptyState } from "@/components/common/States";
 import { cn } from "@/lib/utils";
 import { displayRaceName } from "@/lib/race-name";
-import type { Race } from "@/types";
+import type { RaceMarker } from "@/types";
 
 const RaceMap = dynamic(
   () => import("./RaceMap").then((m) => ({ default: m.RaceMap })),
@@ -33,7 +33,7 @@ const RaceMap = dynamic(
 );
 
 interface MapClientProps {
-  races: Race[];
+  races: RaceMarker[];
   /** Le sélecteur de jour, dans le volet : la carte garde sa largeur. */
   dayPicker?: DayPickerState;
 }
@@ -44,7 +44,7 @@ function ResultRow({
   selected,
   onSelect,
 }: {
-  race: Race;
+  race: RaceMarker;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -107,7 +107,7 @@ export function MapClient({ races, dayPicker }: MapClientProps) {
     const source =
       visibleIds === null
         ? races
-        : visibleIds.map((id) => byId.get(id)).filter((r): r is Race => Boolean(r));
+        : visibleIds.map((id) => byId.get(id)).filter((r): r is RaceMarker => Boolean(r));
     return [...source].sort(
       (a, b) => parseRaceDate(a.raceDate).getTime() - parseRaceDate(b.raceDate).getTime()
     );

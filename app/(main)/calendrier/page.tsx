@@ -26,7 +26,7 @@ import {
   racesByDay,
 } from "@/components/races/MonthGrid";
 import { todayISO } from "@/lib/date";
-import type { Race, PaginatedRaces } from "@/types";
+import { toRaceMarker, type Race, type PaginatedRaces } from "@/types";
 import type { FederationSlug, Discipline } from "@/lib/constants";
 
 export const metadata: Metadata = {
@@ -189,10 +189,13 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
     // DB not configured
   }
 
-  const byDay = racesByDay(calendarRaces);
+  const byDay = racesByDay(calendarRaces.map(toRaceMarker));
   const selectedDay = ISO_DATE.test(getString(params.jour))
     ? getString(params.jour)
     : "";
+  const selectedRaces = selectedDay
+    ? calendarRaces.filter((r) => byDay.get(selectedDay)?.some((m) => m.id === r.id))
+    : [];
 
   const prevMonth = new Date(Date.UTC(year, month - 1, 1));
   const nextMonth = new Date(Date.UTC(year, month + 1, 1));
@@ -299,7 +302,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
       {view === "carte" ? (
         <div className="min-h-0 flex-1">
           <MapClient
-            races={mapRaces}
+            races={mapRaces.map(toRaceMarker)}
             dayPicker={{
               month: `${year}-${String(month + 1).padStart(2, "0")}`,
               selected: dateFrom && dateFrom === dateTo ? dateFrom : "",
@@ -328,6 +331,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
                 month={month}
                 days={days}
                 byDay={byDay}
+                selectedRaces={selectedRaces}
                 today={today}
                 selectedDay={selectedDay}
                 dayHref={(day) => `/calendrier${buildQuery(base, { jour: day })}`}

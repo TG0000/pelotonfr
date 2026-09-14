@@ -40,6 +40,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The climbs a race really uses, read from the rides of those who rode
+      # it. segments/explore has closed to unverified apps; this has not.
+      - name: Read the climbs from riders' own rides
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+        run: npm run scrape:efforts -- --limit=80
+        continue-on-error: true
+
       - name: Read the climbs around upcoming races
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

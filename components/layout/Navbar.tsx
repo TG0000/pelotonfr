@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignInButton, SignUpButton, UserButton, useAuth } from "@/components/auth";
-import { Activity, Bell, CalendarDays, Flag, Menu, UserRound, Users } from "lucide-react";
+import { OperatorLink } from "./OperatorLink";
+import { Bell, CalendarDays, Flag, Menu, UserRound, Users } from "lucide-react";
 import { Logo, Wordmark } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
@@ -55,7 +56,7 @@ function NavLink({
   );
 }
 
-export function Navbar({ operator = false }: { operator?: boolean }) {
+export function Navbar() {
   const { isSignedIn } = useAuth();
 
   return (
@@ -80,15 +81,7 @@ export function Navbar({ operator = false }: { operator?: boolean }) {
         <div className="flex items-center gap-2">
           <ThemeToggle />
 
-          {operator && (
-            <Link
-              href="/admin"
-              className="hidden items-center gap-1.5 rounded-md px-2 py-1 text-sm text-accent hover:bg-surface-2 sm:inline-flex"
-            >
-              <Activity className="size-4" />
-              Tableau de bord
-            </Link>
-          )}
+          <OperatorLink />
           {isSignedIn ? (
             <UserButton />
           ) : (

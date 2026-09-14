@@ -1,3 +1,4 @@
+import { fileSlug } from "@/lib/slug";
 import { NextRequest, NextResponse } from "next/server";
 import { getRaceById } from "@/lib/db/queries/races";
 import { getRaceTrace } from "@/lib/db/queries/race-detail";
@@ -19,16 +20,8 @@ import { encodeCourse, type TracePoint } from "@/lib/fit-course";
  * gros, et le compteur annonce alors quatorze fois l'arrivée.
  */
 
-/** Un nom de fichier qu'un coureur retrouve parmi cinquante sur son compteur. */
 function fileNameFor(name: string, date: string, oneLap: boolean): string {
-  const slug = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return `${slug || "parcours"}-${date}${oneLap ? "-1tour" : ""}.fit`;
+  return `${fileSlug(name)}-${date}${oneLap ? "-1tour" : ""}.fit`;
 }
 
 export async function GET(

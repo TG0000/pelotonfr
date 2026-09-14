@@ -1,3 +1,4 @@
+import { fileSlug } from "@/lib/slug";
 import { NextResponse } from "next/server";
 import { getRaceById } from "@/lib/db/queries/races";
 import { displayRaceName } from "@/lib/race-name";
@@ -53,18 +54,12 @@ export async function GET(
     name
   );
 
-  const slug = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
+  const slug = fileSlug(name, "course");
 
   return new NextResponse(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${slug || "course"}-${race.raceDate}.ics"`,
+      "Content-Disposition": `attachment; filename="${slug}-${race.raceDate}.ics"`,
       "Cache-Control": "public, max-age=3600",
     },
   });

@@ -1,3 +1,4 @@
+import { fileSlug } from "@/lib/slug";
 import { NextRequest, NextResponse } from "next/server";
 import { getRaceById } from "@/lib/db/queries/races";
 import { getRaceTrace } from "@/lib/db/queries/race-detail";
@@ -22,16 +23,8 @@ function escapeXml(value: string): string {
   );
 }
 
-/** A filename a rider can find again among fifty others on a head unit. */
 function fileNameFor(name: string, date: string, oneLap: boolean): string {
-  const slug = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return `${slug || "parcours"}-${date}${oneLap ? "-1tour" : ""}.gpx`;
+  return `${fileSlug(name)}-${date}${oneLap ? "-1tour" : ""}.gpx`;
 }
 
 export async function GET(

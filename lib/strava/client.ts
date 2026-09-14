@@ -199,6 +199,20 @@ export async function getActivityStreams(
 }
 
 /** Thrown rather than swallowed: see exploreSegments. */
+/**
+ * Strava refuse — pas « il n'y a rien ici ».
+ *
+ * `segments/explore` a répondu 401 pendant deux nuits, et chaque refus était
+ * lu comme un secteur vide : neuf cents lectures dépensées, trois cents
+ * courses marquées lues sans avoir été regardées. Un refus arrête la passe.
+ */
+export class StravaAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StravaAuthError";
+  }
+}
+
 export class StravaRateLimitError extends Error {
   readonly name = "StravaRateLimitError";
 }
@@ -256,6 +270,9 @@ export async function exploreSegments(
       `Strava read limit reached (${usage} of ${limit}).`
     );
   }
+  if (res.status === 401 || res.status === 403) {
+    throw new StravaAuthError(`Strava refuse segments/explore (${res.status}) : ce point d'entrée n'est plus ouvert à cette application.`);
+  }
   if (!res.ok) return [];
 
   const body = (await res.json()) as {
@@ -293,4 +310,55 @@ export function authorizeUrl(redirectUri: string, state: string): string {
     state,
   });
   return `https://www.strava.com/oauth/authorize?${params}`;
+}
+
+/** Un segment tel qu'une sortie l'a rencontré. */
+export interface EffortSegment {
+  id: number;
+  name: string;
+  distanceM: number;
+  averageGrade: number;
+  elevationM: number;
+  climbCategory: number;
+  startLat: number;
+  startLng: number;
+}
+
+/**
+ * Les segments qu'une sortie a traversés.
+ *
+ * `segments/explore` s'est fermé ; les sorties de nos coureurs, elles, disent
+ * exactement quelles bosses le parcours emprunte — puisqu'ils l'ont couru.
+ * Une lecture par sortie, pour tous les segments de la course.
+ */
+export async function getActivityEffortSegments(
+  token: string,
+  activityId: number
+): Promise<EffortSegment[]> {
+  const res = await fetch(`${STRAVA_API}/activities/${activityId}?include_all_efforts=true`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 429) throw new StravaRateLimitError("Strava read limit reached.");
+  if (res.status === 401 || res.status === 403) throw new StravaAuthError(`Strava refuse activities/${activityId} (${res.status}).`);
+  if (!res.ok) return [];
+  const body = (await res.json()) as { segment_efforts?: Array<{ segment?: Record<string, unknown> }> };
+  const seen = new Map<number, EffortSegment>();
+  for (const e of body.segment_efforts ?? []) {
+    const sg = e.segment;
+    if (!sg || typeof sg.id !== "number") continue;
+    const start = (sg.start_latlng as number[] | undefined) ?? [];
+    const high = Number(sg.elevation_high ?? 0);
+    const low = Number(sg.elevation_low ?? 0);
+    seen.set(sg.id, {
+      id: sg.id,
+      name: String(sg.name ?? ""),
+      distanceM: Number(sg.distance ?? 0),
+      averageGrade: Number(sg.average_grade ?? 0),
+      elevationM: Math.max(0, high - low),
+      climbCategory: Number(sg.climb_category ?? 0),
+      startLat: Number(start[0] ?? 0),
+      startLng: Number(start[1] ?? 0),
+    });
+  }
+  return [...seen.values()];
 }
