@@ -23,6 +23,7 @@ import { ReportButton } from "@/components/races/ReportButton";
 import { ClubmatesOnRace } from "@/components/club/ClubmatesOnRace";
 import { RaceClimbs } from "@/components/races/RaceClimbs";
 import { DepositCircuit } from "@/components/races/DepositCircuit";
+import { RaceBrief } from "@/components/races/RaceBrief";
 import { RaceStages } from "@/components/races/RaceStages";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
 import { estimateTiming, type RaceTiming } from "@/lib/race-timing";
@@ -128,6 +129,9 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
   const dateEnd = race.raceDateEnd ? new Date(`${race.raceDateEnd}T12:00:00Z`) : null;
   const fed = FEDERATIONS.find((f) => f.slug === race.federationSlug);
   const soon = countdown(race.raceDate, today);
+  const daysLeft = Math.round(
+    (new Date(`${race.raceDate}T12:00:00Z`).getTime() - new Date(`${today}T12:00:00Z`).getTime()) / 86_400_000
+  );
   const isPast = race.raceDate < today;
 
   return (
@@ -264,6 +268,12 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
         <ClubmatesOnRace raceId={race.id} />
       </Suspense>
 
+      {!isPast && !race.isCancelled && (
+        <Suspense fallback={null}>
+          <RaceBrief race={race} trace={trace} timing={timing} daysLeft={daysLeft} />
+        </Suspense>
+      )}
+
       <OrganiserBriefing
         bibPickupTime={race.bibPickupTime}
         bibPickupPlace={race.bibPickupPlace}
@@ -323,7 +333,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
         {/* Sans tracé, la page le dit et tend la main : le circuit d'une
             course de village n'existe qu'en segment Strava, chez ceux qui
             l'ont couru. */}
-        {!trace && !isPast && <DepositCircuit raceId={race.id} />}
+        {!trace && !isPast && !race.isCancelled && <DepositCircuit raceId={race.id} />}
 
         {/* Après la course, la seule question. En premier, donc, avant le
             relief et le peloton qu'on attendait. */}
