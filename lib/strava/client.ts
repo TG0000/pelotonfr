@@ -30,7 +30,14 @@ interface TokenResponse {
   access_token: string;
   refresh_token: string;
   expires_at: number;
-  athlete?: { id: number; firstname?: string; lastname?: string; city?: string };
+  athlete?: {
+    id: number;
+    firstname?: string;
+    lastname?: string;
+    city?: string;
+    /** L'avatar, en 124 px. */
+    profile_medium?: string;
+  };
 }
 
 async function requestToken(body: Record<string, string>): Promise<TokenResponse> {
@@ -53,7 +60,11 @@ async function requestToken(body: Record<string, string>): Promise<TokenResponse
 
 /** Exchanges the one-time code from the OAuth redirect for a token pair. */
 export async function exchangeCode(code: string): Promise<
-  StravaTokens & { athleteName: string | null; homeCity: string | null }
+  StravaTokens & {
+    athleteName: string | null;
+    homeCity: string | null;
+    avatarUrl: string | null;
+  }
 > {
   const data = await requestToken({ code, grant_type: "authorization_code" });
   const name = [data.athlete?.firstname, data.athlete?.lastname]
@@ -67,7 +78,26 @@ export async function exchangeCode(code: string): Promise<
     athleteId: data.athlete?.id ?? 0,
     athleteName: name || null,
     homeCity: data.athlete?.city ?? null,
+    avatarUrl: data.athlete?.profile_medium ?? null,
   };
+}
+
+/**
+ * L'adresse e-mail qu'un compte créé depuis Strava porte en attendant la vraie.
+ *
+ * Strava ne communique jamais l'adresse d'un athlète, et un compte sans
+ * adresse n'existe pas pour Better Auth. Celle-ci est reconnaissable, ne
+ * reçoit rien, et se remplace depuis le profil — les alertes attendront
+ * qu'un coureur en donne une vraie.
+ */
+export const PLACEHOLDER_EMAIL_DOMAIN = "athlete.strava.pelotonfr.app";
+
+export function placeholderEmail(athleteId: number | string): string {
+  return `strava-${athleteId}@${PLACEHOLDER_EMAIL_DOMAIN}`;
+}
+
+export function isPlaceholderEmail(email: string | null | undefined): boolean {
+  return Boolean(email && email.toLowerCase().endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`));
 }
 
 export async function refreshTokens(refreshToken: string): Promise<StravaTokens> {

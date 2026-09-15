@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { auth, currentUser } from "@/lib/session";
 import { SignInButton } from "@/components/auth";
 import { Users } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { sql } from "@/lib/db";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { getClubQueue, getMembership, getClubPlans, getViewerGroups } from "@/lib/db/queries/club";
@@ -55,9 +54,7 @@ export default async function ClubPage({
           le compte. Cette page lui montre qui reste à inscrire, et à quelle
           heure la porte se ferme.
         </p>
-        <SignInButton mode="modal">
-          <Button>Se connecter</Button>
-        </SignInButton>
+        <SignInButton size="default">Se connecter</SignInButton>
       </div>
     );
   }

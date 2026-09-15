@@ -3,12 +3,14 @@ import Link from "next/link";
 import { auth, currentUser } from "@/lib/session";
 import { SignInButton } from "@/components/auth";
 import { Bookmark, CalendarCheck, Flag, TrendingUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { getMySeason, type MySeason } from "@/lib/db/queries/my-season";
 import { RiderClaim } from "@/components/me/RiderClaim";
 import { PlanButton } from "@/components/races/PlanButton";
 import { EmptyState } from "@/components/common/States";
+import { StravaInvite } from "@/components/strava/StravaInvite";
+import { getConnection } from "@/lib/db/queries/strava";
+import { stravaConfigured } from "@/lib/strava/client";
 import {
   CategorySummary, DateBlock, FederationMark, PlaceLabel,
 } from "@/components/races/RacePrimitives";
@@ -111,14 +113,13 @@ export default async function MaSaisonPage() {
           Vos courses à venir, vos résultats et votre progression au classement,
           au même endroit.
         </p>
-        <div className="rounded-xl border border-border bg-surface-1 py-12 text-center">
-          <p className="mb-1 font-medium">Connectez-vous pour construire votre saison</p>
+        <StravaInvite className="mb-4" />
+        <div className="rounded-xl border border-border bg-surface-1 py-8 text-center">
+          <p className="mb-1 font-medium">Ou connectez-vous par e-mail</p>
           <p className="mb-4 text-sm text-muted-foreground">
             Le calendrier reste consultable sans compte.
           </p>
-          <SignInButton mode="modal">
-            <Button>Se connecter</Button>
-          </SignInButton>
+          <SignInButton size="default" variant="outline">Se connecter</SignInButton>
         </div>
       </div>
     );
@@ -128,6 +129,7 @@ export default async function MaSaisonPage() {
   const season = Number(today.slice(0, 4));
 
   let data: MySeason | null = null;
+  let stravaLinked = true;
   try {
     const user = await currentUser();
     const id = await resolveUser(
@@ -135,6 +137,7 @@ export default async function MaSaisonPage() {
       user?.primaryEmailAddress?.emailAddress ?? null
     );
     data = await getMySeason(id, season);
+    if (stravaConfigured()) stravaLinked = Boolean(await getConnection(id));
   } catch {
     // DB not configured
   }
@@ -162,6 +165,8 @@ export default async function MaSaisonPage() {
             : "Vos courses, vos résultats et votre progression."}
         </p>
       </header>
+
+      {!stravaLinked && <StravaInvite compact className="mb-6" />}
 
       <div className="mb-8">
         <RiderClaim current={rider} />

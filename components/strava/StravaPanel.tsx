@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, RefreshCw, Unlink, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/lib/button-variants";
-import { cn } from "@/lib/utils";
+import { StravaButton } from "@/components/auth/StravaButton";
 
 interface Connection {
   athleteName: string | null;
@@ -71,7 +70,7 @@ export function StravaPanel({
     if (res.ok) setState((await res.json()) as State);
   }, []);
 
-  async function sync() {
+  const sync = useCallback(async () => {
     setBusy(true);
     setMessage(null);
     try {
@@ -91,7 +90,22 @@ export function StravaPanel({
     } finally {
       setBusy(false);
     }
-  }
+  }, [load]);
+
+  // Au retour de Strava, la première synchronisation part toute seule : un
+  // coureur qui vient de connecter veut voir ses courses, pas un bouton.
+  const started = useRef(false);
+  useEffect(() => {
+    if (initialStatus !== "ok" || !initialState.connection || initialState.connection.lastSyncedAt) return;
+    // Différé d'un tour : le mode strict monte deux fois, et le garde-fou ne
+    // doit se poser qu'au départ réel.
+    const t = setTimeout(() => {
+      if (started.current) return;
+      started.current = true;
+      void sync();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [initialStatus, initialState, sync]);
 
   async function unlink() {
     setBusy(true);
@@ -167,15 +181,7 @@ export function StravaPanel({
             Synchroniser
           </Button>
         ) : (
-          state.authorizeUrl && (
-            <a
-              href={state.authorizeUrl}
-              className={cn(buttonVariants({ size: "sm" }), "gap-2")}
-            >
-              <Activity className="size-4" />
-              Connecter Strava
-            </a>
-          )
+          <StravaButton callbackURL="/profil?strava=ok" />
         )}
       </div>
     </div>

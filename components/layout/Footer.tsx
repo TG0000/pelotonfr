@@ -18,6 +18,12 @@ export function Footer() {
             <Suspense fallback={null}>
               <DataFreshness />
             </Suspense>
+            <Link href="/departement" className="hover:text-foreground transition-colors">
+              Par département
+            </Link>
+            <Link href="/blog" className="hover:text-foreground transition-colors">
+              Blog
+            </Link>
             <Link href="/mentions-legales" className="hover:text-foreground transition-colors">
               Mentions légales
             </Link>
