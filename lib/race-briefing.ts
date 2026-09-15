@@ -50,9 +50,9 @@ export interface Briefing {
   organizer: string | null;
 }
 
-/** L'échelle des catégories route FFC, dans l'ordre de la fiche. */
-const LADDER = ["elite", "open1", "open2", "open3", "access1", "access2", "access3", "access4"];
-const YOUTH = ["u7", "u9", "u11", "u13", "u15", "u17", "u19"];
+/** L'échelle des catégories route FFC, dans l'ordre de la fiche : « De Elite
+ *  à U17 » descend des Élites aux cadets en passant par tous les Open et Access. */
+const LADDER = ["elite", "open1", "open2", "open3", "access1", "access2", "access3", "access4", "u19", "u17", "u15", "u13", "u11", "u9", "u7"];
 
 function categoryToken(raw: string): string | null {
   const v = raw.toLowerCase().replace(/\s+/g, "");
@@ -79,12 +79,10 @@ export function categoriesFromAdmissibility(text: string): string[] {
     const from = categoryToken(m[1]);
     const to = categoryToken(m[2]);
     if (!from || !to) continue;
-    for (const ladder of [LADDER, YOUTH]) {
-      const i = ladder.indexOf(from), j = ladder.indexOf(to);
-      if (i >= 0 && j >= 0) { for (let k = Math.min(i, j); k <= Math.max(i, j); k++) out.add(ladder[k]); }
-    }
-    if (!LADDER.includes(from) && !YOUTH.includes(from)) out.add(from);
-    if (!LADDER.includes(to) && !YOUTH.includes(to)) out.add(to);
+    const i = LADDER.indexOf(from), j = LADDER.indexOf(to);
+    if (i >= 0 && j >= 0) { for (let k = Math.min(i, j); k <= Math.max(i, j); k++) out.add(LADDER[k]); }
+    if (i < 0) out.add(from);
+    if (j < 0) out.add(to);
   }
   // « Femmes dès 17 ans » : une épreuve féminine, quelle que soit l'échelle.
   if (out.size > 0 && /\bFemmes\b/i.test(text)) out.add("feminines");
