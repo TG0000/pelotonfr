@@ -24,13 +24,22 @@ declare global {
 }
 
 function loadMaps(key: string): Promise<typeof google.maps> {
-  if (typeof window.google !== "undefined" && window.google.maps) return Promise.resolve(window.google.maps);
+  const ready = () => typeof window.google !== "undefined" && typeof window.google.maps?.importLibrary === "function";
+  if (ready()) return Promise.resolve(window.google.maps);
   if (!window.__pelotonMaps) {
     window.__pelotonMaps = new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&language=fr`;
       s.async = true;
-      s.onload = () => resolve(window.google.maps);
+      // Le script s'exécute, puis définit importLibrary un instant plus tard :
+      // on attend la fonction, pas seulement le chargement.
+      const started = Date.now();
+      const poll = () => {
+        if (ready()) resolve(window.google.maps);
+        else if (Date.now() - started > 15_000) reject(new Error("Google Maps n'a pas répondu."));
+        else setTimeout(poll, 50);
+      };
+      s.onload = poll;
       s.onerror = () => reject(new Error("Le script Google Maps n'a pas chargé."));
       document.head.appendChild(s);
     });
