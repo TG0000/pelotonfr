@@ -102,6 +102,10 @@ async function main() {
      relit les fiches des dix prochains jours, déjà lues ou non, pour ce
      chiffre-là. */
   const placesOnly = process.argv.includes("--places");
+  /* --categories : les fiches des courses sans catégorie, déjà lues ou non.
+     La fiche les écrit dans ses critères d'admissibilité, que le lecteur ne
+     regardait pas ; 266 courses route à venir n'en avaient aucune. */
+  const categoriesOnly = process.argv.includes("--categories");
 
   const races = (await sql(
     `SELECT id, name, city, department_code, source_url,
@@ -111,8 +115,9 @@ async function main() {
         AND source_url LIKE '%/calendrier/competition/%'
         AND is_cancelled = false
         AND COALESCE(race_date_end, race_date) >= CURRENT_DATE
-        AND ($2::boolean OR $4::boolean OR briefing_fetched_at IS NULL)
+        AND ($2::boolean OR $4::boolean OR $5::boolean OR briefing_fetched_at IS NULL)
         AND (NOT $4::boolean OR race_date <= CURRENT_DATE + 10)
+        AND (NOT $5::boolean OR cardinality(categories) = 0 OR department_code IS NULL)
         AND (NOT $3::boolean
              OR (race_date_end > race_date
                  AND NOT EXISTS (SELECT 1 FROM race_stages s
@@ -120,7 +125,7 @@ async function main() {
       ORDER BY EXISTS (SELECT 1 FROM user_favorites f WHERE f.race_id = races.id) DESC,
                race_date ASC
       LIMIT $1::int`,
-    [limit, force, stagesOnly, placesOnly]
+    [limit, force, stagesOnly, placesOnly, categoriesOnly]
   )) as Array<Record<string, unknown>>;
 
   console.log(`${races.length} fiches à lire.\n`);
@@ -129,6 +134,8 @@ async function main() {
   let withPlace = 0;
   let located = 0;
   let withStages = 0;
+  let withCategories = 0;
+  let withDepartment = 0;
 
   for (const race of races) {
     try {
@@ -172,6 +179,34 @@ async function main() {
           brief.placesTotal,
         ]
       );
+
+      /* Ce que la fiche dit et que le nom ne disait pas : les catégories,
+         le département en toutes lettres, l'organisateur. Jamais en
+         écrasant ce qu'on savait déjà. */
+      if (brief.categories.length > 0) {
+        const r = await sql(
+          `UPDATE races SET categories = $2::text[] WHERE id = $1::uuid AND cardinality(categories) = 0 RETURNING id`,
+          [race.id, brief.categories]
+        );
+        if (r.length) withCategories++;
+      }
+      if (brief.departmentCandidates.length > 0 && !race.department_code) {
+        for (const candidate of brief.departmentCandidates) {
+          const r = await sql(
+            `UPDATE races r SET department_code = d.code, department_name = d.name
+               FROM (SELECT DISTINCT department_code AS code, department_name AS name FROM races
+                      WHERE department_name IS NOT NULL AND department_code IS NOT NULL) d
+              WHERE r.id = $1::uuid AND r.department_code IS NULL
+                AND lower(translate(d.name, 'éèêàâîôûç', 'eeeaaiouc')) = lower(translate($2, 'éèêàâîôûç', 'eeeaaiouc'))
+              RETURNING r.id`,
+            [race.id, candidate]
+          );
+          if (r.length) { withDepartment++; break; }
+        }
+      }
+      if (brief.organizer) {
+        await sql(`UPDATE races SET organizer = $2 WHERE id = $1::uuid AND organizer IS NULL`, [race.id, brief.organizer.slice(0, 120)]);
+      }
 
       /* Une compétition qui dure plusieurs jours est une course par étapes :
          la fédération n'en fait qu'une ligne, alors que le coureur a trois
@@ -255,7 +290,8 @@ async function main() {
   console.log(
     `\n${withCircuit} circuits annoncés par l'organisateur, ` +
       `${withPlace} lieux de retrait, dont ${located} situés précisément, ` +
-      `${withStages} courses par étapes détaillées.`
+      `${withStages} courses par étapes détaillées, ` +
+      `${withCategories} catégories posées depuis les critères d'admissibilité, ${withDepartment} départements posés.`
   );
 
   return {

@@ -35,6 +35,60 @@ export interface Briefing {
   /** « 74/150 places disponibles » : 74 places restantes sur 150. */
   placesLeft: number | null;
   placesTotal: number | null;
+  /**
+   * Les catégories admises, lues dans les « critères d'admissibilité » de
+   * chaque épreuve (« De Open 1 à Access 4 », « De U17 à U17 »), dans le
+   * vocabulaire de la base. C'est la seule source quand le nom n'en dit rien.
+   */
+  categories: string[];
+  /**
+   * Ce qui précède « CONTACTER L'ORGANISATEUR » : le département en toutes
+   * lettres, collé à la fin du titre. On rend les quatre derniers mots, du
+   * plus long au plus court ; le lecteur garde celui qui est un département.
+   */
+  departmentCandidates: string[];
+  organizer: string | null;
+}
+
+/** L'échelle des catégories route FFC, dans l'ordre de la fiche. */
+const LADDER = ["elite", "open1", "open2", "open3", "access1", "access2", "access3", "access4"];
+const YOUTH = ["u7", "u9", "u11", "u13", "u15", "u17", "u19"];
+
+function categoryToken(raw: string): string | null {
+  const v = raw.toLowerCase().replace(/\s+/g, "");
+  if (/^[ée]lite/.test(v)) return "elite";
+  const o = v.match(/^open(\d)/); if (o) return `open${o[1]}`;
+  const a = v.match(/^acc?ess?(\d)/); if (a) return `access${a[1]}`;
+  const u = v.match(/^u(\d{1,2})/); if (u) return `u${u[1]}`;
+  if (/^espoir/.test(v)) return "espoirs";
+  if (/^senior/.test(v)) return "seniors";
+  if (/^master/.test(v)) return "masters";
+  if (/^junior/.test(v)) return "u19";
+  if (/^cadet/.test(v)) return "u17";
+  if (/^minime/.test(v)) return "u15";
+  if (/^benjamin/.test(v)) return "u13";
+  if (/^pupille/.test(v)) return "u11";
+  if (/^poussin/.test(v)) return "u9";
+  return null;
+}
+
+/** « De Open 1 à Access 4 » → open1, open2, open3, access1 … access4. */
+export function categoriesFromAdmissibility(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/\bDe\s+([A-Za-zÉé]+\s?\d{0,2})\s+à\s+([A-Za-zÉé]+\s?\d{0,2})/g)) {
+    const from = categoryToken(m[1]);
+    const to = categoryToken(m[2]);
+    if (!from || !to) continue;
+    for (const ladder of [LADDER, YOUTH]) {
+      const i = ladder.indexOf(from), j = ladder.indexOf(to);
+      if (i >= 0 && j >= 0) { for (let k = Math.min(i, j); k <= Math.max(i, j); k++) out.add(ladder[k]); }
+    }
+    if (!LADDER.includes(from) && !YOUTH.includes(from)) out.add(from);
+    if (!LADDER.includes(to) && !YOUTH.includes(to)) out.add(to);
+  }
+  // « Femmes dès 17 ans » : une épreuve féminine, quelle que soit l'échelle.
+  if (out.size > 0 && /\bFemmes\b/i.test(text)) out.add("feminines");
+  return [...out];
 }
 
 /** Words that end a pickup place — the page runs sections together. */
@@ -141,7 +195,18 @@ export function parseBriefing(pageText: string): Briefing {
     placesTotal = (placesTotal ?? 0) + total;
   }
 
-  return { bibPickupTime, bibPickupPlace, circuitM, lapCount, entriesCloseAt, placesLeft, placesTotal };
+  const categories = categoriesFromAdmissibility(text);
+  /* Sous le titre, la fiche écrit le département en toutes lettres, puis
+     « CONTACTER L'ORGANISATEUR » ; plus bas, « ORGANISATEUR » puis le club. */
+  const dep = text.match(/(\S+(?:\s+\S+){0,3})\s+CONTACTER L'ORGANISATEUR/);
+  const words = dep ? dep[1].split(/\s+/) : [];
+  const departmentCandidates = words.map((_, i) => words.slice(i).join(" "));
+  // Le dernier « ORGANISATEUR » avant « DURÉE » : le premier est celui du
+  // bouton « CONTACTER L'ORGANISATEUR », pas le club.
+  const org = text.match(/\bORGANISATEUR\s+((?:(?!ORGANISATEUR).){3,80}?)\s+(?:DURÉE|DUREE)/);
+  const organizer = org ? org[1].trim() : null;
+
+  return { bibPickupTime, bibPickupPlace, circuitM, lapCount, entriesCloseAt, placesLeft, placesTotal, categories, departmentCandidates, organizer };
 }
 
 /**
