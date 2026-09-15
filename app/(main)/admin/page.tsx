@@ -8,6 +8,8 @@ import { getLiveViewers, getOpenReports, getSiteKpis, type SiteKpis } from "@/li
 import { describeAge } from "@/lib/collectors";
 import { ReportList } from "./ReportList";
 import { TraceChecks } from "./TraceChecks";
+import { DataIssues } from "./DataIssues";
+import { getLatestDataIssues } from "@/lib/db/queries/data-issues";
 import { getTraceChecks, countTraceChecks } from "@/lib/db/queries/traces";
 import { LiveMap } from "@/components/ops/LiveMap";
 import { cn } from "@/lib/utils";
@@ -55,6 +57,7 @@ function coverage(k: SiteKpis) {
 export default async function AdminPage() {
   if (!(await isOperator())) notFound();
 
+  const issues = await getLatestDataIssues().catch(() => []);
   const [checks, checkCounts] = await Promise.all([getTraceChecks().catch(() => []), countTraceChecks().catch(() => ({ faux: 0, confirme: 0, echauffement: 0, audit: 0, douteux: 0 }))]);
   const [kpis, live, reports, health] = await Promise.all([
     getSiteKpis(),
@@ -138,7 +141,8 @@ export default async function AdminPage() {
       </section>
 
       {/* À traiter */}
-      <section className="mb-8">
+      <section className="mb-8 grid gap-4 lg:grid-cols-2">
+        <DataIssues issues={issues} />
         <TraceChecks checks={checks} counts={checkCounts} />
       </section>
 

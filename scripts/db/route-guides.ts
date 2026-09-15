@@ -75,22 +75,24 @@ async function main() {
       let routed = await routeThrough(placed);
       if (!routed) { console.log(`  étape ${st.stage} : routage impossible`); continue; }
       let ratio = guideKm > 0 ? routed.distanceM / (guideKm * 1000) : 1;
-      if (ratio > 1.25) {
-        const kept = dropDetours(placed, routed.legsM);
-        if (kept.length >= 3 && kept.length < placed.length) {
-          const again = await routeThrough(kept);
-          if (again) {
-            console.log(`  étape ${st.stage} : ${placed.length - kept.length} détour(s) retiré(s), ${(routed.distanceM / 1000).toFixed(0)} → ${(again.distanceM / 1000).toFixed(0)} km`);
-            routed = again;
-            ratio = guideKm > 0 ? routed.distanceM / (guideKm * 1000) : 1;
-          }
-        }
+      /* Tant que la route fait plus de 15 % de trop, on retire les points qui
+         font faire un détour et on route à nouveau — trois passes au plus. */
+      let current = placed;
+      for (let pass = 0; pass < 3 && ratio > 1.15; pass++) {
+        const kept = dropDetours(current, routed.legsM);
+        if (kept.length < 3 || kept.length >= current.length) break;
+        const again = await routeThrough(kept);
+        if (!again) break;
+        console.log(`  étape ${st.stage} : ${current.length - kept.length} détour(s) retiré(s), ${(routed.distanceM / 1000).toFixed(0)} → ${(again.distanceM / 1000).toFixed(0)} km`);
+        current = kept;
+        routed = again;
+        ratio = guideKm > 0 ? routed.distanceM / (guideKm * 1000) : 1;
       }
       console.log(`  étape ${st.stage} : ${placed.length}/${st.points.length} points placés, ${(routed.distanceM / 1000).toFixed(1)} km routés pour ${guideKm} km au guide (${Math.round(ratio * 100)} %)`);
       if (guideKm > 0 && (ratio < 0.8 || ratio > 1.25)) { console.log("    écart trop grand, non retenu"); continue; }
       const trace = await buildTrace(routed.line, routed.distanceM);
       if (!trace) { console.log("    relief illisible"); continue; }
-      const wp = JSON.stringify(placed.map((p) => ({ km: p.km, place: p.place, label: p.label, lat: p.lat, lng: p.lng })));
+      const wp = JSON.stringify(current.map((p) => ({ km: p.km, place: p.place, label: p.label, lat: p.lat, lng: p.lng })));
       if (multi) {
         await sql(
           `INSERT INTO race_stage_traces (race_id, stage_number, source, points, distance_m, elevation_gain_m, min_elevation_m, max_elevation_m, bounds, waypoints, guide_km)

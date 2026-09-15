@@ -31,6 +31,8 @@
     "alerts:closing": "tsx scripts/alerts/send-closing.ts",
     "postinstall": "node scripts/build/copy-maplibre-worker.mjs",
     "prebuild": "node scripts/build/copy-maplibre-worker.mjs",
+    "db:guard": "tsx scripts/db/data-guard.ts",
+    "db:place-check": "tsx scripts/db/place-check.ts",
     "db:place": "tsx scripts/db/place-from-name.ts",
     "db:retype-cyclos": "tsx scripts/db/retype-cyclos.ts",
     "scrape:meteo": "tsx scripts/scrapers/forecast.ts",
