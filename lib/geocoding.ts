@@ -19,7 +19,7 @@ export async function geocodeCity(
     const url = `${BAN_BASE}/search/?q=${q}${postcodeParam}&type=municipality&limit=1`;
 
     const res = await fetch(url, {
-      headers: { "User-Agent": "PelotonFR/1.0 (contact@pelotonfr.fr)" },
+      headers: { "User-Agent": "PelotonFR/1.0 (+https://pelotonfr.vercel.app/contact)" },
       signal: AbortSignal.timeout(5000),
     });
 
@@ -59,7 +59,7 @@ export async function geocodeSearch(
       `${BAN_BASE}/search/?q=${encodeURIComponent(query)}` +
       `&limit=8&type=municipality`;
     const res = await fetch(url, {
-      headers: { "User-Agent": "PelotonFR/1.0 (contact@pelotonfr.fr)" },
+      headers: { "User-Agent": "PelotonFR/1.0 (+https://pelotonfr.vercel.app/contact)" },
       signal: AbortSignal.timeout(5000),
     });
 

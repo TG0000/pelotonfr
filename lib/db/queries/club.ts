@@ -1,3 +1,4 @@
+import { transaction } from "@/lib/db/transaction";
 import { sql } from "../index";
 import { toDateOnly } from "@/lib/date";
 import { groupOf, isGroup, raceFitsGroups } from "@/lib/groups";
@@ -23,10 +24,10 @@ export async function getMembership(
 ): Promise<ClubMembership | null> {
   const [row] = await sql(
     `SELECT m.club_id, m.role, c.name,
-            (SELECT COUNT(*) FROM club_members x WHERE x.club_id = m.club_id) AS members
+            (SELECT COUNT(*) FROM club_members x WHERE x.club_id = m.club_id AND x.verified_at IS NOT NULL) AS members
        FROM club_members m
        JOIN clubs c ON c.id = m.club_id
-      WHERE m.user_id = $1::uuid`,
+      WHERE m.user_id = $1::uuid AND m.verified_at IS NOT NULL`,
     [userId]
   );
   if (!row) return null;
@@ -79,15 +80,15 @@ export async function getClubQueue(clubId: string): Promise<QueuedRace[]> {
             json_agg(
               json_build_object(
                 'userId', u.id,
-                'name', COALESCE(u.display_name, ri.first_name || ' ' || ri.last_name, u.email),
+                'name', COALESCE(u.display_name, ri.first_name || ' ' || ri.last_name, 'Un coéquipier'),
                 'confirmed', EXISTS (
                   SELECT 1 FROM engagements e
                    WHERE e.race_id = r.id AND e.rider_id = u.rider_id
                 )
-              ) ORDER BY COALESCE(u.display_name, ri.last_name, u.email)
+              ) ORDER BY COALESCE(u.display_name, ri.last_name, 'Un coéquipier')
             ) AS riders
        FROM user_favorites f
-       JOIN club_members m ON m.user_id = f.user_id AND m.club_id = $1::uuid
+       JOIN club_members m ON m.verified_at IS NOT NULL AND m.user_id = f.user_id AND m.club_id = $1::uuid
        JOIN users u ON u.id = f.user_id
        LEFT JOIN riders ri ON ri.id = u.rider_id
        JOIN races r ON r.id = f.race_id
@@ -144,26 +145,18 @@ export async function unmarkEntered(
   );
 }
 
-/** Rejoindre un club. Le premier arrivé en est le responsable : un club sans
- *  personne pour engager n'a pas d'intérêt, et il n'y a personne pour l'adouber. */
-export async function joinClub(
-  userId: string,
-  clubId: string
-): Promise<ClubMembership["role"]> {
-  const [existing] = await sql(
-    `SELECT 1 AS present FROM club_members
-      WHERE club_id = $1::uuid AND role = 'responsable' LIMIT 1`,
-    [clubId]
-  );
-  const role = existing ? "coureur" : "responsable";
-
-  await sql(
-    `INSERT INTO club_members (club_id, user_id, role)
-     VALUES ($1::uuid, $2::uuid, $3)
-     ON CONFLICT (club_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
-    [clubId, userId, role]
-  );
-  return role;
+/** Joining only requests access. An operator verifies membership and role. */
+export async function joinClub(userId: string, clubId: string): Promise<ClubMembership["role"] | "pending"> {
+  return transaction(async (client) => {
+    await client.query("SELECT id FROM users WHERE id=$1::uuid FOR UPDATE", [userId]);
+    const { rows } = await client.query("SELECT club_id,role FROM club_members WHERE user_id=$1::uuid AND verified_at IS NOT NULL", [userId]);
+    if (rows[0]) {
+      if (rows[0].club_id !== clubId) throw new Error("Quitte ton club actuel avant d’en rejoindre un autre.");
+      return rows[0].role as ClubMembership["role"];
+    }
+    await client.query("INSERT INTO club_members(club_id,user_id,role) VALUES ($1::uuid,$2::uuid,'coureur') ON CONFLICT(club_id,user_id) DO NOTHING", [clubId,userId]);
+    return "pending";
+  });
 }
 
 export async function leaveClub(userId: string): Promise<void> {
@@ -248,7 +241,7 @@ export async function getClubPlans(
             array_remove(array_agg(CASE WHEN uf.intent = 'envisagee' AND uf.user_id <> $2::uuid THEN ${MATE_NAME_SQL} END), NULL) AS considering,
             max(CASE WHEN uf.user_id = $2::uuid THEN uf.intent END) AS mine
        FROM user_favorites uf
-       JOIN club_members cm ON cm.user_id = uf.user_id AND cm.club_id = $1::uuid
+       JOIN club_members cm ON cm.verified_at IS NOT NULL AND cm.user_id = uf.user_id AND cm.club_id = $1::uuid
        JOIN users u ON u.id = uf.user_id
        LEFT JOIN riders rd ON rd.id = u.rider_id
        JOIN races r ON r.id = uf.race_id
@@ -295,11 +288,11 @@ export async function getClubmatesOnRace(
     `SELECT c.name AS club_name, uf.intent, ${MATE_NAME_SQL} AS mate
        FROM club_members me
        JOIN clubs c ON c.id = me.club_id
-       JOIN club_members cm ON cm.club_id = me.club_id AND cm.user_id <> me.user_id
+       JOIN club_members cm ON cm.verified_at IS NOT NULL AND cm.club_id = me.club_id AND cm.user_id <> me.user_id
        JOIN user_favorites uf ON uf.user_id = cm.user_id AND uf.race_id = $1::uuid
        JOIN users u ON u.id = cm.user_id
        LEFT JOIN riders rd ON rd.id = u.rider_id
-      WHERE me.user_id = $2::uuid
+      WHERE me.user_id = $2::uuid AND me.verified_at IS NOT NULL
       ORDER BY uf.intent, mate`,
     [raceId, viewerId]
   )) as Array<Record<string, unknown>>;

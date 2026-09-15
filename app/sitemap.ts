@@ -2,6 +2,8 @@ import type { MetadataRoute } from "next";
 import { sql } from "@/lib/db";
 import { ARTICLES } from "@/lib/blog";
 
+export const revalidate = 3600;
+
 const SITE = "https://pelotonfr.vercel.app";
 
 /**
@@ -38,7 +40,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     races = (await sql(
       `SELECT id::text, updated_at::text
          FROM races
-        WHERE race_date >= CURRENT_DATE AND is_cancelled = false
+        WHERE COALESCE(race_date_end, race_date) >= (now() AT TIME ZONE 'Europe/Paris')::date AND is_cancelled = false
         ORDER BY race_date
         LIMIT 5000`,
       []

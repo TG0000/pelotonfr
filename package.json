@@ -1,6 +1,6 @@
 {
   "name": "pelotonfr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -38,7 +38,10 @@
     "scrape:meteo": "tsx scripts/scrapers/forecast.ts",
     "scrape:segments:index": "tsx scripts/scrapers/segment-circuits.ts",
     "scrape:efforts": "tsx scripts/scrapers/strava-efforts.ts",
-    "db:link-editions": "tsx scripts/db/link-editions.ts"
+    "db:link-editions": "tsx scripts/db/link-editions.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "test:integration": "tsx --test tests/integration/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
@@ -79,5 +82,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5"
+  },
+  "overrides": {
+    "js-yaml": "^4.3.2"
   }
 }

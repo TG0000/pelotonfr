@@ -1,6 +1,8 @@
 "use server";
 
 import { auth, currentUser } from "@/lib/session";
+import { isUuid } from "@/lib/validation";
+import { consumeLimit } from "@/lib/rate-limit";
 import { revalidatePath } from "next/cache";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import {
@@ -31,13 +33,17 @@ async function me(): Promise<string | null> {
 export async function rejoindre(clubId: string) {
   const id = await me();
   if (!id) return { ok: false as const, message: "Connecte-toi d'abord." };
-  const role = await joinClub(id, clubId);
+  if (!isUuid(clubId)) return { ok: false as const, message: "Club invalide." };
+  if (!(await consumeLimit(`club:join:${id}`, 5, 3600))) return { ok: false as const, message: "Réessaie dans une heure." };
+  let role;
+  try { role = await joinClub(id, clubId); }
+  catch { return { ok: false as const, message: "Impossible de rejoindre ce club. Vérifie ton club actuel puis réessaie." }; }
   revalidatePath("/club");
   return {
     ok: true as const,
     message:
-      role === "responsable"
-        ? "Club rejoint. Tu en es le responsable : personne d'autre ne s'y était inscrit."
+      role === "pending"
+        ? "Demande enregistrée. L’accès sera ouvert après vérification ; utilise Contact pour faire vérifier ton rôle."
         : "Club rejoint.",
   };
 }

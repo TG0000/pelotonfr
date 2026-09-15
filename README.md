@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PelotonFR
 
-## Getting Started
+Calendrier du cyclisme amateur français : courses FFC, FSGT et UFOLEP, préparation de saison et coordination des clubs. Next.js 16, React 19, Better Auth et PostgreSQL/PostGIS (Neon).
 
-First, run the development server:
+## Développement
 
-```bash
+Node.js 22 et npm sont requis.
+
+```sh
+npm ci
+cp .env.example .env.local
+# Renseigner une base de développement et des secrets générés indépendamment.
+npm run db:migrate:dry
+npm run db:migrate
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Le calendrier peut se consulter sans compte. Les connexions par lien e-mail nécessitent un transport Brevo ou Resend réellement configuré. Strava et Google sont facultatifs et exigent leurs propres origines de retour OAuth. Ne copiez jamais les identifiants d'une base de production dans une preview.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Vérification
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```sh
+npm run lint
+npm run typecheck
+npm test
+npm audit --audit-level=high
+npm run build
+```
 
-## Learn More
+`npm run test:integration` écrit des comptes synthétiques puis les efface. Il refuse toute base dont le nom n'est pas `pelotonfr_preview_v02`. La connexion doit être fournie par l'environnement ; les tests unitaires n'envoient aucun e-mail.
 
-To learn more about Next.js, take a look at the following resources:
+## Authentification et données
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `BETTER_AUTH_SECRET` protège les sessions et le stockage OAuth de Better Auth.
+- `TOKEN_ENCRYPTION_KEY` est une clé AES de 32 octets, encodée sur 64 caractères hexadécimaux, pour les jetons Strava du stockage métier. Une clé absente ou incorrecte provoque un refus ; elle ne doit pas être changée sans migration.
+- `ADMIN_USER_IDS` contient exclusivement des identifiants Better Auth. Une adresse e-mail ne confère aucun droit opérateur.
+- Les demandes de contact se traitent dans `/admin/contact`, les vérifications de clubs dans `/admin/clubs`.
+- Le retour OAuth Strava historique `/api/strava/callback` est retiré. L'intégration actuelle utilise Better Auth.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Migrations
 
-## Deploy on Vercel
+Les fichiers SQL appliqués sont immuables. Le script vérifie leurs empreintes avant d'écrire. Les migrations en attente et leurs enregistrements sont validés ensemble, dans une transaction protégée contre deux exécutions concurrentes. Un échec annule le lot. `--dry-run` est strictement en lecture seule.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+La migration 064 décrit le schéma d'authentification. La 066 met les adhésions historiques en attente de vérification : anticiper la revue des clubs avant toute mise en production. La migration des anciens jetons OAuth reste un préalable à la fusion de la V0.2.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## V0.2 en cours
+
+Le [registre des 61 constats](docs/AUDIT_V02_STATUS.md) distingue les corrections en cours des validations encore nécessaires. La branche `codex/v0.2-audit-brand` et sa PR restent en brouillon. Aucun déploiement de production ne fait partie des tests.
+
+L'identité retient les directions éditorial sportif + esprit club pour le site, performance sombre pour un futur espace premium. Aucune facturation ni règle d'abonnement n'est implémentée à ce stade.

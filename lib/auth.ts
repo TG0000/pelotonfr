@@ -1,7 +1,8 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { genericOAuth, magicLink } from "better-auth/plugins";
-import { Pool } from "pg";
+import { databasePool } from "@/lib/db/transaction";
+import { sendMail } from "@/lib/mail";
 import { sendMagicLinkEmail } from "@/lib/auth-mail";
 import { mirrorStravaAccount } from "@/lib/strava/account";
 import {
@@ -11,24 +12,7 @@ import {
   STRAVA_SCOPES,
 } from "@/lib/strava/client";
 
-/**
- * Les comptes, chez nous.
- *
- * Clerk plafonnait l'instance de développement à cent utilisateurs et
- * exigeait un domaine pour aller au-delà. Better Auth vit dans l'application
- * et dans notre base : pas de plafond, pas de domaine à acheter, et l'adresse
- * e-mail d'un coureur ne quitte pas le site.
- *
- * On se connecte par un lien reçu par e-mail — pas de mot de passe à
- * retenir, rien à réinitialiser — et par Google quand ses clés sont posées.
- * Apple viendra avec un domaine : c'est Apple qui l'exige, pas nous.
- *
- * Et par Strava : c'est là que sont les coureurs, et c'est la connexion qui
- * donne au site sa matière (sorties, circuits, niveau). Un clic sur Strava
- * crée le compte et relie les sorties en même temps — trois étapes de moins
- * que « e-mail, lien, profil, connecter ».
- */
-
+/** Verified addresses and explicit OAuth linking; no account migration by email. */
 const STRAVA_AUTHORIZE = "https://www.strava.com/oauth/authorize";
 const STRAVA_TOKEN = "https://www.strava.com/oauth/token";
 
@@ -103,14 +87,11 @@ const stravaProvider = stravaConfigured()
   : [];
 
 export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL,
+  baseURL: process.env.BETTER_AUTH_URL || (process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL}` : undefined),
+  trustedOrigins: [process.env.BETTER_AUTH_URL, process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined, process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : undefined].filter((value): value is string => Boolean(value)),
   secret: process.env.BETTER_AUTH_SECRET,
-  database: new Pool({
-    connectionString: process.env.DATABASE_URL,
-    // Neon serveur ; une fonction Vercel n'a pas besoin de plus.
-    max: 3,
-    ssl: { rejectUnauthorized: false },
-  }),
+  database: databasePool,
+  rateLimit: { enabled: true, storage: "database", window: 60, max: 60 },
   emailAndPassword: { enabled: false },
   socialProviders:
     process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
@@ -121,24 +102,36 @@ export const auth = betterAuth({
           },
         }
       : {},
+  emailVerification: {
+    expiresIn: 900,
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendMail({ to: user.email, subject: "Vérifie ton adresse PelotonFR", text: `Confirme cette adresse avec ce lien valable 15 minutes :\n${url}` });
+    },
+  },
   account: {
+    encryptOAuthTokens: true,
     accountLinking: {
       enabled: true,
       // Un coureur connecté par e-mail rattache son Strava : l'adresse que
       // Strava « donne » est fictive, elle ne correspondra jamais.
-      trustedProviders: ["google", "strava"],
+      trustedProviders: ["google"],
       allowDifferentEmails: true,
     },
   },
   user: {
     changeEmail: {
       enabled: true,
-      // Un compte né sur Strava porte une adresse fictive, non vérifiée : la
-      // vraie la remplace sans détour.
-      updateEmailWithoutVerification: true,
+      // The new address must prove ownership before it becomes an identity.
+      updateEmailWithoutVerification: false,
     },
   },
   databaseHooks: {
+    user: {
+      update: { after: async (user) => {
+        const { resolveUser } = await import("@/lib/db/queries/alerts");
+        await resolveUser(user.id);
+      } },
+    },
     account: {
       create: { after: async (account) => mirrorStravaAccount(account) },
       update: { after: async (account) => mirrorStravaAccount(account) },
@@ -153,6 +146,7 @@ export const auth = betterAuth({
   plugins: [
     magicLink({
       expiresIn: 60 * 15,
+      storeToken: "hashed",
       sendMagicLink: async ({ email, url }) => {
         await sendMagicLinkEmail(email, url);
       },

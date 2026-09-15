@@ -26,8 +26,8 @@ export default function MentionsLegales() {
         </p>
         <p>
           Contact :{" "}
-          <a href="mailto:contact@pelotonfr.fr" className="underline">
-            contact@pelotonfr.fr
+          <a href="/contact" className="underline">
+            le formulaire de contact
           </a>
         </p>
       </section>

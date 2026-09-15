@@ -23,7 +23,7 @@ const GEO_KEY_PRECISION = 4;
 
 const BAN_BASE = "https://api-adresse.data.gouv.fr";
 const GEO_API_BASE = "https://geo.api.gouv.fr";
-const USER_AGENT = "PelotonFR/2.0 (+https://pelotonfr.fr; contact@pelotonfr.fr)";
+const USER_AGENT = "PelotonFR/2.0 (+https://pelotonfr.vercel.app/contact)";
 
 export function geoKey(lat: number, lng: number): string {
   return `${lat.toFixed(GEO_KEY_PRECISION)},${lng.toFixed(GEO_KEY_PRECISION)}`;

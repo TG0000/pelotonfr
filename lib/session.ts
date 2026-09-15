@@ -14,6 +14,7 @@ import { auth as betterAuth } from "@/lib/auth";
 export interface AuthUser {
   id: string;
   email: string;
+  emailVerified: boolean;
   name: string | null;
   firstName: string | null;
 }
@@ -26,6 +27,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     return {
       id: session.user.id,
       email: session.user.email,
+      emailVerified: session.user.emailVerified,
       name,
       firstName: name ? name.split(/\s+/)[0] : null,
     };

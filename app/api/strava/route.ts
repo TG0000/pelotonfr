@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
-import { getSiteUrl } from "@/lib/site-url";
 import { auth, currentUser } from "@/lib/session";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { getConnection, disconnect } from "@/lib/db/queries/strava";
-import { authorizeUrl, stravaConfigured } from "@/lib/strava/client";
-
-async function redirectUri(): Promise<string> {
-  return `${await getSiteUrl()}/api/strava/callback`;
-}
+import { stravaConfigured } from "@/lib/strava/client";
 
 export async function GET() {
   const { userId } = await auth();
@@ -24,9 +19,7 @@ export async function GET() {
   return NextResponse.json({
     configured: true,
     connection,
-    // The Clerk id is carried through OAuth as `state` and checked on return,
-    // which is what stops another site initiating the connection.
-    authorizeUrl: connection ? null : authorizeUrl(await redirectUri(), userId),
+    authorizeUrl: null, // Linking uses Better Auth and its one-time OAuth state.
   });
 }
 

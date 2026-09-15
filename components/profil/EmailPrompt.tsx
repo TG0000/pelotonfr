@@ -20,21 +20,24 @@ export function EmailPrompt() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setState("sending");
-    const res = await authClient.changeEmail({ newEmail: email.trim() });
-    if (res.error) {
-      setError(res.error.message ?? "L'adresse n'a pas été enregistrée, réessayez.");
+    setError("");
+    try {
+      const res = await authClient.changeEmail({ newEmail: email.trim(), callbackURL: "/profil" });
+      if (res.error) throw new Error("L’adresse n’a pas pu être enregistrée. Vérifie-la et réessaie.");
+      setState("done");
+    } catch {
+      setError("L’envoi du lien a échoué. Vérifie l’adresse et réessaie.");
       setState("error");
-      return;
     }
-    setState("done");
   }
 
   if (state === "done") {
     return (
-      <p className="rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-sm">
-        Adresse enregistrée : <span className="font-medium">{email}</span>. Les alertes
-        et rappels de club partiront vers elle.
-      </p>
+      <div role="status" className="rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-sm">
+        Un lien de vérification a été demandé pour <span className="font-medium">{email}</span>.
+        Confirme l’adresse depuis ce message avant de recevoir des alertes.
+        <button className="block mt-2 underline" onClick={() => setState("idle")}>Corriger l’adresse ou renvoyer le lien</button>
+      </div>
     );
   }
 
@@ -50,6 +53,7 @@ export function EmailPrompt() {
       </p>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <input
+          aria-label="Adresse e-mail pour les alertes"
           type="email"
           required
           autoComplete="email"
@@ -66,7 +70,7 @@ export function EmailPrompt() {
           {state === "sending" ? "Enregistrement…" : "Enregistrer"}
         </button>
       </div>
-      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
     </form>
   );
 }

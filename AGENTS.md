@@ -1,76 +1,35 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
 <!-- END:nextjs-agent-rules -->
 
-# Identity
+# Identity — user decision, 15 September 2026
 
-Settled in phase 1 of the redesign. These are rules, not suggestions: the point
-of an identity is that it holds when nobody is looking at it.
+The user chose a hybrid of prototype 01 (editorial sport) and prototype 03
+(warm club) for the public product. Prototype 02 is the visual direction for
+future paid premium analysis. Do not infer billing rules from a colour theme.
 
-## The mark
+- One route-shaped P and one wordmark across both registers, in components/brand/Logo.tsx.
+- Manrope for interface/body text; Barlow Condensed for display headings;
+  IBM Plex Mono for dates, times, rankings and measured values.
+- Public: warm cream, deep blue, coral highlights, clear editorial hierarchy,
+  rounded controls and friendly language.
+- Premium: graphite, light text and electric blue through the .premium scope.
+  Premium entitlements do not exist yet; colour is not an authorization check.
+- Read colours from app/globals.css tokens. Federation colours identify federations.
+- Never present an illustrative circuit, synthetic preview fixture or inferred
+  start time as confirmed race data.
+- Keep keyboard navigation, visible field labels, reduced-motion support and
+  mobile layouts functional in both light and dark themes.
 
-A circuit with its decisive sector, in `components/brand/Logo.tsx`. French
-amateur racing is laps of a village loop, and this product exists to tell a
-rider what that loop will do to them before they start. So the mark is the
-circuit, traced the way a route is drawn on a map, with one stretch in the
-yellow of a course arrow: the place the race is won.
+# V0.2 delivery
 
-Straights and corners, never a soft blob — a smooth loop reads as a pebble.
-Two paths, no more: at 16px it has to survive as a dark loop with a bright
-straight. Use `<Logo />` and `<Wordmark />`; never a bicycle icon from an icon
-set, which is what a thousand other apps already use.
-
-The yellow sector is the product's thesis. Anyone can tell you a race exists;
-this tells you where it is decided.
-
-## Two registers
-
-The free product speaks in the **route card** register: paper ground, navy ink,
-course-arrow yellow for what wants noticing. It is the light theme.
-
-The analysis and premium surfaces speak in the **performance board** register:
-the navy of the mark as ground, data in colour. It is the dark theme.
-
-Both are the same token set — `app/globals.css` — so a component never picks a
-register. Switching theme switches register.
-
-## Two voices
-
-- **Archivo** (`font-sans`, `font-heading`) — everything read as language.
-  It has the sturdy, faintly condensed build of French road signage.
-- **IBM Plex Mono** (`font-mono`) — everything *measured*: dossards, dates,
-  times, placings, points, distances. A number should look like a number, and
-  columns of them should line up. Pair it with `tabular-nums`.
-
-If you are unsure which a value is: would it appear on a results sheet? Then
-it is mono.
-
-## Colour
-
-Every colour comes from `app/globals.css` tokens, which are derived from the
-five colours of the mark. Never write a hex in a component.
-
-The federation colours (`--ffc`, `--fsgt`, `--ufolep`) are *semantic* — they
-identify a federation and nothing else. They are not decoration and must not be
-borrowed for unrelated accents.
-
-Colours are authored in OKLCH. Anything that cannot parse OKLCH — MapLibre is
-the known case — goes through `lib/color.ts` rather than getting its own
-hard-coded palette to drift from.
-
-## Words
-
-Write from the rider's side of the screen.
-
-- Name things as a racer would: a *course*, a *catégorie*, un *dossard* — never
-  a "race entity" or a "category enum".
-- Say what a control does, then confirm that it happened.
-- An empty state says why it is empty and what to change. "Aucune course ne
-  correspond — élargissez la période ou retirez une catégorie", not "Aucun
-  résultat".
-- An error says what failed and what to do. No apologies, no "oups".
-- Never shout: race names are title-cased for display through
-  `lib/race-name.ts`, and headings are capitalised in code rather than with a
-  CSS `capitalize`, which title-cases every word.
+Work on codex/v0.2-audit-brand in the separate worktree. Do not alter the user's
+original checkout or its uncommitted AGENTS.md. Keep docs/AUDIT_V02_STATUS.md
+honest about remaining work. This is a draft PR, with no production promotion.
+Never use production data for preview accounts or copy production OAuth tokens.
