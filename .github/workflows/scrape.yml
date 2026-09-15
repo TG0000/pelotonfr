@@ -60,6 +60,7 @@ jobs:
         run: |
           npm run db:place
           npm run db:place-check
+          npm run scrape:briefing -- --categories --limit=150
           npm run db:retype-cyclos
           # Each race meets its previous edition: same village, same week, same discipline.
           npm run db:link-editions
