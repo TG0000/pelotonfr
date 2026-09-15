@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/session";
 import { SignInButton } from "@/components/auth";
 import { UserRound } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { StravaPanel } from "@/components/strava/StravaPanel";
 import type { StravaPanelState } from "@/components/strava/StravaPanel";
 import { currentUser } from "@/lib/session";
@@ -12,6 +11,9 @@ import { authorizeUrl, stravaConfigured } from "@/lib/strava/client";
 import { getSiteUrl } from "@/lib/site-url";
 import { getRiderSeason } from "@/lib/db/queries/points";
 import { PointsCounter } from "@/components/profil/PointsCounter";
+import { EmailPrompt } from "@/components/profil/EmailPrompt";
+import { StravaInvite } from "@/components/strava/StravaInvite";
+import { isPlaceholderEmail } from "@/lib/strava/client";
 
 /**
  * Whether this rider has linked Strava, resolved before the page renders.
@@ -56,9 +58,8 @@ export default async function ProfilPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const status = typeof params.strava === "string" ? params.strava : undefined;
   const stravaState = userId ? await loadStravaState(userId) : null;
-  const canonical = userId
-    ? await resolveUser(userId, (await currentUser())?.primaryEmailAddress?.emailAddress ?? null)
-    : null;
+  const email = userId ? ((await currentUser())?.primaryEmailAddress?.emailAddress ?? null) : null;
+  const canonical = userId ? await resolveUser(userId, email) : null;
   const season = canonical ? await getRiderSeason(canonical).catch(() => null) : null;
 
   return (
@@ -76,15 +77,17 @@ export default async function ProfilPage({ searchParams }: PageProps) {
 
       {stravaState ? (
         <div className="flex flex-col gap-6">
-          <PointsCounter season={season} />
+          {isPlaceholderEmail(email) && <EmailPrompt />}
           <StravaPanel initialState={stravaState} initialStatus={status} />
+          <PointsCounter season={season} />
         </div>
       ) : (
-        <div className="text-center py-12 border rounded-xl bg-card">
-          <p className="font-medium mb-1">Connectez-vous pour lier Strava</p>
-          <SignInButton mode="modal">
-            <Button>Se connecter</Button>
-          </SignInButton>
+        <div className="flex flex-col gap-4">
+          <StravaInvite />
+          <div className="text-center py-6 border rounded-xl bg-card">
+            <p className="font-medium mb-1">Ou connectez-vous par e-mail</p>
+            <SignInButton size="default" variant="outline">Se connecter</SignInButton>
+          </div>
         </div>
       )}
     </div>

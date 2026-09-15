@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { LogOut, UserRound } from "lucide-react";
 import { authClient, useSession, signOut } from "@/lib/auth-client";
 import { GoogleButton } from "./GoogleButton";
+import { StravaButton } from "./StravaButton";
 import { buttonVariants } from "@/lib/button-variants";
+import type { VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
@@ -63,6 +65,17 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
+      {/* Strava d'abord : c'est là que sont les coureurs, et le compte se
+          crée avec les sorties déjà reliées. */}
+      <StravaButton callbackURL="/profil?strava=ok" className="w-full" />
+      <p className="text-[11px] text-muted-foreground">
+        Vos sorties sont reliées à vos courses ; nous ne publions rien sur Strava.
+      </p>
+      <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        ou par e-mail
+        <span className="h-px flex-1 bg-border" />
+      </div>
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Votre e-mail
@@ -102,13 +115,49 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
   );
 }
 
-function SignInDialog({ children, title }: { children: React.ReactNode; title: string }) {
+type TriggerStyle = {
+  variant?: VariantProps<typeof buttonVariants>["variant"];
+  size?: VariantProps<typeof buttonVariants>["size"];
+  className?: string;
+};
+
+function SignInDialog({
+  children,
+  title,
+  variant,
+  size = "sm",
+  className,
+}: { children: React.ReactNode; title: string } & TriggerStyle) {
+  /* Le déclencheur est rendu ici, en bouton natif habillé comme `Button`.
+     Confier un `<Button>` tout fait à Base UI par `render` marchait dans le
+     navigateur mais pas au rendu serveur : depuis une page serveur,
+     l'élément arrive comme référence, Base UI l'emboîte dans son propre
+     bouton, et l'hydratation refait tout — bouton vide un instant, erreur
+     en console sur chaque page. Une page serveur passe donc le libellé et
+     la variante en props ; un composant client peut encore passer un
+     élément, dont on ne garde que le libellé et les classes. */
+  const el = React.isValidElement(children)
+    ? (children as React.ReactElement<{ children?: React.ReactNode } & TriggerStyle>)
+    : null;
+  const label = el ? el.props.children : children;
+  /* Un bouton natif reçu tel quel garde tous ses attributs (titre, aria). */
+  const native = el && typeof el.type === "string" ? (el.props as Record<string, unknown>) : null;
+  const { children: _omit, ...nativeProps } = native ?? {};
+  void _omit;
+  const classes = native
+    ? (native.className as string | undefined)
+    : cn(
+        buttonVariants({
+          variant: el?.props.variant ?? variant,
+          size: el?.props.size ?? size,
+          className: el?.props.className ?? className,
+        })
+      );
   return (
     <Dialog>
-      {/* Base UI compose par `render` : l'élément reçu devient le déclencheur. */}
-      <DialogTrigger
-        render={React.isValidElement(children) ? (children as React.ReactElement) : <button type="button">{children}</button>}
-      />
+      <DialogTrigger {...nativeProps} className={classes}>
+        {label}
+      </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -120,12 +169,18 @@ function SignInDialog({ children, title }: { children: React.ReactNode; title: s
   );
 }
 
-export function SignInButton({ children }: { children: React.ReactNode; mode?: string }) {
-  return <SignInDialog title="Se connecter">{children}</SignInDialog>;
+export function SignInButton({
+  children,
+  ...style
+}: { children: React.ReactNode; mode?: string } & TriggerStyle) {
+  return <SignInDialog title="Se connecter" {...style}>{children}</SignInDialog>;
 }
 
-export function SignUpButton({ children }: { children: React.ReactNode; mode?: string }) {
-  return <SignInDialog title="Créer un compte">{children}</SignInDialog>;
+export function SignUpButton({
+  children,
+  ...style
+}: { children: React.ReactNode; mode?: string } & TriggerStyle) {
+  return <SignInDialog title="Créer un compte" {...style}>{children}</SignInDialog>;
 }
 
 export function UserButton() {

@@ -8,6 +8,8 @@
  * jour où un domaine existera.
  */
 
+import { isPlaceholderEmail } from "@/lib/strava/client";
+
 export interface Mail {
   to: string;
   subject: string;
@@ -24,6 +26,10 @@ function parseFrom(from: string): { name: string; email: string } {
 }
 
 export async function sendMail(mail: Mail): Promise<void> {
+  // Un compte né sur Strava porte une adresse fictive tant que le coureur
+  // n'en a pas donné une vraie : rien ne part vers elle.
+  if (isPlaceholderEmail(mail.to)) return;
+
   const from = mail.from ?? process.env.ALERT_FROM_EMAIL ?? DEFAULT_FROM;
 
   const brevo = process.env.BREVO_API_KEY;

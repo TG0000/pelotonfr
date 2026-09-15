@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/session";
 import { SignInButton } from "@/components/auth";
 import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { AlertManager } from "@/components/alerts/AlertManager";
 import type { AlertRuleView } from "@/components/alerts/AlertManager";
 import { currentUser } from "@/lib/session";
@@ -61,9 +60,7 @@ export default async function AlertesPage() {
           <p className="text-sm text-muted-foreground mb-4">
             Vos alertes sont liées à votre compte.
           </p>
-          <SignInButton mode="modal">
-            <Button>Se connecter</Button>
-          </SignInButton>
+          <SignInButton size="default">Se connecter</SignInButton>
         </div>
       )}
     </div>
