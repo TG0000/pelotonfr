@@ -353,10 +353,28 @@ export function CircuitView3D({
         });
       }
       if (!m.getLayer("curseur")) {
+        /* Le point, et devant lui un trait dans le sens de la course : c'est
+           ce que Street View regarde. Un halo pour qu'il se voie sur l'ortho. */
+        m.addLayer({
+          id: "curseur-cap",
+          type: "line",
+          source: "curseur",
+          filter: ["==", ["geometry-type"], "LineString"],
+          paint: { "line-color": "#f2c94c", "line-width": 4, "line-opacity": 0.95 },
+          layout: { "line-cap": "round" },
+        });
+        m.addLayer({
+          id: "curseur-halo",
+          type: "circle",
+          source: "curseur",
+          filter: ["==", ["geometry-type"], "Point"],
+          paint: { "circle-radius": 14, "circle-color": "#f2c94c", "circle-opacity": 0.35 },
+        });
         m.addLayer({
           id: "curseur",
           type: "circle",
           source: "curseur",
+          filter: ["==", ["geometry-type"], "Point"],
           paint: {
             "circle-radius": 7,
             "circle-color": "#ffffff",
@@ -574,15 +592,24 @@ export function CircuitView3D({
     if (!source) return;
 
     const at = cursor != null ? points[cursor] : null;
-    source.setData(
-      at
-        ? {
-            type: "Feature",
-            properties: {},
-            geometry: { type: "Point", coordinates: [at[0], at[1]] },
-          }
-        : { type: "FeatureCollection", features: [] }
-    );
+    if (!at) {
+      source.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+    // Le cap à cet endroit, et un trait de soixante mètres devant.
+    const a = points[Math.max(0, cursor! - 2)];
+    const b = points[Math.min(points.length - 1, cursor! + 2)];
+    const dLng = (b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180);
+    const bearing = Math.atan2(dLng, b[1] - a[1]);
+    const m60 = 60 / 111_000;
+    const tip: [number, number] = [at[0] + (Math.sin(bearing) * m60) / Math.cos((at[1] * Math.PI) / 180), at[1] + Math.cos(bearing) * m60];
+    source.setData({
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [[at[0], at[1]], tip] } },
+        { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [at[0], at[1]] } },
+      ],
+    });
   }, [cursor, points]);
 
   /** Where the wind bites, said in words rather than painted over the road. */
