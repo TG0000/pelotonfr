@@ -29,7 +29,7 @@ async function main() {
      l'écart de date. */
   const candidates = (await sql(
     `WITH cur AS (
-       SELECT r.id, r.name, r.race_date, r.discipline, r.federation_id,
+       SELECT r.id, r.name, r.race_date, r.discipline, r.federation_id, r.department_code,
               lower(regexp_replace(coalesce(r.city, ''), '[^a-zA-Z]+', '', 'g')) AS c
          FROM races r
         WHERE r.previous_race_id IS NULL
@@ -37,7 +37,7 @@ async function main() {
           AND r.race_date >= CURRENT_DATE - 400
      ),
      prev AS (
-       SELECT r.id, r.name, r.race_date, r.discipline, r.federation_id, r.finisher_count,
+       SELECT r.id, r.name, r.race_date, r.discipline, r.federation_id, r.finisher_count, r.department_code,
               lower(regexp_replace(coalesce(r.city, ''), '[^a-zA-Z]+', '', 'g')) AS c
          FROM races r
         WHERE r.city IS NOT NULL AND r.city NOT ILIKE '%préciser%'
@@ -54,6 +54,9 @@ async function main() {
               ) AS rk
          FROM cur JOIN prev
            ON prev.c = cur.c AND prev.c <> ''
+          -- Pommérieux (57) n'est pas Pommerieux (53) : la même commune, c'est
+          -- aussi le même département.
+          AND (prev.department_code IS NULL OR cur.department_code IS NULL OR prev.department_code = cur.department_code)
           AND prev.federation_id = cur.federation_id
           AND prev.discipline = cur.discipline
           AND prev.id <> cur.id

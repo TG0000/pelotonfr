@@ -333,11 +333,14 @@ async function refreshRiderAggregates(riderIds: string[]): Promise<void> {
               podium_count  = s.podiums,
               last_raced_on = s.last_date
          FROM (
+           -- Une course compte une fois même quand plusieurs grilles la
+           -- publient (étape et général) ; une ligne sans rang est un abandon
+           -- ou un non-partant, pas un résultat.
            SELECT rr.rider_id,
-                  COUNT(*)                                        AS total,
-                  COUNT(*) FILTER (WHERE rr.rank = 1)             AS wins,
-                  COUNT(*) FILTER (WHERE rr.rank BETWEEN 1 AND 3) AS podiums,
-                  MAX(ra.race_date)                               AS last_date
+                  COUNT(DISTINCT rr.race_id) FILTER (WHERE rr.rank IS NOT NULL)          AS total,
+                  COUNT(DISTINCT rr.race_id) FILTER (WHERE rr.rank = 1)                  AS wins,
+                  COUNT(DISTINCT rr.race_id) FILTER (WHERE rr.rank BETWEEN 1 AND 3)      AS podiums,
+                  MAX(ra.race_date) FILTER (WHERE rr.rank IS NOT NULL)                   AS last_date
              FROM race_results rr
              JOIN races ra ON ra.id = rr.race_id
             WHERE rr.rider_id = ANY($1::uuid[])

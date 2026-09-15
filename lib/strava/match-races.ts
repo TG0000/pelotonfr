@@ -157,10 +157,19 @@ export async function matchRideToRace(
   const rideTitle = normalizeTitle(ride.name);
   if (!rideTitle || GENERIC_TITLES.test(ride.name.trim())) return null;
 
-  const candidates = await sql(
-    `SELECT id, name, categories FROM races WHERE race_date = $1::date`,
-    [ride.localDate]
-  );
+  /* Le même jour et le même nom ne suffisent pas : « St hilaire » a rattaché
+     une sortie de l'Orne à Saint-Hilaire en Haute-Garonne, à 600 km. Quand la
+     sortie sait d'où elle part, la course doit être à moins de 80 km — la
+     distance qu'un coureur fait en voiture un dimanche, pas plus. */
+  const candidates =
+    ride.lat != null && ride.lng != null
+      ? await sql(
+          `SELECT id, name, categories FROM races
+            WHERE race_date = $1::date
+              AND (location IS NULL OR ST_DWithin(location, ST_MakePoint($2::float8, $3::float8)::geography, 80000))`,
+          [ride.localDate, ride.lng, ride.lat]
+        )
+      : await sql(`SELECT id, name, categories FROM races WHERE race_date = $1::date`, [ride.localDate]);
 
   let best: { id: string; name: string; score: number } | null = null;
   for (const row of candidates) {

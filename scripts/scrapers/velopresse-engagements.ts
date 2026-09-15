@@ -45,6 +45,9 @@ function stripAccents(value: string): string {
 
 function normalizeName(value: string): string {
   return stripAccents(value.toLowerCase())
+    // « Louna (FRA) » sur les pages de Coupe de France : la nationalité entre
+    // parenthèses n'est pas un prénom, et elle laissait 650 engagés sans coureur.
+    .replace(/\([^)]*\)/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
@@ -938,7 +941,17 @@ async function main() {
   const misses = new Map<string, number>();
   const nearMisses: string[] = [];
 
+  /* Un article dont la course est passée depuis plus de trois jours a déjà
+     été lu : le relire chaque nuit coûtait dix minutes et 35 000 lignes pour
+     deux courses à venir. --all pour tout reprendre. */
+  const all = process.argv.includes("--all");
+  const floor = Date.now() - 3 * 86_400_000;
+  let skipped = 0;
   for (const path of links) {
+    if (!all) {
+      const meta = parseSlug(path.split("/").pop() ?? path);
+      if (meta?.date && meta.date.getTime() < floor) { skipped++; continue; }
+    }
     try {
       const result = await ingestArticle(path, dryRun);
       if (result.race) {
@@ -990,6 +1003,7 @@ async function main() {
 
   // Counted in start lists rather than entrants: a run that finds 263 lists
   // and can place 30 of them is the failure worth seeing.
+  if (skipped > 0) console.log(`${skipped} article(s) de courses passées, non relus.`);
   return {
     seen: linkedRaces + unmatchedRaces,
     written: linkedRaces,
