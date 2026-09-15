@@ -65,8 +65,8 @@ export default function Confidentialite() {
         <h2 className="font-heading text-lg font-semibold">Retirer ses données</h2>
         <p>
           Écrivez à{" "}
-          <a href="mailto:contact@pelotonfr.fr" className="underline">
-            contact@pelotonfr.fr
+          <a href="/contact" className="underline">
+            le formulaire de contact
           </a>{" "}
           : le compte et tout ce qui s&apos;y rattache sont supprimés sous
           quinze jours. Un coureur qui souhaite que son nom n&apos;apparaisse

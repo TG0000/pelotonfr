@@ -1,3 +1,6 @@
+import { openToken, sealToken } from "@/lib/security";
+import { transaction } from "@/lib/db/transaction";
+import { symmetricEncrypt } from "better-auth/crypto";
 import { sql } from "../index";
 import { toDateOnly } from "@/lib/date";
 import { refreshTokens, type StravaActivity } from "@/lib/strava/client";
@@ -66,8 +69,8 @@ export async function saveConnection(params: {
     [
       params.userId,
       params.athleteId,
-      params.accessToken,
-      params.refreshToken,
+      sealToken(params.accessToken),
+      sealToken(params.refreshToken),
       params.expiresAt.toISOString(),
       params.scope,
       params.athleteName ?? null,
@@ -95,32 +98,35 @@ export async function disconnect(userId: string): Promise<void> {
  * expired by the time the request lands.
  */
 export async function getAccessToken(userId: string): Promise<string | null> {
-  const rows = await sql(
-    `SELECT access_token, refresh_token, expires_at
-       FROM strava_connections WHERE user_id = $1::uuid`,
-    [userId]
-  );
-  if (!rows[0]) return null;
-
-  const r = rows[0] as Record<string, unknown>;
-  const expiresAt = new Date(String(r.expires_at));
-  if (expiresAt.getTime() - Date.now() > 60_000) {
-    return r.access_token as string;
-  }
-
-  const refreshed = await refreshTokens(r.refresh_token as string);
-  await sql(
-    `UPDATE strava_connections
-        SET access_token = $2::text, refresh_token = $3::text, expires_at = $4::timestamptz
-      WHERE user_id = $1::uuid`,
-    [
-      userId,
-      refreshed.accessToken,
-      refreshed.refreshToken,
-      refreshed.expiresAt.toISOString(),
-    ]
-  );
-  return refreshed.accessToken;
+  return transaction(async (client) => {
+    // Hold a per-connection lock until the rotated pair is committed. Other
+    // workers then read the new token instead of spending the old refresh token.
+    const { rows } = await client.query(
+      `SELECT access_token, refresh_token, expires_at
+         FROM strava_connections WHERE user_id = $1::uuid FOR UPDATE`, [userId]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    if (new Date(row.expires_at).getTime() - Date.now() > 60_000) {
+      return openToken(row.access_token);
+    }
+    const refreshed = await refreshTokens(openToken(row.refresh_token));
+    await client.query(
+      `UPDATE strava_connections SET access_token = $2, refresh_token = $3, expires_at = $4
+        WHERE user_id = $1::uuid`,
+      [userId, sealToken(refreshed.accessToken), sealToken(refreshed.refreshToken), refreshed.expiresAt]
+    );
+    const key = process.env.BETTER_AUTH_SECRET;
+    if (!key) throw new Error("Auth encryption is not configured");
+    await client.query(
+      `UPDATE account SET "accessToken" = $2, "refreshToken" = $3, "accessTokenExpiresAt" = $4,
+          "updatedAt" = now()
+        WHERE "providerId" = 'strava' AND "userId" = (SELECT clerk_id FROM users WHERE id = $1::uuid)`,
+      [userId, await symmetricEncrypt({ key, data: refreshed.accessToken }),
+       await symmetricEncrypt({ key, data: refreshed.refreshToken }), refreshed.expiresAt]
+    );
+    return refreshed.accessToken;
+  });
 }
 
 export async function saveFitness(

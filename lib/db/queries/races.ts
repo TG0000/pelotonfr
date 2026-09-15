@@ -196,7 +196,7 @@ export async function getRaces(
   let clubSelect = "";
   if (clubId) {
     pageParams.push(clubId);
-    clubSelect = `, (SELECT count(*) FROM user_favorites uf JOIN club_members cm ON cm.user_id = uf.user_id
+    clubSelect = `, (SELECT count(*) FROM user_favorites uf JOIN club_members cm ON cm.verified_at IS NOT NULL AND cm.user_id = uf.user_id
                      WHERE cm.club_id = $${pageParams.length}::uuid AND uf.race_id = r.id) AS club_going`;
   }
   const offsetParam = `$${pageParams.length - (clubId ? 1 : 0)}`;

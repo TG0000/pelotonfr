@@ -8,12 +8,12 @@ export function Footer() {
     <footer className="border-t mt-auto">
       <div className="mx-auto max-w-7xl px-4 py-8">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-wrap justify-center items-center gap-2 text-sm text-muted-foreground">
             <Logo className="size-5" />
             <span className="font-semibold text-foreground">PelotonFR</span>
-            <span>— Toutes les courses cyclistes en France</span>
+            <span>— Le dimanche commence ici.</span>
           </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-3 text-xs text-muted-foreground">
             <span>Données : FFC · FSGT · UFOLEP</span>
             <Suspense fallback={null}>
               <DataFreshness />
@@ -24,6 +24,7 @@ export function Footer() {
             <Link href="/blog" className="hover:text-foreground transition-colors">
               Blog
             </Link>
+            <Link href="/contact" className="hover:text-foreground transition-colors">Contact</Link>
             <Link href="/mentions-legales" className="hover:text-foreground transition-colors">
               Mentions légales
             </Link>

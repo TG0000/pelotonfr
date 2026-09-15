@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Activity, RefreshCw, Unlink, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StravaButton } from "@/components/auth/StravaButton";
@@ -92,27 +92,16 @@ export function StravaPanel({
     }
   }, [load]);
 
-  // Au retour de Strava, la première synchronisation part toute seule : un
-  // coureur qui vient de connecter veut voir ses courses, pas un bouton.
-  const started = useRef(false);
-  useEffect(() => {
-    if (initialStatus !== "ok" || !initialState.connection || initialState.connection.lastSyncedAt) return;
-    // Différé d'un tour : le mode strict monte deux fois, et le garde-fou ne
-    // doit se poser qu'au départ réel.
-    const t = setTimeout(() => {
-      if (started.current) return;
-      started.current = true;
-      void sync();
-    }, 0);
-    return () => clearTimeout(t);
-  }, [initialStatus, initialState, sync]);
-
   async function unlink() {
-    setBusy(true);
-    await fetch("/api/strava", { method: "DELETE" });
-    setMessage(null);
-    await load();
-    setBusy(false);
+    setBusy(true); setMessage(null);
+    try {
+      const response = await fetch("/api/strava", { method: "DELETE" });
+      if (!response.ok) throw new Error("La déconnexion a échoué. Réessaie dans un instant.");
+      await load();
+      setMessage("Compte Strava déconnecté.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "La déconnexion a échoué.");
+    } finally { setBusy(false); }
   }
 
   if (!state.configured) {
@@ -148,7 +137,7 @@ export function StravaPanel({
           </p>
         </div>
         {c && (
-          <Button variant="ghost" size="icon-sm" onClick={unlink} disabled={busy} title="Déconnecter">
+          <Button variant="ghost" size="icon-sm" onClick={unlink} disabled={busy} title="Déconnecter" aria-label="Déconnecter Strava">
             <Unlink className="size-4 text-muted-foreground" />
           </Button>
         )}
@@ -172,7 +161,7 @@ export function StravaPanel({
         </div>
       )}
 
-      {message && <p className="text-xs text-muted-foreground">{message}</p>}
+      {message && <p role="status" className="text-xs text-muted-foreground">{message}</p>}
 
       <div className="flex gap-2">
         {c ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useId } from "react";
 import { MapPin, Loader2, Navigation } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,9 @@ interface LocationSearchProps {
 }
 
 export function LocationSearch({ onSelect, placeholder = "Ville ou code postal...", defaultValue = "" }: LocationSearchProps) {
+  const inputId = useId();
+  const [active, setActive] = useState(-1);
+  const requestRef = useRef<AbortController | null>(null);
   const [query, setQuery] = useState(defaultValue);
   const [results, setResults] = useState<GeocodingResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,12 +32,18 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      clearTimeout(timerRef.current);
+      requestRef.current?.abort();
+    };
   }, []);
 
   function handleChange(value: string) {
     setQuery(value);
     clearTimeout(timerRef.current);
+    requestRef.current?.abort();
+    setActive(-1); setLoading(false); setGeoError(null);
 
     if (!value.trim() || value.length < 2) {
       setResults([]);
@@ -44,16 +53,19 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
     }
 
     timerRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      requestRef.current = controller;
       setLoading(true);
       try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}`);
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}`, { signal: controller.signal });
+        if (!res.ok) throw new Error("Geocoding unavailable");
         const data = (await res.json()) as GeocodingResult[];
         setResults(data);
         setOpen(data.length > 0);
       } catch {
-        setResults([]);
+        if (!controller.signal.aborted) { setResults([]); setOpen(false); setGeoError("La recherche est indisponible. Réessaie dans un instant."); }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }, 300);
   }
@@ -107,10 +119,25 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
 
   return (
     <div ref={containerRef} className="relative">
+      <label htmlFor={inputId} className="block text-xs font-semibold mb-2">Ville ou code postal</label>
       <div className="relative flex gap-2">
         <div className="relative flex-1">
           <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
+            id={inputId}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={open}
+            aria-controls={`${inputId}-results`}
+            aria-activedescendant={open && active >= 0 ? `${inputId}-option-${active}` : undefined}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") { setOpen(false); setActive(-1); }
+              if (results.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+                event.preventDefault(); setOpen(true);
+                setActive((previous) => (previous + (event.key === "ArrowDown" ? 1 : -1) + results.length) % results.length);
+              }
+              if (event.key === "Enter" && open && active >= 0) { event.preventDefault(); handleSelect(results[active]); }
+            }}
             value={query}
             onChange={(e) => handleChange(e.target.value)}
             placeholder={placeholder}
@@ -147,11 +174,17 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
       )}
 
       {open && results.length > 0 && (
-        <ul className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-md overflow-hidden">
+        <ul id={`${inputId}-results`} role="listbox" aria-label="Lieux proposés" className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-md overflow-hidden">
           {results.map((r, i) => (
-            <li key={i}>
+            <li key={i} role="presentation">
               <button
-                className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 transition-colors"
+                id={`${inputId}-option-${i}`}
+                type="button"
+                role="option"
+                aria-selected={active === i}
+                tabIndex={-1}
+                onMouseDown={(event) => event.preventDefault()}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-muted aria-selected:bg-muted flex items-center gap-2 transition-colors"
                 onClick={() => handleSelect(r)}
               >
                 <MapPin className="size-3.5 text-muted-foreground shrink-0" />

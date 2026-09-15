@@ -1,3 +1,4 @@
+import { symmetricDecrypt } from "better-auth/crypto";
 import { sql } from "@/lib/db";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { saveConnection, saveFitness } from "@/lib/db/queries/strava";
@@ -42,11 +43,16 @@ export async function mirrorStravaAccount(account: OAuthAccountRow): Promise<voi
     const name = ((user?.name as string | undefined) ?? "").trim() || null;
 
     const id = await resolveUser(account.userId, email);
+    // Database hooks receive the encrypted values persisted by Better Auth.
+    const secret = process.env.BETTER_AUTH_SECRET;
+    if (!secret) throw new Error("Auth encryption is not configured");
+    const accessToken = await symmetricDecrypt({ key: secret, data: account.accessToken });
+    const refreshToken = await symmetricDecrypt({ key: secret, data: account.refreshToken });
     await saveConnection({
       userId: id,
       athleteId: Number(account.accountId),
-      accessToken: account.accessToken,
-      refreshToken: account.refreshToken,
+      accessToken,
+      refreshToken,
       expiresAt: account.accessTokenExpiresAt
         ? new Date(account.accessTokenExpiresAt)
         : new Date(Date.now() + TOKEN_LIFETIME_MS),
@@ -54,9 +60,9 @@ export async function mirrorStravaAccount(account: OAuthAccountRow): Promise<voi
       athleteName: name,
     });
 
-    const summary = await getAthleteSummary(account.accessToken);
+    const summary = await getAthleteSummary(accessToken);
     await saveFitness(id, summary.ftp, summary.weightKg);
-  } catch (err) {
-    console.error("Strava account mirror:", err);
+  } catch {
+    console.error("STRAVA_MIRROR_FAILED: reconnect the Strava account");
   }
 }

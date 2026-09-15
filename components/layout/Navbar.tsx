@@ -43,6 +43,7 @@ function NavLink({
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md transition-colors",
         active
@@ -61,7 +62,7 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-sm">
-      <div className="mx-auto max-w-7xl px-4 h-14 flex items-center gap-4">
+      <div className="mx-auto max-w-7xl px-4 h-18 flex items-center gap-4">
         {/* Logo */}
         <Link href="/" className="shrink-0" aria-label="PelotonFR — accueil">
           <Logo className="size-8 sm:hidden" />
@@ -69,7 +70,7 @@ export function Navbar() {
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-1 ml-4">
+        <nav className="hidden lg:flex items-center gap-1 ml-4">
           {navLinks.map((link) => (
             <NavLink key={link.href} {...link} />
           ))}
@@ -103,7 +104,7 @@ export function Navbar() {
           <Sheet>
             <SheetTrigger
               render={
-                <Button variant="ghost" size="icon" className="md:hidden" />
+                <Button variant="ghost" size="icon" className="lg:hidden" />
               }
             >
               <Menu className="size-5" />

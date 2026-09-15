@@ -215,8 +215,8 @@ export async function POST() {
             await sql(
               `UPDATE strava_activities
                   SET race_id = $2::uuid, race_match_method = 'location_and_date'
-                WHERE activity_id = $1::bigint AND race_id IS NULL`,
-              [Number(r.activity_id), donor.raceId]
+                WHERE activity_id = $1::bigint AND user_id = $3::uuid AND race_id IS NULL`,
+              [Number(r.activity_id), donor.raceId, id]
             );
           }
         } catch {

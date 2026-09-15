@@ -8,7 +8,7 @@
  */
 
 const USER_AGENT =
-  "PelotonFR/2.0 (+https://pelotonfr.fr; contact@pelotonfr.fr)";
+  "PelotonFR/2.0 (+https://pelotonfr.vercel.app/contact)";
 
 const HEADERS = {
   "User-Agent": USER_AGENT,
