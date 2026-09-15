@@ -245,6 +245,7 @@ export function RaceCircuit({
             onSelect={setSelected}
             marks={marks}
             coverage={coverage}
+            compact={full}
           />
         </div>
       </div>

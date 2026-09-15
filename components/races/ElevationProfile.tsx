@@ -60,6 +60,8 @@ interface Props {
   coverage?: Array<{ fromM: number; toM: number }>;
   /** Un clic choisit un point : le panorama s'y place. */
   onSelect?: (index: number) => void;
+  /** En plein écran : une bande basse, étirée en largeur, pas un mur. */
+  compact?: boolean;
 }
 
 const W = 1000;
@@ -67,6 +69,8 @@ const H = 250;
 /** The strip along the foot of the profile that carries the wind. */
 const WIND_H = 9;
 const PAD_BOTTOM = 22;
+/** Le bas du tracé : au-dessus du vent et de la ligne Street View, jamais dessus. */
+const FLOOR = PAD_BOTTOM + 9 + 12;
 const PAD_TOP = 22;
 const PAD_LEFT = 34;
 
@@ -80,6 +84,7 @@ export function ElevationProfile({
   marks = [],
   coverage = [],
   onSelect,
+  compact = false,
 }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const [cursor, setCursor] = useState<number | null>(null);
@@ -94,7 +99,7 @@ export function ElevationProfile({
   );
   const y = useCallback(
     (a: number) =>
-      H - PAD_BOTTOM - ((a - minElevationM) / span) * (H - PAD_BOTTOM - PAD_TOP),
+      H - FLOOR - ((a - minElevationM) / span) * (H - FLOOR - PAD_TOP),
     [minElevationM, span]
   );
 
@@ -148,7 +153,7 @@ export function ElevationProfile({
     const line = points
       .map((p) => `${x(p[3]).toFixed(1)} ${y(p[2]).toFixed(1)}`)
       .join(" L ");
-    return `M ${PAD_LEFT} ${H - PAD_BOTTOM} L ${line} L ${W} ${H - PAD_BOTTOM} Z`;
+    return `M ${PAD_LEFT} ${H - FLOOR} L ${line} L ${W} ${H - FLOOR} Z`;
   }, [points, x, y]);
 
   function handleMove(event: React.MouseEvent<SVGSVGElement>) {
@@ -221,6 +226,8 @@ export function ElevationProfile({
       <svg
         ref={ref}
         viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio={compact ? "none" : "xMidYMid meet"}
+        style={compact ? { height: 170 } : undefined}
         className="w-full touch-none"
         onMouseMove={handleMove}
         onMouseLeave={handleLeave}
@@ -295,7 +302,7 @@ export function ElevationProfile({
             const km = (i + 1) * stepKm;
             return (
               <g key={km}>
-                <line x1={x(km * 1000)} y1={PAD_TOP} x2={x(km * 1000)} y2={H - PAD_BOTTOM} stroke="var(--color-border)" strokeWidth="1" strokeDasharray="2 4" />
+                <line x1={x(km * 1000)} y1={PAD_TOP} x2={x(km * 1000)} y2={H - FLOOR} stroke="var(--color-border)" strokeWidth="1" strokeDasharray="2 4" />
                 <text x={x(km * 1000)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 11, fontFamily: "var(--font-mono)" }}>
                   {km}
                 </text>
@@ -324,7 +331,7 @@ export function ElevationProfile({
         {active && (
           <line
             x1={x(active[3])} y1={PAD_TOP}
-            x2={x(active[3])} y2={H - PAD_BOTTOM}
+            x2={x(active[3])} y2={H - FLOOR}
             stroke="var(--color-foreground)" strokeWidth="1.5"
           />
         )}

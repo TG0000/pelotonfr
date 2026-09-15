@@ -72,6 +72,12 @@ export function StreetViewPane({
   const [noPano, setNoPano] = useState(false);
   const shown = index ?? 0;
   const at = points[Math.min(points.length - 1, Math.max(0, shown))] ?? points[0];
+  const indexRef = useRef<number | null>(index);
+  const onIndexRef = useRef(onIndex);
+  useEffect(() => {
+    indexRef.current = index;
+    onIndexRef.current = onIndex;
+  }, [index, onIndex]);
 
   const open = useCallback(async () => {
     setState("loading");
@@ -100,12 +106,34 @@ export function StreetViewPane({
         clickToGo: true,
         visible: true,
       });
+      /* Quand le lecteur avance dans le panorama lui-même (flèches, clic sur
+         la route), la carte et le profil suivent : le point du tracé le plus
+         proche devient le point choisi. Seulement s'il a vraiment bougé, pour
+         ne pas boucler avec le déplacement qu'on commande nous-mêmes. */
+      pano.current.addListener("position_changed", () => {
+        const pos = pano.current?.getPosition();
+        if (!pos) return;
+        const lat = pos.lat(), lng = pos.lng();
+        let best = -1, bestD = 60;
+        for (let i = 0; i < points.length; i++) {
+          const p = points[i];
+          const d = Math.hypot((p[1] - lat) * 111_000, (p[0] - lng) * 111_000 * Math.cos((lat * Math.PI) / 180));
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        if (best < 0) return;
+        const cur = points[Math.min(points.length - 1, Math.max(0, indexRef.current ?? 0))];
+        const moved = Math.hypot((cur[1] - lat) * 111_000, (cur[0] - lng) * 111_000 * Math.cos((lat * Math.PI) / 180));
+        if (moved > 25) onIndexRef.current?.(best);
+      });
+      if (new URLSearchParams(window.location.search).has("capture")) {
+        (window as unknown as { __pano?: google.maps.StreetViewPanorama }).__pano = pano.current;
+      }
       setState("ready");
     } catch (err) {
       setReason(err instanceof Error ? err.message : "Street View n'a pas chargé.");
       setState("refused");
     }
-  }, []);
+  }, [points]);
 
   /* Suivre le point : le panorama le plus proche à moins de quarante mètres,
      tourné dans le sens de la course. */
