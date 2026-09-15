@@ -54,6 +54,12 @@ interface Props {
   /** Where the wind comes from on the day, when the forecast reaches. */
   windFromDeg?: number | null;
   className?: string;
+  /** Les photos et dangers lus sur la boucle, posés au kilomètre. */
+  marks?: Array<{ alongM: number; kind: "photo" | "danger"; severity?: number }>;
+  /** Là où Street View a un panorama, en portions du tour. */
+  coverage?: Array<{ fromM: number; toM: number }>;
+  /** Un clic choisit un point : le panorama s'y place. */
+  onSelect?: (index: number) => void;
 }
 
 const W = 1000;
@@ -70,6 +76,9 @@ export function ElevationProfile({
   onHover,
   windFromDeg,
   className,
+  marks = [],
+  coverage = [],
+  onSelect,
 }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const [cursor, setCursor] = useState<number | null>(null);
@@ -213,10 +222,35 @@ export function ElevationProfile({
         className="w-full touch-none"
         onMouseMove={handleMove}
         onMouseLeave={handleLeave}
+        onClick={() => { if (cursor !== null) onSelect?.(cursor); }}
         role="img"
         aria-label={`Profil du parcours, ${Math.round(totalM / 1000)} kilomètres`}
       >
         <path d={areaPath} fill="var(--color-primary)" opacity="0.08" />
+
+        {/* Street View : une ligne fine au-dessus du vent, pleine là où un
+            panorama existe, pointillée là où l'on est aveugle. */}
+        {coverage.length > 0 && (
+          <g>
+            <line x1={x(0)} y1={H - PAD_BOTTOM - WIND_H - 4} x2={x(totalM)} y2={H - PAD_BOTTOM - WIND_H - 4} stroke="var(--color-border)" strokeWidth="1.5" strokeDasharray="2 3" />
+            {coverage.map((c, i) => (
+              <line key={i} x1={x(c.fromM)} y1={H - PAD_BOTTOM - WIND_H - 4} x2={x(Math.min(c.toM, totalM))} y2={H - PAD_BOTTOM - WIND_H - 4} stroke="var(--color-primary)" strokeWidth="2.5" />
+            ))}
+          </g>
+        )}
+
+        {/* Les photos lues (points) et les dangers (triangles), au-dessus du profil. */}
+        {marks.map((m, i) => (
+          m.kind === "danger" ? (
+            <polygon
+              key={`m${i}`}
+              points={`${x(m.alongM)},${PAD_TOP + 2} ${x(m.alongM) - 5},${PAD_TOP + 11} ${x(m.alongM) + 5},${PAD_TOP + 11}`}
+              fill={(m.severity ?? 1) >= 2 ? "var(--color-destructive)" : "var(--color-accent)"}
+            />
+          ) : (
+            <circle key={`m${i}`} cx={x(m.alongM)} cy={PAD_TOP + 6} r="3" fill="var(--color-accent)" stroke="var(--color-background)" strokeWidth="1" />
+          )
+        ))}
 
         {/* The wind along the foot: face, travers, dos. */}
         {windBands.map((b, i) => (

@@ -7,6 +7,8 @@ import { ElevationProfile } from "./ElevationProfile";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { detectLaps } from "@/lib/trace";
 import type { RoadPhotoMarker } from "./CircuitView3D";
+import { StreetViewPane } from "./StreetViewPane";
+import type { CoverageSpan } from "@/lib/streetview";
 import { useNearViewport } from "@/components/common/useNearViewport";
 
 /* The relief view when the ground has been read, the flat map otherwise. Both
@@ -61,6 +63,7 @@ export function RaceCircuit({
   windFromDeg,
   windKmh,
   photos = [],
+  coverage = [],
 }: {
   trace: RaceTrace;
   raceId: string;
@@ -68,8 +71,13 @@ export function RaceCircuit({
   windFromDeg?: number | null;
   windKmh?: number | null;
   photos?: RoadPhotoMarker[];
+  /** Là où Street View voit la boucle. */
+  coverage?: CoverageSpan[];
 }) {
   const [cursor, setCursor] = useState<number | null>(null);
+  /* Le point choisi — clic sur le profil, ou la visite qui avance — tient
+     tant que la souris passe ailleurs ; le survol ne fait que regarder. */
+  const [selected, setSelected] = useState<number | null>(null);
   const [whole, setWhole] = useState(false);
 
   const laps = useMemo(() => detectLaps(trace.points), [trace.points]);
@@ -86,6 +94,18 @@ export function RaceCircuit({
   // hard independently of how long it is.
   const density = km > 0 ? trace.elevationGainM / km : 0;
   const lapGain = lapped ? Math.round(trace.elevationGainM / laps.lapCount) : null;
+
+  /* Les repères du profil : une photo par point, un triangle par danger. */
+  const marks = useMemo(
+    () =>
+      photos.flatMap((p) => {
+        const out: Array<{ alongM: number; kind: "photo" | "danger"; severity?: number }> = [{ alongM: p.alongM, kind: "photo" }];
+        if (p.severity >= 1) out.push({ alongM: p.alongM, kind: "danger", severity: p.severity });
+        return out;
+      }),
+    [photos]
+  );
+  const shownIndex = selected ?? cursor;
 
   return (
     <section>
@@ -126,12 +146,14 @@ export function RaceCircuit({
       </h2>
 
       <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
-        {/* The map is heavy; it loads when the reader gets near it. */}
-        <div ref={mapSlot} className="h-80 w-full sm:h-[26rem]">
+        {/* La carte et Street View côte à côte : le même point, vu du ciel et
+            de la selle. Le panorama ne charge qu'au clic. */}
+        <div className="grid lg:grid-cols-5">
+        <div ref={mapSlot} className="h-80 w-full sm:h-[26rem] lg:col-span-3">
           {mapNear ? (
             <CircuitView3D
               points={profilePoints}
-              cursor={cursor}
+              cursor={shownIndex}
               windFromDeg={windFromDeg ?? null}
               windKmh={windKmh ?? null}
               className="h-full w-full"
@@ -140,6 +162,14 @@ export function RaceCircuit({
           ) : (
             <div className="h-full w-full bg-surface-2" />
           )}
+        </div>
+        <StreetViewPane
+          points={profilePoints}
+          index={shownIndex}
+          onIndex={setSelected}
+          coverage={coverage}
+          className="h-64 w-full border-t border-border lg:col-span-2 lg:h-[26rem] lg:border-l lg:border-t-0"
+        />
         </div>
 
         <div className="grid grid-cols-2 gap-4 border-t border-border px-4 py-3 sm:grid-cols-4">
@@ -181,6 +211,9 @@ export function RaceCircuit({
             minElevationM={trace.minElevationM}
             maxElevationM={trace.maxElevationM}
             onHover={setCursor}
+            onSelect={setSelected}
+            marks={marks}
+            coverage={coverage}
           />
         </div>
       </div>

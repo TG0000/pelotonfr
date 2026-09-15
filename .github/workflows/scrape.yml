@@ -207,11 +207,14 @@ jobs:
           MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_MAPS_SERVER_KEY: ${{ secrets.GOOGLE_MAPS_SERVER_KEY }}
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
         run: |
           npm run scrape:affiches -- --limit=30
           npm run scrape:guides -- --limit=30
           npm run scrape:guides:vision -- --limit=40
           npm run scrape:road:vision -- --limit=40
+          npm run scrape:streetview -- --limit=60
         continue-on-error: true
 
       # The weather at the start, for the coming week, so the list can show it.

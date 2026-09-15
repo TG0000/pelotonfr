@@ -595,3 +595,9 @@ export async function getRaceStageTraces(raceId: string): Promise<StageTrace[]> 
     waypoints: (r.waypoints as StageTrace["waypoints"]) ?? [],
   }));
 }
+
+/** Les portions du tour où Street View a un panorama, ou [] si jamais sondé. */
+export async function getStreetViewCoverage(raceId: string): Promise<Array<{ fromM: number; toM: number }>> {
+  const [row] = await sql(`SELECT spans FROM race_streetview WHERE race_id = $1::uuid`, [raceId]);
+  return (row?.spans as Array<{ fromM: number; toM: number }>) ?? [];
+}

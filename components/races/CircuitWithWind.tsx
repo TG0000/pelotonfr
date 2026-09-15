@@ -4,6 +4,7 @@ import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { RaceCircuit } from "./RaceCircuit";
 import type { RoadView } from "@/lib/db/queries/road";
 import type { RoadPhotoMarker } from "./CircuitView3D";
+import { getStreetViewCoverage } from "@/lib/db/queries/race-detail";
 
 /**
  * The circuit, knowing which way the wind will be blowing.
@@ -36,6 +37,7 @@ export async function CircuitWithWind({
 }) {
   let windFromDeg: number | null = null;
   let windKmh: number | null = null;
+  const coverage = await getStreetViewCoverage(raceId).catch(() => []);
 
   if (lat != null && lng != null) {
     try {
@@ -80,6 +82,7 @@ export async function CircuitWithWind({
       windFromDeg={windFromDeg}
       windKmh={windKmh}
       photos={photos}
+      coverage={coverage}
     />
   );
 }
