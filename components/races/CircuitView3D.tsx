@@ -252,6 +252,18 @@ export function CircuitView3D({
 
     m.on("style.load", () => {
       try {
+      /* Le fond de carte, calmé. Liberty nomme chaque lieu-dit dès le zoom 8
+         et couvre une boucle de village de vingt étiquettes ; ici la route
+         est le sujet. Les lieux-dits attendent le zoom 15, les commerces
+         disparaissent, les aplats d'occupation du sol s'effacent à moitié,
+         les noms de villages restent. */
+      for (const layer of m.getStyle().layers ?? []) {
+        const id = layer.id;
+        if (id === "label_other") m.setLayerZoomRange(id, 15, 24);
+        else if (/^poi_|^highway-name-path|^road_one_way/.test(id)) m.setLayoutProperty(id, "visibility", "none");
+        else if (layer.type === "fill" && /^(landuse_|landcover_|park$)/.test(id)) m.setPaintProperty(id, "fill-opacity", 0.45);
+        else if (layer.type === "symbol" && /^highway-name-/.test(id)) m.setLayoutProperty(id, "text-size", 10);
+      }
       if (!m.getSource("relief")) {
         m.addSource("relief", {
           type: "raster-dem",
@@ -430,7 +442,13 @@ export function CircuitView3D({
       }
     });
 
+    /* Le bloc change de taille — plein écran, colonne qui s'élargit — et la
+       carte doit suivre, pas seulement la fenêtre. */
+    const observer = new ResizeObserver(() => m.resize());
+    if (host.current) observer.observe(host.current);
+
     return () => {
+      observer.disconnect();
       m.remove();
       map.current = null;
     };
@@ -533,7 +551,7 @@ export function CircuitView3D({
         const esc = (v: unknown) => String(v ?? "").replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
         const html =
           `<div style="width:230px;font:12px/1.35 system-ui,sans-serif;color:#111">` +
-          `<img src="${esc(pr.image)}" alt="" style="width:100%;height:110px;object-fit:cover;border-radius:6px;display:block;margin-bottom:5px">` +
+          `<img src="${esc(pr.image)}" alt="" style="width:100%;height:auto;border-radius:6px;display:block;margin-bottom:5px">` +
           `<div><b>km ${esc(pr.km)}</b> · ${esc(pr.label)}</div>` +
           (pr.hazards ? `<div style="color:#b3261e;font-weight:600;margin-top:2px">⚠ ${esc(pr.hazards)}</div>` : "") +
           (pr.note ? `<div style="color:#555;margin-top:2px">${esc(pr.note)}</div>` : "") +

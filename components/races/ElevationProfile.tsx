@@ -63,11 +63,12 @@ interface Props {
 }
 
 const W = 1000;
-const H = 220;
+const H = 250;
 /** The strip along the foot of the profile that carries the wind. */
 const WIND_H = 9;
 const PAD_BOTTOM = 22;
-const PAD_TOP = 12;
+const PAD_TOP = 22;
+const PAD_LEFT = 34;
 
 export function ElevationProfile({
   points,
@@ -88,7 +89,7 @@ export function ElevationProfile({
   const span = Math.max(maxElevationM - minElevationM, 40);
 
   const x = useCallback(
-    (d: number) => (totalM > 0 ? (d / totalM) * W : 0),
+    (d: number) => (totalM > 0 ? PAD_LEFT + (d / totalM) * (W - PAD_LEFT) : PAD_LEFT),
     [totalM]
   );
   const y = useCallback(
@@ -147,14 +148,15 @@ export function ElevationProfile({
     const line = points
       .map((p) => `${x(p[3]).toFixed(1)} ${y(p[2]).toFixed(1)}`)
       .join(" L ");
-    return `M 0 ${H - PAD_BOTTOM} L ${line} L ${W} ${H - PAD_BOTTOM} Z`;
+    return `M ${PAD_LEFT} ${H - PAD_BOTTOM} L ${line} L ${W} ${H - PAD_BOTTOM} Z`;
   }, [points, x, y]);
 
   function handleMove(event: React.MouseEvent<SVGSVGElement>) {
     const svg = ref.current;
     if (!svg || points.length === 0) return;
     const rect = svg.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / rect.width;
+    const left = rect.left + (PAD_LEFT / W) * rect.width;
+    const ratio = Math.max(0, Math.min(1, (event.clientX - left) / (rect.width * (1 - PAD_LEFT / W))));
     const target = ratio * totalM;
 
     // The points are ordered by distance, so a scan is enough at this size.
@@ -240,17 +242,25 @@ export function ElevationProfile({
         )}
 
         {/* Les photos lues (points) et les dangers (triangles), au-dessus du profil. */}
-        {marks.map((m, i) => (
-          m.kind === "danger" ? (
+        {marks.map((m, i) => {
+          const select = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            let idx = points.findIndex((p) => p[3] >= m.alongM);
+            if (idx < 0) idx = points.length - 1;
+            onSelect?.(idx);
+          };
+          return m.kind === "danger" ? (
             <polygon
               key={`m${i}`}
-              points={`${x(m.alongM)},${PAD_TOP + 2} ${x(m.alongM) - 5},${PAD_TOP + 11} ${x(m.alongM) + 5},${PAD_TOP + 11}`}
+              onClick={select}
+              style={{ cursor: "pointer" }}
+              points={`${x(m.alongM)},${PAD_TOP - 12} ${x(m.alongM) - 5},${PAD_TOP - 3} ${x(m.alongM) + 5},${PAD_TOP - 3}`}
               fill={(m.severity ?? 1) >= 2 ? "var(--color-destructive)" : "var(--color-accent)"}
             />
           ) : (
-            <circle key={`m${i}`} cx={x(m.alongM)} cy={PAD_TOP + 6} r="3" fill="var(--color-accent)" stroke="var(--color-background)" strokeWidth="1" />
-          )
-        ))}
+            <circle key={`m${i}`} onClick={select} style={{ cursor: "pointer" }} cx={x(m.alongM)} cy={PAD_TOP - 7} r="3.5" fill="var(--color-accent)" stroke="var(--color-background)" strokeWidth="1" />
+          );
+        })}
 
         {/* The wind along the foot: face, travers, dos. */}
         {windBands.map((b, i) => (
@@ -276,27 +286,40 @@ export function ElevationProfile({
           />
         ))}
 
-        {/* Every 10 km, so the eye can place itself along the course. */}
-        {Array.from({ length: Math.floor(totalM / 10_000) }, (_, i) => {
-          const km = (i + 1) * 10;
-          return (
-            <g key={km}>
-              <line
-                x1={x(km * 1000)} y1={PAD_TOP}
-                x2={x(km * 1000)} y2={H - PAD_BOTTOM}
-                stroke="var(--color-border)" strokeWidth="1"
-              />
-              <text
-                x={x(km * 1000)} y={H - 6}
-                textAnchor="middle"
-                className="fill-muted-foreground"
-                style={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
-              >
-                {km}
+        {/* Des repères à l'échelle de la boucle : tous les kilomètres sur un
+            tour de village, tous les cinq sur une course en ligne, tous les
+            dix au-delà. Sans ça, un tour de 5 km n'avait aucun repère. */}
+        {(() => {
+          const stepKm = totalM < 15_000 ? 1 : totalM < 60_000 ? 5 : 10;
+          return Array.from({ length: Math.floor(totalM / (stepKm * 1000)) }, (_, i) => {
+            const km = (i + 1) * stepKm;
+            return (
+              <g key={km}>
+                <line x1={x(km * 1000)} y1={PAD_TOP} x2={x(km * 1000)} y2={H - PAD_BOTTOM} stroke="var(--color-border)" strokeWidth="1" strokeDasharray="2 4" />
+                <text x={x(km * 1000)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 11, fontFamily: "var(--font-mono)" }}>
+                  {km}
+                </text>
+              </g>
+            );
+          });
+        })()}
+
+        {/* L'altitude, en marge : deux ou trois lignes à des valeurs rondes,
+            pour lire une bosse en mètres et pas seulement en forme. */}
+        {(() => {
+          const step = span <= 60 ? 20 : span <= 150 ? 50 : span <= 400 ? 100 : 250;
+          const first = Math.ceil(minElevationM / step) * step;
+          const lines: number[] = [];
+          for (let a = first; a <= minElevationM + span; a += step) lines.push(a);
+          return lines.map((a) => (
+            <g key={`alt${a}`}>
+              <line x1={PAD_LEFT} y1={y(a)} x2={W} y2={y(a)} stroke="var(--color-border)" strokeWidth="1" opacity="0.7" />
+              <text x={PAD_LEFT - 5} y={y(a) + 4} textAnchor="end" className="fill-muted-foreground" style={{ fontSize: 10, fontFamily: "var(--font-mono)" }}>
+                {a}
               </text>
             </g>
-          );
-        })}
+          ));
+        })()}
 
         {active && (
           <line

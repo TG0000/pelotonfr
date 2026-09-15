@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Download, Route } from "lucide-react";
+import { Download, Maximize2, Route } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { ElevationProfile } from "./ElevationProfile";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { detectLaps } from "@/lib/trace";
@@ -79,6 +80,20 @@ export function RaceCircuit({
      tant que la souris passe ailleurs ; le survol ne fait que regarder. */
   const [selected, setSelected] = useState<number | null>(null);
   const [whole, setWhole] = useState(false);
+  /* Le bloc entier en plein écran : carte, panorama et profil, sans le reste
+     de la page. Le navigateur fait le travail ; on ne garde que l'état. */
+  const block = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
+  function toggleFull() {
+    const el = block.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      setFull(false);
+    } else {
+      void el.requestFullscreen().then(() => setFull(true)).catch(() => {});
+    }
+  }
 
   const laps = useMemo(() => detectLaps(trace.points), [trace.points]);
   const { ref: mapSlot, near: mapNear } = useNearViewport();
@@ -125,6 +140,15 @@ export function RaceCircuit({
             qui défile, là où un GPX n'est qu'une ligne à suivre. Le GPX reste,
             il passe partout. */}
         <span className="ml-auto inline-flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={toggleFull}
+            title="Le parcours en plein écran"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs font-normal text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            <Maximize2 className="size-3.5" />
+            Plein écran
+          </button>
           <a
             href={`/api/course/${raceId}/fit${lapped && !whole ? "?tour=1" : ""}`}
             download
@@ -145,11 +169,18 @@ export function RaceCircuit({
         </span>
       </h2>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-surface-1">
+      <div
+        ref={block}
+        onDoubleClick={(e) => { if (full && e.target === e.currentTarget) toggleFull(); }}
+        className={cn(
+          "overflow-hidden rounded-xl border border-border bg-surface-1",
+          full && "flex h-screen flex-col rounded-none border-0 bg-background"
+        )}
+      >
         {/* La carte et Street View côte à côte : le même point, vu du ciel et
             de la selle. Le panorama ne charge qu'au clic. */}
-        <div className="grid lg:grid-cols-5">
-        <div ref={mapSlot} className="h-80 w-full sm:h-[26rem] lg:col-span-3">
+        <div className={cn("grid lg:grid-cols-5", full && "min-h-0 flex-1")}>
+        <div ref={mapSlot} className={cn("h-80 w-full sm:h-[26rem] lg:col-span-3", full && "h-full sm:h-full")}>
           {mapNear ? (
             <CircuitView3D
               points={profilePoints}
@@ -168,7 +199,7 @@ export function RaceCircuit({
           index={shownIndex}
           onIndex={setSelected}
           coverage={coverage}
-          className="h-64 w-full border-t border-border lg:col-span-2 lg:h-[26rem] lg:border-l lg:border-t-0"
+          className={cn("h-64 w-full border-t border-border lg:col-span-2 lg:h-[26rem] lg:border-l lg:border-t-0", full && "h-full lg:h-full")}
         />
         </div>
 
