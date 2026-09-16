@@ -13,6 +13,7 @@ import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "./utils/db";
 import { detectLaps } from "../../lib/trace";
 import { publicStravaEnabled } from "../../lib/strava/policy";
+import { hasPano, coverageFromSamples } from "../../lib/streetview-metadata";
 import { trackRun } from "../lib/track-run";
 
 loadEnv();
@@ -20,19 +21,6 @@ const sql = createSql(requireEnv("DATABASE_URL"));
 const STEP_M = 120;
 const MAX_SAMPLES = 250;
 
-async function hasPano(key: string, lat: number, lng: number): Promise<boolean | null> {
-  const url = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat.toFixed(6)},${lng.toFixed(6)}&radius=40&source=outdoor&key=${key}`;
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { status: string };
-    if (data.status === "OK") return true;
-    if (data.status === "ZERO_RESULTS") return false;
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 async function main() {
   const key = process.env.GOOGLE_MAPS_SERVER_KEY;
@@ -67,18 +55,9 @@ async function main() {
       if (i < 0) i = lap.length - 1;
       samples.push({ m, ok: await hasPano(key, lap[i][1], lap[i][0]) });
     }
-    if (!samples.length || samples.some(sample => sample.ok === null)) { failed++; continue; }
-    const spans: Array<{ fromM: number; toM: number }> = [];
-    let open: { fromM: number; toM: number } | null = null;
-    for (const s of samples) {
-      if (s.ok) {
-        if (!open) open = { fromM: Math.max(0, Math.round(s.m - step / 2)), toM: Math.round(s.m + step / 2) };
-        else open.toM = Math.round(s.m + step / 2);
-      } else if (open) { spans.push(open); open = null; }
-    }
-    if (open) spans.push(open);
-    for (const sp of spans) sp.toM = Math.min(sp.toM, Math.round(lapM));
-    const covered = spans.reduce((a, s) => a + (s.toM - s.fromM), 0);
+    const coverage = coverageFromSamples(samples, step, lapM);
+    if (!coverage) { failed++; continue; }
+    const { spans, covered } = coverage;
     await sql(
       `INSERT INTO race_streetview (race_id, spans, sampled, covered_m, lap_m, checked_at, trace_hash)
        VALUES ($1::uuid, $2::jsonb, $3, $4, $5, now(), $6)

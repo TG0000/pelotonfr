@@ -8,7 +8,7 @@ export function mutationOriginAllowed(request: Request): boolean {
 }
 
 /** Vercel overwrites this header. Outside Vercel, share a conservative budget. */
-export function visitorKey(request: Request): string {
+export function visitorKey(request: Pick<Request, "headers">): string {
   const address = process.env.VERCEL ? request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() : "local";
   const secret = process.env.BETTER_AUTH_SECRET;
   if (!secret) throw new Error("Request hashing is not configured");

@@ -4,8 +4,8 @@ import { sql } from "@/lib/db";
  * The rider's own season.
  *
  * Everything else in this product is about races; this is the one place that is
- * about a person. It only works once a Clerk account is tied to a rider in the
- * federation's own files, which is what `users.rider_id` records.
+ * about a person. Planning works for every account; federal results require
+ * an optional rider association through `users.rider_id`.
  */
 
 export interface RiderMatch {
@@ -205,7 +205,7 @@ export async function getMySeason(
        JOIN races ra      ON ra.id = uf.race_id
        JOIN federations f ON f.id = ra.federation_id
       WHERE uf.user_id = $1::uuid
-        AND COALESCE(ra.race_date_end, ra.race_date) >= CURRENT_DATE
+        AND COALESCE(ra.race_date_end, ra.race_date) >= (now() AT TIME ZONE 'Europe/Paris')::date
       -- Committed races first: that is the season, the rest is the shortlist.
       ORDER BY (uf.intent = 'programmee') DESC, ra.race_date ASC
       LIMIT 40`,

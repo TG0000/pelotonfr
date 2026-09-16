@@ -36,8 +36,7 @@ export default function MentionsLegales() {
         <h2 className="font-heading text-lg font-semibold">Hébergement</h2>
         <p>
           Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, États-Unis.
-          La base de données est hébergée par Neon Inc. dans l&apos;Union
-          européenne.
+          La base de données est hébergée par Neon Inc. dans la région de Londres, au Royaume-Uni.
         </p>
       </section>
 
@@ -54,7 +53,7 @@ export default function MentionsLegales() {
         <p>
           Les noms des coureurs figurant dans les listes d&apos;engagés et les
           classements sont ceux publiés par les fédérations. Tout coureur peut
-          demander leur retrait à l&apos;adresse ci-dessus.
+          demander leur retrait via le formulaire de contact ci-dessus.
         </p>
       </section>
 

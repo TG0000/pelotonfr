@@ -6,7 +6,7 @@ async function main() {
   const fixtures = [
     { key:"preview-falaises",name:"Démo — Le Circuit des Falaises",fed:1,city:"Caen",lat:49.182,lng:-0.370,days:5,categories:["access1","access2"],distance:68 },
     { key:"preview-bocage",name:"Démo — La Ronde du Bocage",fed:2,city:"Vire",lat:48.839,lng:-0.889,days:12,categories:["fsgt3","fsgt4"],distance:72 },
-    { key:"preview-ponts",name:"Démo — Le Prix des Trois Ponts",fed:3,city:"Bayeux",lat:49.278,lng:-0.703,days:19,categories:["ufolep2","ufolep3"],distance:56 },
+    { key:"preview-ponts",name:"Démo — Le Prix des Trois Ponts",fed:3,city:"Bayeux",lat:49.278,lng:-0.703,days:19,categories:["fsgt2","fsgt3"],distance:56 },
   ];
   for (const race of fixtures) {
     await getDatabasePool().query(`INSERT INTO races(external_id,federation_id,name,race_date,city,department_code,department_name,region,

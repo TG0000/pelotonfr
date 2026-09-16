@@ -202,9 +202,17 @@ export async function getRaces(
                      WHERE cm.club_id = $${pageParams.length}::uuid AND uf.race_id = r.id) AS club_going`;
   }
   const offsetParam = `$${pageParams.length - (clubId ? 1 : 0)}`;
+  // Only sort-dependent aggregates belong before LIMIT. A normal page needs
+  // entrant/club counts for 24 rows, not every matching race.
+  const entrantSelect = (alias: string) => `(SELECT count(*) FROM engagements e WHERE e.race_id = ${alias}.id) AS entrant_count`;
+  const lateSelect = [
+    sortBy !== "engages" ? entrantSelect("g") : "",
+    sortBy !== "club" ? clubSelect.replace(/^, /, "").replace(/uf\.race_id = r\.id/g, "uf.race_id = g.id") : "",
+  ].filter(Boolean);
+
 
   const rows = await sql(
-    `SELECT * FROM (
+    `SELECT g.*${lateSelect.length ? `, ${lateSelect.join(", ")}` : ""} FROM (
        SELECT
          r.*,
          f.slug AS federation_slug,
@@ -213,12 +221,12 @@ export async function getRaces(
          ROW_NUMBER() OVER (PARTITION BY ${SIBLING_KEY} ORDER BY r.id) AS sibling_rank,
          COUNT(*)     OVER (PARTITION BY ${SIBLING_KEY})               AS sibling_count,
          -- La liste publiée par la presse : le vrai compte des engagés.
-         (SELECT count(*) FROM engagements e WHERE e.race_id = r.id)  AS entrant_count,
+         ${sortBy === "engages" ? `${entrantSelect("r")},` : ""}
          fc.wind_kmh AS forecast_wind_kmh, fc.gust_kmh AS forecast_gust_kmh,
          fc.wind_from_deg AS forecast_wind_from_deg, fc.rain_pct AS forecast_rain_pct,
          fc.temp_c AS forecast_temp_c,
          pv.finisher_count AS previous_finishers
-         ${clubSelect}
+         ${sortBy === "club" ? clubSelect : ""}
          ${distanceSelect}
        FROM races r
        JOIN federations f ON f.id = r.federation_id

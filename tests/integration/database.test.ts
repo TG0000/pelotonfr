@@ -5,7 +5,7 @@ import { getDatabasePool, transaction } from "../../lib/db/transaction";
 import { resolveUser } from "../../lib/db/queries/alerts";
 import { joinClub, getMembership } from "../../lib/db/queries/club";
 import { consumeLimit } from "../../lib/rate-limit";
-import { submitContact, readContact } from "../../app/(main)/contact/actions";
+import { createContact, lookupContact } from "../../lib/contact";
 
 if (!process.env.DATABASE_URL || new URL(process.env.DATABASE_URL).pathname !== "/pelotonfr_preview_v02") {
   throw new Error("Integration tests require the isolated pelotonfr_preview_v02 database");
@@ -48,13 +48,19 @@ test("The distributed counter admits exactly five simultaneous requests", async 
   finally { await getDatabasePool().query("DELETE FROM request_limits WHERE key=$1",[key]); }
 });
 test("Contact receipt grants only its own ticket; guessed codes reveal no message", async () => {
-  const result=await submitContact("support","Integration fixture, safe to remove.");
+  const visitor=randomUUID();
+  const result=await createContact("support","Integration fixture, safe to remove.",visitor);
   assert.ok(result.id && result.code);
   try {
-    const own=await readContact(result.id,result.code);assert.equal(own.ticket?.message,"Integration fixture, safe to remove.");
-    const wrong=await readContact(result.id,"x".repeat(32));assert.ok(wrong.error);assert.equal(wrong.ticket,undefined);
+    const own=await lookupContact(result.id,result.code,visitor);assert.equal(own.ticket?.message,"Integration fixture, safe to remove.");
+    const wrong=await lookupContact(result.id,"x".repeat(32),visitor);assert.ok(wrong.error);assert.equal(wrong.ticket,undefined);
     const row=await getDatabasePool().query("SELECT access_hash FROM support_requests WHERE id=$1",[result.id]);assert.notEqual(row.rows[0].access_hash,result.code);
-  } finally { await getDatabasePool().query("DELETE FROM support_requests WHERE id=$1",[result.id]); }
+    await getDatabasePool().query("UPDATE request_limits SET count=5 WHERE key=$1",[`contact:create:${visitor}`]);
+    assert.ok((await createContact("support","This ticket must be refused.",visitor)).error);
+  } finally {
+    await getDatabasePool().query("DELETE FROM support_requests WHERE id=$1",[result.id]);
+    await getDatabasePool().query("DELETE FROM request_limits WHERE key=ANY($1::text[])",[[`contact:create:${visitor}`,`contact:read:${visitor}`]]);
+  }
 });
 test("A failing transaction leaves neither business write nor migration record", async () => {
   const key=`rollback:${randomUUID()}`;
@@ -213,4 +219,34 @@ test("Migration and place-check dry runs create neither venues nor tracking rows
   await promisify(execFile)(process.execPath,["node_modules/tsx/dist/cli.mjs",script,"--dry-run"],{cwd:process.cwd(),env:process.env});
  }
  assert.deepEqual(await counts(),before);
+});
+
+test("A new account can plan a season without claiming a federal rider", async () => {
+  const {getMySeason}=await import("../../lib/db/queries/my-season");
+  const {setIntent,clearIntent}=await import("../../lib/db/queries/plan");
+  const authId=randomUUID(),raceId=randomUUID();let user="";
+  try {
+    await getDatabasePool().query(`INSERT INTO "user"(id,name,email,"emailVerified") VALUES($1,'Season fixture',$2,true)`,[authId,`${authId}@example.test`]);
+    user=await resolveUser(authId);
+    await getDatabasePool().query(`INSERT INTO races(id,external_id,federation_id,name,city,race_date,categories,discipline) VALUES($1,$2::text,1,'Season fixture '||$2::text,'Caen',CURRENT_DATE+5,ARRAY['access1'],'route')`,[raceId,raceId]);
+    await getDatabasePool().query("INSERT INTO engagements(race_id,last_name_raw,first_name_raw) VALUES($1,'Fixture','One'),($1,'Fixture','Two')",[raceId]);
+    const {getRaces}=await import("../../lib/db/queries/races");
+    for (const sortBy of ["date_asc","engages","distance"] as const) {
+      const listed=await getRaces({q:raceId,sortBy});
+      assert.equal(listed.races.length,1);
+      assert.equal(listed.races[0].entrantCount,2);
+    }
+    await setIntent(user,raceId,"envisagee");
+    const considered=await getMySeason(user,new Date().getUTCFullYear());
+    assert.equal(considered?.rider,null);
+    assert.equal(considered?.targets.find(r=>r.raceId===raceId)?.intent,"envisagee");
+    await setIntent(user,raceId,"programmee");
+    assert.equal((await getMySeason(user,new Date().getUTCFullYear()))?.targets.find(r=>r.raceId===raceId)?.intent,"programmee");
+    await clearIntent(user,raceId);
+    assert.equal((await getMySeason(user,new Date().getUTCFullYear()))?.targets.length,0);
+  } finally {
+    await getDatabasePool().query("DELETE FROM races WHERE id=$1",[raceId]);
+    await getDatabasePool().query("DELETE FROM users WHERE clerk_id=$1",[authId]);
+    await getDatabasePool().query(`DELETE FROM "user" WHERE id=$1`,[authId]);
+  }
 });

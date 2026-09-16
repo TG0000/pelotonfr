@@ -1,3 +1,4 @@
+import { validRaceFilters } from "@/lib/race-filter-validation";
 import { requestTime } from "@/lib/request-time";
 import { getAuthUser } from "@/lib/session";
 import { resolveUser } from "@/lib/db/queries/alerts";
@@ -80,6 +81,16 @@ function buildQuery(
 export default async function CalendrierPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const base = params as Record<string, string | string[]>;
+  const validatedParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item !== undefined) validatedParams.append(key, item);
+    }
+  }
+  if (!validRaceFilters(validatedParams)) {
+    return <section className="mx-auto max-w-2xl px-4 py-12"><h1 className="text-3xl font-bold">Filtres invalides</h1><p className="my-4">Vérifie les dates, la position et le rayon de recherche.</p><Link className="underline" href="/calendrier?vue=liste">Revenir au calendrier</Link></section>;
+  }
+
 
   /* La recherche retenue, rejouée avant de rendre la page.
 
@@ -102,8 +113,10 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
     }
   }
   if (remembered && !hasFilters) {
-    const merged = new URLSearchParams(decodeURIComponent(remembered));
-    if ([...merged.keys()].length > 0) {
+    let decoded = "";
+    try { decoded = decodeURIComponent(remembered); } catch { /* Ignore a malformed preference cookie. */ }
+    const merged = new URLSearchParams(decoded);
+    if ([...merged.keys()].length > 0 && validRaceFilters(merged)) {
       for (const [key, value] of Object.entries(params)) {
         for (const v of Array.isArray(value) ? value : [value]) {
           if (v) merged.append(key, v);

@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { isUuid } from "@/lib/validation";
 import { consumeLimit } from "@/lib/rate-limit";
 import { jsonObject } from "@/lib/request-security";
@@ -58,6 +59,8 @@ export async function POST(request: NextRequest) {
     } else {
       return NextResponse.json({ error: "intent inconnu" }, { status: 400 });
     }
+    revalidatePath("/ma-saison");
+    revalidatePath("/club");
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("POST /api/plan:", err);

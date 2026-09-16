@@ -1,5 +1,6 @@
 "use client";
 import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth";
 import type { RaceIntent } from "@/lib/db/queries/plan";
 import { isUuid } from "@/lib/validation";
@@ -14,6 +15,7 @@ export function PlanProvider({children}:{children:ReactNode}) {
 }
 
 function SessionPlanProvider({children,isSignedIn}:{children?:ReactNode;isSignedIn:boolean}) {
+  const router=useRouter();
   const [intents,setIntents]=useState<Map<string,RaceIntent>>(new Map());
   const [ready,setReady]=useState(false);
   const [pending,setPending]=useState<Set<string>>(new Set());
@@ -34,6 +36,7 @@ function SessionPlanProvider({children,isSignedIn}:{children?:ReactNode;isSigned
             const result=await fetch("/api/plan",{method:"POST",signal:controller.signal,headers:{"Content-Type":"application/json"},body:JSON.stringify({raceId:saved.raceId,intent:"envisagee"})});
             if (!result.ok) throw new Error();
             loaded.set(saved.raceId,"envisagee");
+            router.refresh();
           }
           sessionStorage.removeItem("pelotonfr:pending-plan");
         }
@@ -41,7 +44,7 @@ function SessionPlanProvider({children,isSignedIn}:{children?:ReactNode;isSigned
       if(!controller.signal.aborted){setIntents(loaded);setReady(true);}
     }).catch(()=>{if(!controller.signal.aborted)setError("Ta saison n’a pas pu être chargée. Recharge la page pour réessayer.");});
     return ()=>controller.abort();
-  },[isSignedIn]);
+  },[isSignedIn,router]);
   const set=useCallback(async(raceId:string,intent:RaceIntent|null)=>{
     if(!isSignedIn||!ready||locks.has(raceId))return;
     locks.add(raceId);setPending(new Set(locks));setError("");
@@ -50,11 +53,12 @@ function SessionPlanProvider({children,isSignedIn}:{children?:ReactNode;isSigned
     try {
       const response=await fetch("/api/plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({raceId,intent})});
       if(!response.ok)throw new Error();
+      router.refresh();
     } catch {
       setIntents(current=>{const next=new Map(current);if(previous===null)next.delete(raceId);else next.set(raceId,previous);return next;});
       setError("La modification de ta saison n’a pas été enregistrée. Réessaie.");
     } finally { locks.delete(raceId);setPending(new Set(locks)); }
-  },[isSignedIn,ready,intents,locks]);
+  },[isSignedIn,ready,intents,locks,router]);
   return createElement(Context.Provider,{value:{plan:isSignedIn?intents:NONE,set,isSignedIn,ready:isSignedIn&&ready,pending}},children,
     error?createElement("div",{role:"alert",className:"fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-xl rounded-xl border bg-background p-4 shadow-lg"},error,
       createElement("button",{type:"button",className:"ml-3 underline",onClick:()=>setError("")},"Fermer")):null);

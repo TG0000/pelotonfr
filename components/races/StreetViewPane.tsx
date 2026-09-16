@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye, ExternalLink, Pause, Play, SkipForward } from "lucide-react";
 import { bearingAtIndex, streetViewLink, type CoverageSpan } from "@/lib/streetview";
 import { cn } from "@/lib/utils";
+import { loadMaps } from "@/lib/google-maps-loader";
 
 /**
  * Le panorama qui suit le curseur.
  *
- * Rien n'est chargé tant que le lecteur n'a pas cliqué : Google ne facture
- * que les panoramas ouverts, et un lecteur qui passe ne coûte rien. Une
+ * Rien n'est chargé tant que le lecteur n'a pas cliqué et obtenu une
+ * réservation dans le budget configuré côté serveur. Une
  * fois ouvert, le panorama se place au point choisi sur le profil ou la
  * carte, tourné dans le sens de la course, et la « visite » avance seule
  * tous les cent cinquante mètres.
@@ -17,37 +18,6 @@ import { cn } from "@/lib/utils";
 
 type State = "idle" | "loading" | "ready" | "refused";
 
-declare global {
-  interface Window {
-    __pelotonMaps?: Promise<typeof google.maps>;
-  }
-}
-
-function loadMaps(key: string): Promise<typeof google.maps> {
-  const ready = () => typeof window.google !== "undefined" && typeof window.google.maps?.importLibrary === "function";
-  if (ready()) return Promise.resolve(window.google.maps);
-  if (!window.__pelotonMaps) {
-    const script = document.createElement("script");
-    window.__pelotonMaps = new Promise<typeof google.maps>((resolve, reject) => {
-      let done = false;
-      let poll: ReturnType<typeof setTimeout> | undefined;
-      const timeout = setTimeout(() => finish(new Error("Google Maps n’a pas répondu.")), 15_000);
-      function finish(error?: Error) {
-        if (done) return;
-        done = true; clearTimeout(timeout); clearTimeout(poll);
-        script.onload = null; script.onerror = null;
-        if (error) { script.remove(); reject(error); } else resolve(window.google.maps);
-      }
-      const check = () => { if (ready()) finish(); else poll = setTimeout(check, 50); };
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&language=fr`;
-      script.async = true;
-      script.onload = check;
-      script.onerror = () => finish(new Error("Le script Google Maps n’a pas chargé."));
-      document.head.appendChild(script);
-    }).catch(error => { window.__pelotonMaps = undefined; throw error; });
-  }
-  return window.__pelotonMaps;
-}
 
 export function StreetViewPane({
   points,

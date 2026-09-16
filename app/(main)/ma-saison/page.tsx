@@ -60,11 +60,8 @@ function TargetList({ targets }: { targets: MySeason["targets"] }) {
   return (
     <div className="divide-y divide-border/60 rounded-xl border border-border bg-surface-1">
       {targets.map((t) => (
-        <Link
-          key={t.raceId}
-          href={`/course/${t.raceId}`}
-          className="group flex items-center gap-4 px-3 py-3"
-        >
+        <article key={t.raceId} className="group flex items-center gap-3 px-3 py-3">
+          <Link href={`/course/${t.raceId}`} className="flex min-w-0 flex-1 items-center gap-3">
           <DateBlock date={t.date} />
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium group-hover:text-primary">
@@ -78,7 +75,7 @@ function TargetList({ targets }: { targets: MySeason["targets"] }) {
               }}
               className="block text-sm text-muted-foreground"
             />
-            <div className="mt-0.5 flex items-center gap-2">
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <FederationMark slug={t.federationSlug} withLabel />
               <CategorySummary categories={t.categories} />
             </div>
@@ -95,8 +92,9 @@ function TargetList({ targets }: { targets: MySeason["targets"] }) {
               </span>
             )}
           </div>
+          </Link>
           <PlanButton raceId={t.raceId} compact />
-        </Link>
+        </article>
       ))}
     </div>
   );
@@ -115,7 +113,7 @@ export default async function MaSaisonPage() {
         </p>
         <StravaInvite className="mb-4" />
         <div className="rounded-xl border border-border bg-surface-1 py-8 text-center">
-          <p className="mb-1 font-medium">Ou connectez-vous par e-mail</p>
+          <p className="mb-1 font-medium">Connectez-vous par e-mail</p>
           <p className="mb-4 text-sm text-muted-foreground">
             Le calendrier reste consultable sans compte.
           </p>
@@ -128,19 +126,13 @@ export default async function MaSaisonPage() {
   const today = todayISO();
   const season = Number(today.slice(0, 4));
 
-  let data: MySeason | null = null;
-  let stravaLinked = true;
-  try {
-    const user = await currentUser();
-    const id = await resolveUser(
-      userId,
-      user?.primaryEmailAddress?.emailAddress ?? null
-    );
-    data = await getMySeason(id, season);
-    if (stravaConfigured()) stravaLinked = Boolean(await getConnection(id));
-  } catch {
-    // DB not configured
-  }
+  const user = await currentUser();
+  const id = await resolveUser(userId, user?.primaryEmailAddress?.emailAddress ?? null);
+  const [data, connection] = await Promise.all([
+    getMySeason(id, season),
+    stravaConfigured() ? getConnection(id) : Promise.resolve(null),
+  ]);
+  const stravaLinked = !stravaConfigured() || Boolean(connection);
 
   const rider = data?.rider ?? null;
   const results = data?.results ?? [];
@@ -167,31 +159,6 @@ export default async function MaSaisonPage() {
       </header>
 
       {!stravaLinked && <StravaInvite compact className="mb-6" />}
-
-      <div className="mb-8">
-        <RiderClaim current={rider} />
-      </div>
-
-      {rider && (
-        <>
-          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat
-              label="Courses"
-              value={String(results.length)}
-              hint={`saison ${season}`}
-            />
-            <Stat label="Victoires" value={String(wins)} />
-            <Stat label="Podiums" value={String(podiums)} hint={`${topTen} top 10`} />
-            <Stat
-              label="Classement"
-              value={data?.ranking.rank ? `#${data.ranking.rank}` : "—"}
-              hint={
-                data?.best.rank
-                  ? `meilleur #${data.best.rank}${data.best.season ? ` en ${data.best.season}` : ""}`
-                  : "national"
-              }
-            />
-          </div>
 
           <section className="mb-8">
             <SectionHeading icon={CalendarCheck}>
@@ -232,6 +199,32 @@ export default async function MaSaisonPage() {
               <TargetList targets={considered} />
             </section>
           )}
+
+
+      <div className="mb-8">
+        <RiderClaim current={rider} />
+      </div>
+
+      {rider && (
+        <>
+          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat
+              label="Courses"
+              value={String(results.length)}
+              hint={`saison ${season}`}
+            />
+            <Stat label="Victoires" value={String(wins)} />
+            <Stat label="Podiums" value={String(podiums)} hint={`${topTen} top 10`} />
+            <Stat
+              label="Classement"
+              value={data?.ranking.rank ? `#${data.ranking.rank}` : "—"}
+              hint={
+                data?.best.rank
+                  ? `meilleur #${data.best.rank}${data.best.season ? ` en ${data.best.season}` : ""}`
+                  : "national"
+              }
+            />
+          </div>
 
           <section>
             <SectionHeading icon={Flag}>

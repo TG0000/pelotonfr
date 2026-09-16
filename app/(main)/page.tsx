@@ -21,13 +21,13 @@ export default async function HomePage() {
     <section className="home-hero">
       <div>
         <p className="home-kicker mb-5 flex items-center gap-3"><span className="size-2 rounded-full bg-highlight" /> LE RENDEZ-VOUS DES COUREURS</p>
-        <h1 className="home-title mb-6">TA PROCHAINE<br />EST POUR TOI.</h1>
+        <h1 className="home-title mb-6">TA PROCHAINE COURSE<br />EST POUR TOI.</h1>
         <p className="max-w-lg text-base sm:text-lg leading-relaxed text-muted-foreground">Les courses près de chez toi. Les infos pour arriver prêt.<br className="hidden sm:block" /> Ta saison, et ceux avec qui tu la partages.</p>
         <div className="mt-8 flex flex-wrap items-center gap-5">
           <Link href="/calendrier" className="inline-flex min-h-12 items-center gap-6 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground">Trouver ma prochaine course <ArrowUpRight className="size-4" /></Link>
           <Link href="#rendez-vous" className="text-sm underline underline-offset-4">Explorer sans compte</Link>
         </div>
-        <div className="mt-8 flex flex-wrap gap-5 font-mono text-xs text-muted-foreground" aria-label="Fédérations référencées">
+        <div className="mt-8 flex flex-wrap gap-5 font-mono text-xs text-muted-foreground" role="group" aria-label="Fédérations référencées">
           <Link href="/courses?fed=ffc" className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-ffc" />FFC</Link>
           <Link href="/courses?fed=fsgt" className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-fsgt" />FSGT</Link>
           <Link href="/courses?fed=ufolep" className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-ufolep" />UFOLEP</Link>
