@@ -80,7 +80,7 @@ export async function RaceTerrain({ lat, lng }: { lat: number; lng: number }) {
           {terrain.verdict}
         </p>
 
-        <p className="mt-2 text-xs text-muted-foreground/70">
+        <p className="mt-2 text-xs text-muted-foreground">
           Lu depuis le relief public autour du départ, pas depuis le tracé — que
           les organisateurs publient rarement.
         </p>

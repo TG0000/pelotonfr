@@ -3,7 +3,7 @@ import { transaction } from "@/lib/db/transaction";
 import { symmetricEncrypt } from "better-auth/crypto";
 import { sql } from "../index";
 import { toDateOnly } from "@/lib/date";
-import { refreshTokens, type StravaActivity } from "@/lib/strava/client";
+import { refreshTokens, revokeToken, type StravaActivity } from "@/lib/strava/client";
 
 /**
  * Strava connection and activity storage.
@@ -84,11 +84,54 @@ export async function saveConnection(params: {
   );
 }
 
+export class StravaDisconnectError extends Error {}
+
 export async function disconnect(userId: string): Promise<void> {
-  await sql(`DELETE FROM strava_connections WHERE user_id = $1::uuid`, [userId]);
-  await sql(`UPDATE users SET strava_athlete_id = NULL WHERE id = $1::uuid`, [
-    userId,
-  ]);
+  await transaction(async client => {
+    const { rows } = await client.query("SELECT access_token,refresh_token FROM strava_connections WHERE user_id=$1::uuid FOR UPDATE", [userId]);
+    const identity = await client.query(`SELECT a.id,a."emailVerified",EXISTS(SELECT 1 FROM account WHERE "userId"=a.id AND "providerId"<>'strava') AS other
+      FROM users u JOIN "user" a ON a.id=u.clerk_id WHERE u.id=$1::uuid`,[userId]);
+    if (identity.rows[0] && !identity.rows[0].emailVerified && !identity.rows[0].other) {
+      throw new StravaDisconnectError("Ajoute et vérifie une adresse e-mail avant de déconnecter ton seul moyen de connexion.");
+    }
+    if (rows[0]) await client.query("INSERT INTO strava_revocations(token_encrypted,refresh_encrypted) VALUES ($1,$2)",[rows[0].access_token,rows[0].refresh_token]);
+    const affected=await client.query(`SELECT race_id FROM race_traces WHERE contributed_by=$1::uuid
+      OR strava_activity IN(SELECT activity_id FROM strava_activities WHERE user_id=$1::uuid)`,[userId]);
+    const races=affected.rows.map(row=>row.race_id);
+    await client.query("DELETE FROM road_views WHERE race_id=ANY($1::uuid[])",[races]);
+    await client.query("DELETE FROM race_segments WHERE race_id=ANY($1::uuid[])",[races]);
+    await client.query("DELETE FROM trace_checks WHERE race_id=ANY($1::uuid[])",[races]);
+    await client.query("DELETE FROM race_traces WHERE race_id=ANY($1::uuid[])",[races]);
+    await client.query("DELETE FROM race_trace_versions WHERE snapshot->>'contributed_by'=$1 OR snapshot->>'strava_activity' IN (SELECT activity_id::text FROM strava_activities WHERE user_id=$1::uuid)",[userId]);
+    await client.query("DELETE FROM circuit_submissions WHERE user_id=$1::uuid",[userId]);
+    await client.query("DELETE FROM strava_activities WHERE user_id=$1::uuid",[userId]);
+    await client.query("DELETE FROM strava_connections WHERE user_id=$1::uuid",[userId]);
+    await client.query("DELETE FROM strava_sync_jobs WHERE user_id=$1::uuid",[userId]);
+    await client.query(`DELETE FROM account WHERE "providerId"='strava' AND "userId"=(SELECT clerk_id FROM users WHERE id=$1::uuid)`,[userId]);
+    await client.query("UPDATE users SET strava_athlete_id=NULL WHERE id=$1::uuid",[userId]);
+  });
+  // Local deletion succeeds even if the provider is down. The durable queue is
+  // retried by the daily maintenance job and contains only encrypted tokens.
+  // Local purge is already committed; the durable queue survives provider/worker failure.
+  await processRevocations(1).catch(() => {});
+}
+
+export async function processRevocations(limit=1): Promise<void> {
+  for (let i=0;i<limit;i++) await transaction(async client => {
+    const {rows}=await client.query("SELECT id,token_encrypted,refresh_encrypted FROM strava_revocations WHERE retry_at<=now() ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1");
+    const row=rows[0]; if(!row)return;
+    let revoked=false;
+    try {
+      revoked=await revokeToken(openToken(row.token_encrypted));
+      if(!revoked && row.refresh_encrypted) {
+        const next=await refreshTokens(openToken(row.refresh_encrypted));
+        await client.query("UPDATE strava_revocations SET token_encrypted=$2,refresh_encrypted=$3 WHERE id=$1",[row.id,sealToken(next.accessToken),sealToken(next.refreshToken)]);
+        revoked=await revokeToken(next.accessToken);
+      }
+    } catch { /* Retain the encrypted pair solely to retry revocation. */ }
+    if(revoked)await client.query("DELETE FROM strava_revocations WHERE id=$1::uuid",[row.id]);
+    else await client.query("UPDATE strava_revocations SET attempts=attempts+1,retry_at=now()+interval '1 day' WHERE id=$1::uuid",[row.id]);
+  });
 }
 
 /**
@@ -148,7 +191,8 @@ export async function saveFitness(
 /** Stores a batch of activities, keeping whatever race link they already had. */
 export async function saveActivities(
   userId: string,
-  activities: StravaActivity[]
+  activities: StravaActivity[],
+  query = sql
 ): Promise<number> {
   if (activities.length === 0) return 0;
 
@@ -199,7 +243,7 @@ export async function saveActivities(
     lngs.push(a.start_latlng?.[1] ?? null);
   }
 
-  await sql(
+  await query(
     `INSERT INTO strava_activities
        (user_id, activity_id, name, description, sport_type, started_at, local_date,
         distance_m, moving_time_s, elevation_gain_m, average_watts, weighted_watts,
@@ -244,11 +288,6 @@ export async function saveActivities(
       distances, times, elevations, avgWatts, weightedWatts, maxWatts,
       avgHr, maxHr, efforts, calories, lats, lngs,
     ]
-  );
-
-  await sql(
-    `UPDATE strava_connections SET last_synced_at = now() WHERE user_id = $1::uuid`,
-    [userId]
   );
 
   return ids.length;

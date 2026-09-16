@@ -12,6 +12,7 @@
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "./utils/db";
 import { detectLaps } from "../../lib/trace";
+import { publicStravaEnabled } from "../../lib/strava/policy";
 import { trackRun } from "../lib/track-run";
 
 loadEnv();
@@ -42,17 +43,19 @@ async function main() {
   const only = raceArg ? raceArg.split("=")[1] : null;
 
   const races = (await sql(
-    `SELECT t.race_id::text AS race_id, r.name, t.points
+    `SELECT t.race_id::text AS race_id, r.name, t.points, md5(t.points::text) AS trace_hash
        FROM race_traces t JOIN races r ON r.id = t.race_id
        LEFT JOIN race_streetview s ON s.race_id = t.race_id
       WHERE ($1::uuid IS NULL OR t.race_id = $1::uuid)
         AND ($1::uuid IS NOT NULL OR r.race_date >= CURRENT_DATE)
-        AND (s.race_id IS NULL OR s.checked_at < now() - interval '180 days')
+        AND ($3::boolean OR t.source='guide')
+        AND (s.race_id IS NULL OR s.trace_hash IS DISTINCT FROM md5(t.points::text) OR s.checked_at < now() - interval '30 days')
       ORDER BY r.race_date LIMIT $2::int`,
-    [only, limit]
+    [only, limit, publicStravaEnabled()]
   )) as Array<Record<string, unknown>>;
   console.log(`${races.length} boucle(s) à sonder.`);
   let written = 0;
+  let failed = 0;
   for (const race of races) {
     const track = race.points as Array<[number, number, number, number]>;
     const lap = detectLaps(track).lap ?? track;
@@ -64,6 +67,7 @@ async function main() {
       if (i < 0) i = lap.length - 1;
       samples.push({ m, ok: await hasPano(key, lap[i][1], lap[i][0]) });
     }
+    if (!samples.length || samples.some(sample => sample.ok === null)) { failed++; continue; }
     const spans: Array<{ fromM: number; toM: number }> = [];
     let open: { fromM: number; toM: number } | null = null;
     for (const s of samples) {
@@ -76,14 +80,15 @@ async function main() {
     for (const sp of spans) sp.toM = Math.min(sp.toM, Math.round(lapM));
     const covered = spans.reduce((a, s) => a + (s.toM - s.fromM), 0);
     await sql(
-      `INSERT INTO race_streetview (race_id, spans, sampled, covered_m, lap_m, checked_at)
-       VALUES ($1::uuid, $2::jsonb, $3, $4, $5, now())
-       ON CONFLICT (race_id) DO UPDATE SET spans = EXCLUDED.spans, sampled = EXCLUDED.sampled, covered_m = EXCLUDED.covered_m, lap_m = EXCLUDED.lap_m, checked_at = now()`,
-      [race.race_id, JSON.stringify(spans), samples.length, covered, Math.round(lapM)]
+      `INSERT INTO race_streetview (race_id, spans, sampled, covered_m, lap_m, checked_at, trace_hash)
+       VALUES ($1::uuid, $2::jsonb, $3, $4, $5, now(), $6)
+       ON CONFLICT (race_id) DO UPDATE SET spans = EXCLUDED.spans, sampled = EXCLUDED.sampled, covered_m = EXCLUDED.covered_m, lap_m = EXCLUDED.lap_m, checked_at = now(), trace_hash = EXCLUDED.trace_hash`,
+      [race.race_id, JSON.stringify(spans), samples.length, covered, Math.round(lapM), race.trace_hash]
     );
     written++;
     console.log(`  ${String(race.name).slice(0, 44).padEnd(46)} ${Math.round((covered / lapM) * 100)} % couvert, ${samples.length} points`);
   }
+  if (failed) throw new Error(`${failed} couverture(s) non mises à jour : métadonnées incomplètes. Nouvel essai au prochain passage.`);
   return { seen: races.length, written };
 }
 

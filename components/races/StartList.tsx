@@ -17,7 +17,7 @@ export async function StartList({ raceId }: { raceId: string }) {
   try {
     list = await getStartList(raceId);
   } catch {
-    return null;
+    return <section role="status"><SectionHeading icon={Users}>Engagés</SectionHeading><p>La liste ne peut pas être chargée pour le moment. Réessaie dans un instant.</p></section>;
   }
 
   if (!list) {

@@ -1,3 +1,4 @@
+import { publicStravaEnabled } from "./policy";
 import { decodePolyline, distancesAlong } from "@/lib/polyline";
 import { groundAlongLine } from "@/lib/elevation";
 import type { SqlLike } from "./types";
@@ -14,6 +15,7 @@ export async function saveRouteTrace(
   raceId: string,
   route: { id: number; name: string; polyline: string; distanceM: number }
 ): Promise<"stored" | "kept" | "unavailable"> {
+  if (!publicStravaEnabled()) return "unavailable";
   const line = decodePolyline(route.polyline);
   if (line.length < 20) return "unavailable";
   const wanted = Math.min(2_000, Math.max(50, Math.round(route.distanceM / 25)));

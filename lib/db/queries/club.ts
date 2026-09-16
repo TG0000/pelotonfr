@@ -160,7 +160,20 @@ export async function joinClub(userId: string, clubId: string): Promise<ClubMemb
 }
 
 export async function leaveClub(userId: string): Promise<void> {
-  await sql(`DELETE FROM club_members WHERE user_id = $1::uuid`, [userId]);
+  await transaction(async (client) => {
+    // Serialize departures of officers in the same club.
+    const membership = await client.query("SELECT club_id FROM club_members WHERE user_id=$1::uuid AND verified_at IS NOT NULL", [userId]);
+    if (membership.rows[0]) {
+      const clubId = membership.rows[0].club_id;
+      await client.query("SELECT id FROM clubs WHERE id=$1::uuid FOR UPDATE", [clubId]);
+      const members = await client.query("SELECT user_id,role FROM club_members WHERE club_id=$1::uuid AND verified_at IS NOT NULL", [clubId]);
+      const me = members.rows.find(row => row.user_id === userId);
+      if (me?.role === "responsable" && members.rows.some(row => row.user_id !== userId) && !members.rows.some(row => row.user_id !== userId && row.role === "responsable")) {
+        throw new Error("Fais valider un nouveau responsable via Contact avant de quitter le club.");
+      }
+    }
+    await client.query("DELETE FROM club_members WHERE user_id=$1::uuid", [userId]);
+  });
 }
 
 /** Les clubs qui ressemblent à ce qu'on cherche, pour en rejoindre un. */

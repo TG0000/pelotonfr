@@ -22,9 +22,9 @@ import {
  * `useUser` disent qui est là.
  */
 
-export function useAuth(): { isSignedIn: boolean; isLoaded: boolean } {
+export function useAuth(): { isSignedIn: boolean; isLoaded: boolean; userId: string | null } {
   const { data, isPending } = useSession();
-  return { isSignedIn: Boolean(data?.user), isLoaded: !isPending };
+  return { isSignedIn: Boolean(data?.user), isLoaded: !isPending, userId: data?.user.id ?? null };
 }
 
 export function useUser(): { user: { firstName: string | null; email: string } | null } {
@@ -43,31 +43,34 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
     e.preventDefault();
     setState("sending");
     setError("");
-    const res = await authClient.signIn.magicLink({ email: email.trim(), callbackURL });
-    if (res.error) {
-      setError(res.error.message ?? "Le lien n'est pas parti, réessayez.");
+    try {
+      const res = await authClient.signIn.magicLink({ email: email.trim(), callbackURL });
+      if (res.error) throw new Error();
+      setState("sent");
+    } catch {
+      setError("Le lien n’a pas pu être envoyé. Vérifie l’adresse et réessaie.");
       setState("error");
-      return;
     }
-    setState("sent");
   }
 
   if (state === "sent") {
     return (
-      <p className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-sm">
+      <div role="status" className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-sm">
         Un lien vient de partir vers <span className="font-medium">{email}</span>. Ouvrez-le : vous
         serez connecté. Il est valable 15 minutes.
-      </p>
+        <button type="button" className="block mt-2 underline" onClick={() => setState("idle")}>Corriger l’adresse ou renvoyer le lien</button>
+      </div>
     );
   }
 
-  const google = Boolean(process.env.NEXT_PUBLIC_GOOGLE_SIGNIN);
+  const google = process.env.NEXT_PUBLIC_GOOGLE_SIGNIN === "true";
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       {/* Strava d'abord : c'est là que sont les coureurs, et le compte se
           crée avec les sorties déjà reliées. */}
-      <StravaButton callbackURL="/profil?strava=ok" className="w-full" />
+      {process.env.NEXT_PUBLIC_STRAVA_SIGNIN === "true" && <>
+      <StravaButton callbackURL={callbackURL} className="w-full" />
       <p className="text-[11px] text-muted-foreground">
         Vos sorties sont reliées à vos courses ; nous ne publions rien sur Strava.
       </p>
@@ -76,6 +79,7 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
         ou par e-mail
         <span className="h-px flex-1 bg-border" />
       </div>
+      </>}
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Votre e-mail
@@ -90,7 +94,7 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
           className="rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
       </label>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <button
         type="submit"
         disabled={state === "sending" || !email}
@@ -119,6 +123,7 @@ type TriggerStyle = {
   variant?: VariantProps<typeof buttonVariants>["variant"];
   size?: VariantProps<typeof buttonVariants>["size"];
   className?: string;
+  callbackURL?: string;
 };
 
 function SignInDialog({
@@ -127,6 +132,7 @@ function SignInDialog({
   variant,
   size = "sm",
   className,
+  callbackURL,
 }: { children: React.ReactNode; title: string } & TriggerStyle) {
   /* Le déclencheur est rendu ici, en bouton natif habillé comme `Button`.
      Confier un `<Button>` tout fait à Base UI par `render` marchait dans le
@@ -163,7 +169,7 @@ function SignInDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>Pour construire votre saison et retrouver vos courses.</DialogDescription>
         </DialogHeader>
-        <SignInForm />
+        <SignInForm callbackURL={callbackURL} />
       </DialogContent>
     </Dialog>
   );

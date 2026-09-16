@@ -1,3 +1,4 @@
+import { publicStravaEnabled } from "@/lib/strava/policy";
 import { sql } from "@/lib/db";
 import {
   COLLECTORS,
@@ -49,7 +50,7 @@ export async function getCollectorHealth(): Promise<CollectorHealth[]> {
   const byKey = new Map(rows.map((r) => [r.collector, r]));
   const now = Date.now();
 
-  return COLLECTORS.map((spec) => {
+  return COLLECTORS.filter(spec => spec.key!=="strava-segments" || publicStravaEnabled()).map((spec) => {
     const row = byKey.get(spec.key);
     const lastSuccessAt = row?.last_success_at
       ? new Date(row.last_success_at).toISOString()

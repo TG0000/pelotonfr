@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_STRAVA_SIGNIN: process.env.STRAVA_CLIENT_ID && process.env.STRAVA_CLIENT_SECRET ? "true" : "false",
+    NEXT_PUBLIC_GOOGLE_SIGNIN: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? "true" : "false",
+  },
   // Les adresses de connexion de l'ancien service restent valables.
   async redirects() {
     return [

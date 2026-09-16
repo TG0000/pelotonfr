@@ -51,7 +51,7 @@ export async function rejoindre(clubId: string) {
 export async function quitter() {
   const id = await me();
   if (!id) return { ok: false as const, message: "Connecte-toi d'abord." };
-  await leaveClub(id);
+  try { await leaveClub(id); } catch { return { ok: false as const, message: "Impossible de quitter le club. Si tu es le dernier responsable, fais valider ton successeur via Contact." }; }
   revalidatePath("/club");
   return { ok: true as const, message: "Club quitté." };
 }
@@ -60,6 +60,7 @@ export async function marquerEngage(raceId: string) {
   const id = await me();
   if (!id) return { ok: false as const, message: "Connecte-toi d'abord." };
 
+  if (!isUuid(raceId)) return { ok: false as const, message: "Course invalide." };
   const membership = await getMembership(id);
   if (!membership || membership.role !== "responsable") {
     return { ok: false as const, message: "Réservé au responsable du club." };
@@ -74,6 +75,7 @@ export async function annulerEngage(raceId: string) {
   const id = await me();
   if (!id) return { ok: false as const, message: "Connecte-toi d'abord." };
 
+  if (!isUuid(raceId)) return { ok: false as const, message: "Course invalide." };
   const membership = await getMembership(id);
   if (!membership || membership.role !== "responsable") {
     return { ok: false as const, message: "Réservé au responsable du club." };

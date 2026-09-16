@@ -1,3 +1,6 @@
+import { isUuid } from "@/lib/validation";
+import { jsonObject } from "@/lib/request-security";
+import { mutationOriginAllowed } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/session";
 import {
@@ -11,12 +14,14 @@ interface RouteContext {
 }
 
 export async function DELETE(_request: NextRequest, { params }: RouteContext) {
+  if (!mutationOriginAllowed(_request)) return NextResponse.json({error:"Origine refusée."},{status:403});
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
+  if (!isUuid(id)) return NextResponse.json({error:"Identifiant invalide."},{status:400});
   try {
     const internalId = await resolveUser(userId);
     const removed = await deleteAlertRule(internalId, id);
@@ -31,14 +36,16 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
+  if (!mutationOriginAllowed(request)) return NextResponse.json({error:"Origine refusée."},{status:403});
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
-  const body = (await request.json().catch(() => ({}))) as { isActive?: boolean };
-  if (typeof body.isActive !== "boolean") {
+  if (!isUuid(id)) return NextResponse.json({error:"Identifiant invalide."},{status:400});
+  const body = await jsonObject(request);
+  if (typeof body?.isActive !== "boolean") {
     return NextResponse.json({ error: "isActive requis" }, { status: 400 });
   }
 

@@ -1,3 +1,4 @@
+import { publicStravaEnabled } from "../../lib/strava/policy";
 /**
  * Les bosses d'une course, lues sur les sorties de ceux qui l'ont courue.
  *
@@ -18,6 +19,7 @@ loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
 
 async function main() {
+  if (!publicStravaEnabled()) { console.log("Collective Strava processing disabled pending authorization."); return; }
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : 60;
 

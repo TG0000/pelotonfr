@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Search, UserRound, X } from "lucide-react";
+import { Loader2, Search, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { categoryLabel } from "@/lib/categories";
@@ -92,8 +92,11 @@ export function RiderClaim({ current }: { current: RiderMatch | null }) {
   async function release() {
     setBusy(true);
     try {
-      await fetch("/api/me/rider", { method: "DELETE" });
+      const response = await fetch("/api/me/rider", { method: "DELETE" });
+      if (!response.ok) throw new Error();
       router.refresh();
+    } catch {
+      setError("La dissociation a échoué. Réessaie.");
     } finally {
       setBusy(false);
     }
@@ -105,9 +108,10 @@ export function RiderClaim({ current }: { current: RiderMatch | null }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <Check className="size-4 shrink-0 text-fsgt" />
+              <UserRound className="size-4 shrink-0 text-muted-foreground" />
               <span className="font-semibold">{current.name}</span>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">Profil de résultats associé par toi — identité non vérifiée. Cette association ne donne aucun droit sur un club.</p>
             <div className="mt-1 text-sm text-muted-foreground">
               {current.club ?? "sans club au fichier"}
               {current.category && ` · ${categoryLabel(current.category)}`}
@@ -127,6 +131,7 @@ export function RiderClaim({ current }: { current: RiderMatch | null }) {
             Ce n&apos;est pas moi
           </Button>
         </div>
+        {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
       </div>
     );
   }
@@ -147,6 +152,7 @@ export function RiderClaim({ current }: { current: RiderMatch | null }) {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          aria-label="Rechercher un profil de résultats par nom ou numéro UCI"
           placeholder="Votre nom, ou votre numéro UCI"
           className="pl-9"
         />

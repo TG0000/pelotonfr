@@ -1,10 +1,11 @@
+import { CANONICAL_SITE_URL } from "@/lib/site-url";
 import type { MetadataRoute } from "next";
 import { sql } from "@/lib/db";
 import { ARTICLES } from "@/lib/blog";
 
 export const revalidate = 3600;
 
-const SITE = "https://pelotonfr.vercel.app";
+const SITE = CANONICAL_SITE_URL;
 
 /**
  * Les pages qui méritent d'être trouvées : les courses à venir, et les pages

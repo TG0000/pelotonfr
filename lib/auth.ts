@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { genericOAuth, magicLink } from "better-auth/plugins";
-import { databasePool } from "@/lib/db/transaction";
+import { getDatabasePool } from "@/lib/db/transaction";
 import { sendMail } from "@/lib/mail";
 import { sendMagicLinkEmail } from "@/lib/auth-mail";
 import { mirrorStravaAccount } from "@/lib/strava/account";
@@ -90,7 +90,7 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || (process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL}` : undefined),
   trustedOrigins: [process.env.BETTER_AUTH_URL, process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined, process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : undefined].filter((value): value is string => Boolean(value)),
   secret: process.env.BETTER_AUTH_SECRET,
-  database: databasePool,
+  database: getDatabasePool(),
   rateLimit: { enabled: true, storage: "database", window: 60, max: 60 },
   emailAndPassword: { enabled: false },
   socialProviders:

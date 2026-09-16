@@ -1,3 +1,7 @@
+import { isUuid } from "@/lib/validation";
+import { consumeLimit } from "@/lib/rate-limit";
+import { jsonObject } from "@/lib/request-security";
+import { mutationOriginAllowed } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@/lib/session";
 import { resolveUser } from "@/lib/db/queries/alerts";
@@ -33,14 +37,14 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!mutationOriginAllowed(request)) return NextResponse.json({error:"Origine refusée."},{status:403});
   const id = await me();
   if (!id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await request.json()) as {
-    raceId?: string;
-    intent?: string | null;
-  };
-  if (!body.raceId) {
+  if (!(await consumeLimit(`plan:${id}`,60,60))) return NextResponse.json({error:"Trop de demandes. Réessaie dans une minute."},{status:429});
+  const body = await jsonObject(request);
+  if (!body) return NextResponse.json({error:"Demande invalide."},{status:400});
+  if (!isUuid(body.raceId)) {
     return NextResponse.json({ error: "raceId manquant" }, { status: 400 });
   }
 

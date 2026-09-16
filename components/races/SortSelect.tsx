@@ -46,7 +46,7 @@ export function SortSelect({ hasClub = false }: { hasClub?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <ArrowUpDown className="size-3.5 text-muted-foreground shrink-0" />
-      <select
+      <select aria-label="Trier les courses"
         value={current}
         onChange={handleChange}
         className="text-sm bg-transparent border rounded-md px-2 py-1.5 pr-7 focus:outline-none focus:ring-1 focus:ring-primary text-foreground cursor-pointer"

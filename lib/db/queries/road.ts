@@ -1,3 +1,4 @@
+import { publicStravaEnabled } from "@/lib/strava/policy";
 import { sql } from "../index";
 import { toDateOnly } from "@/lib/date";
 import { summarise, type RoadReading, type RoadSeen } from "@/lib/road-vision";
@@ -21,8 +22,8 @@ export interface RoadView {
 export async function getRoadViews(raceId: string): Promise<{ views: RoadView[]; seen: RoadSeen | null }> {
   const rows = await sql(
     `SELECT picture_id, along_m, taken_on, url, producer, reading, bearing, orientation, (crop IS NOT NULL) AS has_crop, lat, lng
-       FROM road_views WHERE race_id = $1::uuid AND ok ORDER BY along_m`,
-    [raceId]
+       FROM road_views WHERE race_id = $1::uuid AND ok AND ($2::boolean OR EXISTS(SELECT 1 FROM race_traces t WHERE t.race_id=road_views.race_id AND t.source='guide')) ORDER BY along_m`,
+    [raceId, publicStravaEnabled()]
   );
   const views = rows.map((r) => ({
     pictureId: r.picture_id as string,

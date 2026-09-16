@@ -1,3 +1,7 @@
+import { isUuid } from "@/lib/validation";
+import { consumeLimit } from "@/lib/rate-limit";
+import { jsonObject } from "@/lib/request-security";
+import { mutationOriginAllowed } from "@/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@/lib/session";
 import { resolveUser } from "@/lib/db/queries/alerts";
@@ -24,11 +28,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!mutationOriginAllowed(request)) return NextResponse.json({error:"Origine refusée."},{status:403});
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await request.json()) as { riderId?: string };
-  if (!body.riderId) {
+  if (!(await consumeLimit(`rider:${userId}`,10,60))) return NextResponse.json({error:"Trop de demandes. Réessaie dans une minute."},{status:429});
+  const body = await jsonObject(request);
+  if (!body) return NextResponse.json({error:"Demande invalide."},{status:400});
+
+  if (!isUuid(body.riderId)) {
     return NextResponse.json({ error: "riderId manquant" }, { status: 400 });
   }
 
@@ -46,7 +54,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  if (!mutationOriginAllowed(request)) return NextResponse.json({error:"Origine refusée."},{status:403});
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

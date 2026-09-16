@@ -1,3 +1,4 @@
+import { safeReturnPath } from "@/lib/validation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
@@ -12,9 +13,9 @@ export default async function ConnexionPage({
   searchParams: Promise<{ vers?: string }>;
 }) {
   const { vers } = await searchParams;
-  const callbackURL = vers && vers.startsWith("/") ? vers : "/ma-saison";
+  const callbackURL = safeReturnPath(vers, "/ma-saison");
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <main className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-surface-1 p-6">
         <Link href="/" className="mb-4 flex items-center gap-2">
           <Logo className="size-6" />
@@ -26,6 +27,6 @@ export default async function ConnexionPage({
         </p>
         <SignInForm callbackURL={callbackURL} />
       </div>
-    </div>
+    </main>
   );
 }

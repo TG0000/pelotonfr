@@ -1,3 +1,4 @@
+import { requestTime } from "@/lib/request-time";
 import { getAuthUser } from "@/lib/session";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { getMembership } from "@/lib/db/queries/club";
@@ -201,7 +202,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
       calendarRaces = monthDays.flatMap((d) => d.races);
     }
   } catch {
-    // DB not configured
+    throw new Error("Le calendrier est temporairement indisponible.");
   }
 
   const byDay = racesByDay(calendarRaces.map(toGridRace));
@@ -252,7 +253,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
       <header
         className={
           view === "carte"
-            ? "flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3"
+            ? "flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-3"
             : "mb-6 flex flex-wrap items-center justify-between gap-4"
         }
       >
@@ -273,7 +274,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           {view === "calendrier" && (
             <div className="flex items-center gap-1">
               <Link
@@ -314,6 +315,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
         </div>
       </header>
 
+      {view === "carte" && mapRaces.length>=2000 && <p role="status" className="bg-card p-3 text-sm">La carte affiche les 2 000 premières courses. Réduis la période ou la zone pour affiner les résultats.</p>}
       {view === "carte" ? (
         <div className="min-h-0 flex-1">
           <MapClient
@@ -364,7 +366,7 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
                   {listResult.races.map((race) => (
                     <RaceCard
                       key={race.id}
-                      race={race}
+                      race={race} nowMs={requestTime()}
                       showDistance={params.lat != null}
                       myCategories={shared.cat}
                       today={today}

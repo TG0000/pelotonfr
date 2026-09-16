@@ -43,7 +43,7 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
     setQuery(value);
     clearTimeout(timerRef.current);
     requestRef.current?.abort();
-    setActive(-1); setLoading(false); setGeoError(null);
+    setActive(-1); setResults([]); setOpen(false); setLoading(false); setGeoError(null);
 
     if (!value.trim() || value.length < 2) {
       setResults([]);
@@ -60,6 +60,7 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
         const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}`, { signal: controller.signal });
         if (!res.ok) throw new Error("Geocoding unavailable");
         const data = (await res.json()) as GeocodingResult[];
+        if (controller.signal.aborted) return;
         setResults(data);
         setOpen(data.length > 0);
       } catch {
@@ -71,6 +72,7 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
   }
 
   function handleSelect(result: GeocodingResult) {
+    clearTimeout(timerRef.current); requestRef.current?.abort(); setLoading(false);
     setQuery(result.label);
     setOpen(false);
     onSelect(result);
@@ -85,6 +87,7 @@ export function LocationSearch({ onSelect, placeholder = "Ville ou code postal..
    * was reported. Every outcome now says something.
    */
   function handleGeolocate() {
+    clearTimeout(timerRef.current); requestRef.current?.abort(); setOpen(false); setLoading(false);
     setGeoError(null);
 
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {

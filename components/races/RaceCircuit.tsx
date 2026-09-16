@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Download, Maximize2, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -84,15 +84,20 @@ export function RaceCircuit({
      de la page. Le navigateur fait le travail ; on ne garde que l'état. */
   const block = useRef<HTMLDivElement>(null);
   const [full, setFull] = useState(false);
-  function toggleFull() {
+  useEffect(() => {
+    const update = () => setFull(document.fullscreenElement === block.current);
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape" && !document.fullscreenElement) setFull(false); };
+    document.addEventListener("fullscreenchange", update);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("fullscreenchange", update); document.removeEventListener("keydown", escape); };
+  }, []);
+  async function toggleFull() {
     const el = block.current;
     if (!el) return;
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-      setFull(false);
-    } else {
-      void el.requestFullscreen().then(() => setFull(true)).catch(() => {});
-    }
+    if (document.fullscreenElement) { await document.exitFullscreen().catch(() => {}); return; }
+    if (full) { setFull(false); return; }
+    if (!el.requestFullscreen) { setFull(true); return; }
+    try { await el.requestFullscreen(); } catch { setFull(true); }
   }
 
   const laps = useMemo(() => detectLaps(trace.points), [trace.points]);
@@ -129,7 +134,7 @@ export function RaceCircuit({
         Le parcours
         {lapped && (
           <span className="ml-1 text-sm font-normal text-muted-foreground">
-            {laps.lapCount} tours de {(laps.lapDistanceM / 1000).toFixed(1)} km
+            Environ {laps.lapCount} tours détectés de {(laps.lapDistanceM / 1000).toFixed(1)} km
           </span>
         )}
         {/* Se télécharge tel qu'il est à l'écran : demander un tour et recevoir
@@ -174,9 +179,10 @@ export function RaceCircuit({
         onDoubleClick={(e) => { if (full && e.target === e.currentTarget) toggleFull(); }}
         className={cn(
           "overflow-hidden rounded-xl border border-border bg-surface-1",
-          full && "flex h-screen flex-col rounded-none border-0 bg-background"
+          full && "fixed inset-0 z-50 flex h-screen flex-col rounded-none border-0 bg-background"
         )}
       >
+        {full && <button type="button" onClick={toggleFull} className="self-end px-4 py-3 text-sm underline">Quitter le plein écran</button>}
         {/* La carte et Street View côte à côte : le même point, vu du ciel et
             de la selle. Le panorama ne charge qu'au clic. */}
         <div className={cn("grid lg:grid-cols-5", full && "min-h-0 flex-1")}>
@@ -207,7 +213,7 @@ export function RaceCircuit({
           <Figure label="Distance" value={km.toFixed(1)} unit="km" />
           <Figure label="Dénivelé" value={String(trace.elevationGainM)} unit="m" />
           {lapped ? (
-            <Figure label="Par tour" value={String(lapGain)} unit="m" />
+            <Figure label="D+ moyen estimé / tour" value={String(lapGain)} unit="m" />
           ) : (
             <Figure label="Par km" value={density.toFixed(1)} unit="m" />
           )}

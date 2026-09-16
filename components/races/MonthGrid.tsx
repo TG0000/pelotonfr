@@ -274,7 +274,7 @@ export function MonthGrid({
                               ? "grid size-5 place-items-center rounded-full bg-primary font-bold text-primary-foreground"
                               : inMonth
                                 ? "font-medium"
-                                : "text-muted-foreground/50"
+                                : "text-muted-foreground"
                           )}
                         >
                           {Number(day.slice(8, 10))}

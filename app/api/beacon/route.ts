@@ -1,3 +1,5 @@
+import { jsonObject, mutationOriginAllowed, visitorKey } from "@/lib/request-security";
+import { consumeLimit } from "@/lib/rate-limit";
 import { NextRequest, NextResponse } from "next/server";
 import { recordPageView } from "@/lib/db/queries/reports";
 import { isOperator } from "@/lib/admin";
@@ -10,13 +12,11 @@ import { isOperator } from "@/lib/admin";
  * site est lu en ce moment.
  */
 export async function POST(request: NextRequest) {
-  let path = "/";
-  try {
-    const body = (await request.json()) as { path?: unknown };
-    if (typeof body.path === "string") path = body.path.slice(0, 200);
-  } catch {
-    // Une balise sans corps compte quand même comme une vue de l'accueil.
-  }
+  if (!mutationOriginAllowed(request)) return NextResponse.json({ok:false},{status:403});
+  if (!(await consumeLimit(`beacon:${visitorKey(request)}`,60,60))) return NextResponse.json({ok:false},{status:429});
+  const body=await jsonObject(request,1024);
+  if(!body || typeof body.path!=="string" || !body.path.startsWith("/")) return NextResponse.json({ok:false},{status:400});
+  const path=body.path.split(/[?#]/)[0].slice(0,200);
   if (path.startsWith("/admin") || path.startsWith("/api")) {
     return NextResponse.json({ ok: true });
   }

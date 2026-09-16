@@ -11,15 +11,18 @@ export function databaseConnectionString(value = process.env.DATABASE_URL): stri
   return url.toString();
 }
 
-export const databasePool = new Pool({
+let pool: Pool | undefined;
+export function getDatabasePool(): Pool {
+  return pool ??= new Pool({
   connectionString: databaseConnectionString(),
   max: 3,
   connectionTimeoutMillis: 10_000,
   idleTimeoutMillis: 20_000,
 });
+}
 
 export async function transaction<T>(run: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await databasePool.connect();
+  const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
     const result = await run(client);

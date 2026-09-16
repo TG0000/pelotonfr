@@ -1,3 +1,4 @@
+import { requestTime } from "@/lib/request-time";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -39,7 +40,7 @@ function inDepartment(name: string): string {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { code } = await params;
-  const d = await getDepartment(code).catch(() => null);
+  const d = await getDepartment(code);
   if (!d) return { title: "Département inconnu" };
   const year = new Date().getFullYear();
   return {
@@ -66,7 +67,7 @@ export async function generateStaticParams() {
  */
 export default async function DepartementPage({ params }: PageProps) {
   const { code } = await params;
-  const d = await getDepartment(code).catch(() => null);
+  const d = await getDepartment(code);
   if (!d) notFound();
 
   const [races, towns] = await Promise.all([
@@ -130,7 +131,7 @@ export default async function DepartementPage({ params }: PageProps) {
       ) : (
         <div className="flex flex-col gap-2">
           {races.map((race) => (
-            <RaceCard key={race.id} race={race} today={today} />
+            <RaceCard key={race.id} race={race} nowMs={requestTime()} today={today} />
           ))}
         </div>
       )}

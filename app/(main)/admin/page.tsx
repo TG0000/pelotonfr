@@ -78,6 +78,8 @@ export default async function AdminPage() {
           <p className="text-sm text-muted-foreground">Ce qui va bien, ce qui se passe, ce qu&apos;il reste à faire.</p>
         </div>
         <Link href="/admin/clubs" className="text-sm text-primary hover:underline">Vérifier les clubs →</Link>
+        <Link href="/admin/confidentialite" className="text-sm text-primary hover:underline">Oppositions à la republication →</Link>
+        <Link href="/admin/circuits" className="text-sm text-primary hover:underline">Vérifier les circuits →</Link>
         <Link href="/admin/contact" className="text-sm text-primary hover:underline">Demandes de contact →</Link>
         <Link href="/etat" className="text-sm text-primary hover:underline">État des collecteurs →</Link>
       </header>

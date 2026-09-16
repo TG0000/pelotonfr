@@ -1,3 +1,4 @@
+import { publicStravaEnabled } from "@/lib/strava/policy";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -28,7 +29,7 @@ import { RaceRoad, getRoadReport } from "@/components/races/RaceRoad";
 import { getRoadViews } from "@/lib/db/queries/road";
 import { RaceStages } from "@/components/races/RaceStages";
 import { getRaceTrace, getMeasuredTiming } from "@/lib/db/queries/race-detail";
-import { estimateTiming, type RaceTiming } from "@/lib/race-timing";
+import { resolveTiming } from "@/lib/race-timing";
 import { PastEditions } from "@/components/races/PastEditions";
 import { SiblingRaces } from "@/components/races/SiblingRaces";
 import {
@@ -94,12 +95,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
   const sharedBy = (await searchParams)?.de;
   const from = typeof sharedBy === "string" ? sharedBy.trim().slice(0, 40) : "";
 
-  let race;
-  try {
-    race = await getRaceById(id);
-  } catch {
-    // DB not configured
-  }
+  const race = await getRaceById(id);
   if (!race) notFound();
 
   // Fetched here rather than in a Suspense boundary: the circuit is the
@@ -125,13 +121,8 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
 
   /* Measured beats estimated: there is no reason to guess a start time when
      somebody has already ridden the race with a computer running. */
-  const timing: RaceTiming = measuredTiming
-    ? { ...measuredTiming, measured: true }
-    : estimateTiming(
-        race.categories,
-        race.discipline,
-        trace ? trace.distanceM / 1000 : (race.distanceKm ?? null)
-      );
+  const timing = resolveTiming({ categories: race.categories, discipline: race.discipline,
+    distanceKm: race.distanceKm, startTime: race.startTime, bibPickupTime: race.bibPickupTime, historical: measuredTiming });
 
   const today = todayISO();
   const date = new Date(`${race.raceDate}T12:00:00Z`);
@@ -141,11 +132,11 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
   const daysLeft = Math.round(
     (new Date(`${race.raceDate}T12:00:00Z`).getTime() - new Date(`${today}T12:00:00Z`).getTime()) / 86_400_000
   );
-  const isPast = race.raceDate < today;
+  const isPast = (race.raceDateEnd ?? race.raceDate) < today;
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/calendrier?vue=liste"
           className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "-ml-2 gap-1.5")}
@@ -153,7 +144,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
           <ArrowLeft className="size-4" />
           Retour aux courses
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
           <ReportButton raceId={race.id} />
           <PlanButton raceId={race.id} />
           <ShareButton
@@ -345,7 +336,7 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
         {/* Sans tracé, la page le dit et tend la main : le circuit d'une
             course de village n'existe qu'en segment Strava, chez ceux qui
             l'ont couru. */}
-        {!trace && !isPast && !race.isCancelled && <DepositCircuit raceId={race.id} />}
+        {publicStravaEnabled() && !trace && !isPast && !race.isCancelled && <DepositCircuit raceId={race.id} />}
 
         {/* Après la course, la seule question. En premier, donc, avant le
             relief et le peloton qu'on attendait. */}

@@ -1,3 +1,4 @@
+import { CANONICAL_SITE_URL } from "@/lib/site-url";
 import type { Metadata } from "next";
 import { Manrope, Barlow_Condensed, IBM_Plex_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -14,7 +15,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://pelotonfr.vercel.app"),
+  metadataBase: new URL(CANONICAL_SITE_URL),
   title: {
     default: "PelotonFR — Ta prochaine course commence ici",
     template: "%s | PelotonFR",

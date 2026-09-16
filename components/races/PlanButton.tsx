@@ -35,15 +35,19 @@ export function PlanButton({
   /** Icon only, for a dense list. */
   compact?: boolean;
 }) {
-  const { plan, set, isSignedIn } = usePlan();
+  const { plan, set, isSignedIn, ready, pending } = usePlan();
   const intent = plan.get(raceId) ?? null;
   const state = intent ?? "none";
 
   if (!isSignedIn) {
     return (
-      <SignInButton mode="modal">
+      <SignInButton mode="modal" callbackURL={`/course/${raceId}`}>
         <button
           type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            try { sessionStorage.setItem("pelotonfr:pending-plan", JSON.stringify({ raceId, at: Date.now() })); } catch {}
+          }}
           title="Connectez-vous pour construire votre calendrier"
           aria-label="Connectez-vous pour construire votre calendrier"
           className={cn(
@@ -78,6 +82,8 @@ export function PlanButton({
         e.stopPropagation();
         void set(raceId, NEXT[state]);
       }}
+      disabled={!ready || pending.has(raceId)}
+      aria-label={intent === "programmee" ? "Retirer de mon programme" : intent === "envisagee" ? "Confirmer dans mon programme" : "Ajouter à ma saison"}
       aria-pressed={intent !== null}
       title={
         intent === "programmee"

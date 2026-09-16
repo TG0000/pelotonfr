@@ -27,22 +27,24 @@ function loadMaps(key: string): Promise<typeof google.maps> {
   const ready = () => typeof window.google !== "undefined" && typeof window.google.maps?.importLibrary === "function";
   if (ready()) return Promise.resolve(window.google.maps);
   if (!window.__pelotonMaps) {
-    window.__pelotonMaps = new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&language=fr`;
-      s.async = true;
-      // Le script s'exécute, puis définit importLibrary un instant plus tard :
-      // on attend la fonction, pas seulement le chargement.
-      const started = Date.now();
-      const poll = () => {
-        if (ready()) resolve(window.google.maps);
-        else if (Date.now() - started > 15_000) reject(new Error("Google Maps n'a pas répondu."));
-        else setTimeout(poll, 50);
-      };
-      s.onload = poll;
-      s.onerror = () => reject(new Error("Le script Google Maps n'a pas chargé."));
-      document.head.appendChild(s);
-    });
+    const script = document.createElement("script");
+    window.__pelotonMaps = new Promise<typeof google.maps>((resolve, reject) => {
+      let done = false;
+      let poll: ReturnType<typeof setTimeout> | undefined;
+      const timeout = setTimeout(() => finish(new Error("Google Maps n’a pas répondu.")), 15_000);
+      function finish(error?: Error) {
+        if (done) return;
+        done = true; clearTimeout(timeout); clearTimeout(poll);
+        script.onload = null; script.onerror = null;
+        if (error) { script.remove(); reject(error); } else resolve(window.google.maps);
+      }
+      const check = () => { if (ready()) finish(); else poll = setTimeout(check, 50); };
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&language=fr`;
+      script.async = true;
+      script.onload = check;
+      script.onerror = () => finish(new Error("Le script Google Maps n’a pas chargé."));
+      document.head.appendChild(script);
+    }).catch(error => { window.__pelotonMaps = undefined; throw error; });
   }
   return window.__pelotonMaps;
 }
@@ -66,6 +68,11 @@ export function StreetViewPane({
   const host = useRef<HTMLDivElement>(null);
   const pano = useRef<google.maps.StreetViewPanorama | null>(null);
   const service = useRef<google.maps.StreetViewService | null>(null);
+  const reservation = useRef<string | null>(null);
+  useEffect(() => () => {
+    if (pano.current) { google.maps.event.clearInstanceListeners(pano.current); pano.current.setVisible(false); pano.current = null; }
+    service.current = null;
+  }, []);
   const [state, setState] = useState<State>("idle");
   const [reason, setReason] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -82,13 +89,14 @@ export function StreetViewPane({
   const open = useCallback(async () => {
     setState("loading");
     try {
-      const res = await fetch("/api/streetview/session", { method: "POST" });
-      const data = (await res.json()) as { ok: boolean; key?: string; reason?: string };
+      const res = reservation.current ? null : await fetch("/api/streetview/session", { method: "POST" });
+      const data = (res ? await res.json() : { ok: true, key: reservation.current }) as { ok: boolean; key?: string; reason?: string };
       if (!data.ok || !data.key) {
         setReason(data.reason ?? "Street View indisponible.");
         setState("refused");
         return;
       }
+      reservation.current = data.key;
       const maps = await loadMaps(data.key);
       const { StreetViewPanorama, StreetViewService } = (await maps.importLibrary("streetView")) as google.maps.StreetViewLibrary;
       if (!host.current) return;

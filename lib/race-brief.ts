@@ -22,6 +22,7 @@ export interface BriefInput {
   /** Heure de départ locale, décimale. Mesurée si une sortie l'a enregistrée. */
   startHour: number | null;
   timingMeasured: boolean;
+  timingSource?: "published-meeting" | "historical" | "estimated";
   entriesEngaged: number | null;
   entriesCapacity: number | null;
   /** ISO local, « 2026-08-25T20:00 ». */
@@ -69,7 +70,7 @@ function de(from: string): string {
   return /^[aeiouy]/.test(from) ? `d'${from}` : `de ${from}`;
 }
 
-const DAYS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+
 
 function km(m: number): string {
   return `${(m / 1000).toFixed(m >= 10_000 ? 0 : 1).replace(".", ",")} km`;
@@ -121,8 +122,7 @@ export function composeBrief(input: BriefInput): Brief {
   if (input.entriesCloseAt) {
     const close = new Date(input.entriesCloseAt);
     if (!Number.isNaN(close.getTime())) {
-      const hours = close.getHours() + close.getMinutes() / 60;
-      const when = `${DAYS[close.getDay()]} à ${formatHour(hours)}`;
+      const when = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", weekday: "long", hour: "2-digit", minute: "2-digit" }).format(close);
       if (close.getTime() > input.now.getTime()) {
         const left =
           input.entriesCapacity != null && input.entriesEngaged != null
@@ -130,10 +130,10 @@ export function composeBrief(input: BriefInput): Brief {
             : null;
         lines.push(
           left != null && left > 0
-            ? `Les engagements ferment ${when}, il reste ${left} place${left > 1 ? "s" : ""} : c'est le club qui engage, pas toi.`
+            ? `Les engagements ferment ${when}, il reste ${left} place${left > 1 ? "s" : ""} . Vérifie les modalités auprès de l’organisateur.`
             : left === 0
               ? `Complet : ${input.entriesEngaged} engagés, plus une place avant la clôture de ${when}.`
-              : `Les engagements ferment ${when} : c'est le club qui engage, pas toi.`
+              : `Les engagements ferment ${when} . Vérifie les modalités auprès de l’organisateur.`
         );
       } else {
         lines.push(`Les engagements sont clos depuis ${when}.`);
@@ -176,19 +176,17 @@ export function composeBrief(input: BriefInput): Brief {
   }
 
   // 4. Le parcours : la boucle, les tours, ce qui grimpe.
-  const lapM = input.trace?.distanceM ?? input.circuitM;
-  const laps =
-    input.lapCount ??
-    (lapM && input.distanceKm ? Math.round((input.distanceKm * 1000) / lapM) : null);
-  if (lapM) {
-    let s = `Une boucle de ${km(lapM)}`;
-    if (laps && laps > 1) s += ` à couvrir ${laps} fois`;
-    if (input.trace) {
-      const perLap = input.trace.elevationGainM;
-      s += `, ${perLap} m de dénivelé par tour`;
-      if (laps && laps > 1) s += ` (${perLap * laps} m au total)`;
-    }
-    lines.push(s + ".");
+  // A trace can include every lap, warm-up or only part of a race.
+  // Only the organiser's circuit length is a published lap measurement.
+  const laps = input.lapCount;
+  if (input.circuitM) {
+    let description = `Circuit annoncé par l’organisateur : ${km(input.circuitM)}`;
+    if (laps && laps > 1) description += ` à parcourir ${laps} fois`;
+    lines.push(description + ".");
+    sources++;
+  }
+  if (input.trace) {
+    lines.push(`Trace disponible : ${km(input.trace.distanceM)} et ${input.trace.elevationGainM} m D+ au total. Elle peut inclure plusieurs tours ou un enregistrement partiel.`);
     sources++;
   }
   if (input.road && input.road.verdict !== "Route de largeur ordinaire, sans surprise.") {
@@ -213,7 +211,7 @@ export function composeBrief(input: BriefInput): Brief {
     const grade = main.averageGrade.toFixed(1).replace(".", ",");
     lines.push(
       onCourse.length > 0
-        ? `Ça se décide dans ${main.name} : ${km(main.distanceM)} à ${grade} %${laps && laps > 1 ? `, ${laps} passages` : ""}.`
+        ? `Difficulté possible : ${main.name} : ${km(main.distanceM)} à ${grade} %${laps && laps > 1 ? `, ${laps} passages` : ""}.`
         : `Sans tracé confirmé, la bosse du coin est ${main.name} : ${km(main.distanceM)} à ${grade} %.`
     );
     sources++;
@@ -275,7 +273,7 @@ export function composeBrief(input: BriefInput): Brief {
       lines.push(`${w.peakRainProbability} % de risque de pluie pendant la course : boyaux et freins en conséquence.`);
     }
     if (w.atStart.temperatureC <= 8) {
-      lines.push(`${Math.round(w.atStart.temperatureC)} °C au départ : échauffe-toi long, l'attaque du premier tour part à froid.`);
+      lines.push(`${Math.round(w.atStart.temperatureC)} °C au départ : prévois un échauffement adapté aux conditions.`);
     } else if (w.atStart.temperatureC >= 28) {
       lines.push(`${Math.round(w.atStart.temperatureC)} °C au départ : deux bidons, pas un.`);
     }
@@ -285,7 +283,9 @@ export function composeBrief(input: BriefInput): Brief {
   // 6. L'heure, en dernier : on la sait toujours à peu près.
   if (input.startHour != null) {
     lines.push(
-      input.timingMeasured
+      input.timingSource === "published-meeting"
+        ? `Premier départ annoncé à ${formatHour(input.startHour)}. Vérifie l’horaire de ta catégorie auprès de l’organisateur.`
+        : input.timingMeasured
         ? `Départ vers ${formatHour(input.startHour)}, relevé sur une sortie enregistrée.`
         : `Départ estimé vers ${formatHour(input.startHour)}, à confirmer sur la fiche de l'organisateur.`
     );

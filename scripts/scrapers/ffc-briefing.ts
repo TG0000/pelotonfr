@@ -117,7 +117,7 @@ async function main() {
         AND COALESCE(race_date_end, race_date) >= CURRENT_DATE
         AND ($2::boolean OR $4::boolean OR $5::boolean OR briefing_fetched_at IS NULL)
         AND (NOT $4::boolean OR race_date <= CURRENT_DATE + 10)
-        AND (NOT $5::boolean OR cardinality(categories) = 0 OR department_code IS NULL)
+        AND (NOT $5::boolean OR $2::boolean OR briefing_fetched_at IS NULL OR briefing_fetched_at < now() - interval '7 days')
         AND (NOT $3::boolean
              OR (race_date_end > race_date
                  AND NOT EXISTS (SELECT 1 FROM race_stages s
@@ -185,7 +185,7 @@ async function main() {
          écrasant ce qu'on savait déjà. */
       if (brief.categories.length > 0) {
         const r = await sql(
-          `UPDATE races SET categories = $2::text[] WHERE id = $1::uuid AND cardinality(categories) = 0 RETURNING id`,
+          `UPDATE races SET categories = $2::text[] WHERE id = $1::uuid AND categories IS DISTINCT FROM $2::text[] RETURNING id`,
           [race.id, brief.categories]
         );
         if (r.length) withCategories++;

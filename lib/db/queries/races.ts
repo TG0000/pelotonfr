@@ -1,3 +1,5 @@
+import { cache } from "react";
+import { isUuid } from "@/lib/validation";
 import { toDateOnly, todayISO } from "@/lib/date";
 import { sql } from "../index";
 import type { Race, PaginatedRaces, RaceFilters } from "@/types";
@@ -246,7 +248,8 @@ export async function getRaces(
   };
 }
 
-export async function getRaceById(id: string): Promise<Race | null> {
+export const getRaceById = cache(async (id: string): Promise<Race | null> => {
+  if (!isUuid(id)) return null;
   const rows = await sql(
     `SELECT r.*, f.slug AS federation_slug,
             ST_X(r.location::geometry) AS lng,
@@ -258,7 +261,7 @@ export async function getRaceById(id: string): Promise<Race | null> {
   );
   if (!rows[0]) return null;
   return buildRaceFromRow(rows[0] as Record<string, unknown>);
-}
+});
 
 export async function getUpcomingRaces(limit = 10): Promise<Race[]> {
   const today = todayISO();

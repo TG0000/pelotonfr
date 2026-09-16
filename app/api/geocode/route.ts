@@ -4,6 +4,7 @@ import { geocodeSearch } from "@/lib/geocoding";
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q") ?? "";
 
+  if (q.length>120) return NextResponse.json({error:"Recherche trop longue."},{status:400});
   if (!q.trim() || q.length < 2) {
     return NextResponse.json([]);
   }

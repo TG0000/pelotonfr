@@ -1,3 +1,5 @@
+import { cache } from "react";
+import { publicStravaEnabled } from "@/lib/strava/policy";
 import { toDateOnly } from "@/lib/date";
 import { sql } from "@/lib/db";
 
@@ -36,7 +38,7 @@ export interface StartList {
  * win count says what that means, which is the difference between a list and
  * a briefing.
  */
-export async function getStartList(raceId: string): Promise<StartList | null> {
+async function readStartList(raceId: string): Promise<StartList | null> {
   const rows = (await sql(
     `SELECT e.bib, e.last_name_raw, e.first_name_raw, e.club_name_raw,
             e.observed_at, e.source_url,
@@ -95,7 +97,7 @@ export interface PastEdition {
  * wants to know who won it last time and how many turned up — the two
  * questions that say whether it is worth the drive.
  */
-export async function getPastEditions(
+async function readPastEditions(
   raceId: string,
   limit = 6
 ): Promise<PastEdition[]> {
@@ -194,7 +196,7 @@ export interface RaceTrace {
  * afternoon almost always share a circuit, so a trace contributed by whoever
  * rode the Open race documents the Access race too.
  */
-export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
+async function readRaceTrace(raceId: string): Promise<RaceTrace | null> {
   const rows = (await sql(
     `WITH me AS (
        SELECT event_id, race_date, discipline, location
@@ -215,7 +217,7 @@ export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
       -- year splits the meeting in two — while the circuit at Louvigné-du-
       -- Désert is still the circuit at Louvigné-du-Désert. A trace is far more
       -- forgiving than an identity: it describes a road, not an event.
-      WHERE r.id = $1::uuid
+      WHERE (t.source = 'guide' OR $2::boolean) AND (r.id = $1::uuid
          OR r.event_id = me.event_id
          OR (r.discipline = me.discipline
              AND me.location IS NOT NULL
@@ -223,13 +225,13 @@ export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
              -- location: a race found through the results index has no
              -- coordinates, while the track hanging off it plainly does.
              AND t.centre IS NOT NULL
-             AND ST_DWithin(t.centre, me.location, 5000))
+             AND ST_DWithin(t.centre, me.location, 5000)))
       ORDER BY (r.id = $1::uuid) DESC,
                (r.event_id = me.event_id) DESC,
                (r.race_date = me.race_date) DESC,
                r.race_date DESC
       LIMIT 1`,
-    [raceId]
+    [raceId, publicStravaEnabled()]
   )) as Array<Record<string, unknown>>;
 
   const row = rows[0];
@@ -253,9 +255,10 @@ export async function getRaceTrace(raceId: string): Promise<RaceTrace | null> {
  * recorded on it. Beats any estimate, and there is no reason to guess when
  * somebody has already measured.
  */
-export async function getMeasuredTiming(
+async function readMeasuredTiming(
   raceId: string
 ): Promise<{ startHour: number; durationMinutes: number } | null> {
+  if (!publicStravaEnabled()) return null;
   const rows = (await sql(
     `WITH me AS (SELECT event_id FROM races WHERE id = $1::uuid)
      SELECT EXTRACT(HOUR FROM a.started_at AT TIME ZONE 'Europe/Paris')
@@ -307,7 +310,7 @@ export interface FieldLevel {
  * Speed comes from rides recorded on the course, so it is real rather than
  * modelled, and absent until somebody has ridden it.
  */
-export async function getFieldLevel(raceId: string): Promise<FieldLevel | null> {
+async function readFieldLevel(raceId: string): Promise<FieldLevel | null> {
   const rows = (await sql(
     `WITH RECURSIVE me AS (SELECT event_id, race_date FROM races WHERE id = $1::uuid),
      chain AS (
@@ -334,7 +337,7 @@ export async function getFieldLevel(raceId: string): Promise<FieldLevel | null> 
      rides AS (
        SELECT (a.distance_m / NULLIF(a.moving_time_s, 0)) * 3.6 AS kmh
          FROM strava_activities a
-        WHERE a.race_id IN (SELECT id FROM past) AND a.moving_time_s > 1200
+        WHERE $2::boolean AND a.race_id IN (SELECT id FROM past) AND a.moving_time_s > 1200
      )
      SELECT
        (SELECT count(*)::int FROM per_edition) AS editions,
@@ -347,7 +350,7 @@ export async function getFieldLevel(raceId: string): Promise<FieldLevel | null> 
        (SELECT COALESCE(sum(classified), 0)::int FROM per_edition) AS total_classified,
        (SELECT round(avg(kmh)::numeric, 1) FROM rides) AS avg_kmh,
        (SELECT round(max(kmh)::numeric, 1) FROM rides) AS max_kmh`,
-    [raceId]
+    [raceId, publicStravaEnabled()]
   )) as Array<Record<string, unknown>>;
 
   const row = rows[0];
@@ -386,7 +389,8 @@ export interface RaceClimb {
  * race with a computer running. Where a trace exists, it is the better source
  * and this is context beside it.
  */
-export async function getRaceClimbs(raceId: string): Promise<RaceClimb[]> {
+async function readRaceClimbs(raceId: string): Promise<RaceClimb[]> {
+  if (!publicStravaEnabled()) return [];
   /* Les difficultés du parcours, pas celles du voisinage.
      `race_segments` contient ce que l'explorateur Strava a trouvé dans le
      cadre de recherche — un carré de dix kilomètres de côté autour de la
@@ -598,6 +602,18 @@ export async function getRaceStageTraces(raceId: string): Promise<StageTrace[]> 
 
 /** Les portions du tour où Street View a un panorama, ou [] si jamais sondé. */
 export async function getStreetViewCoverage(raceId: string): Promise<Array<{ fromM: number; toM: number }>> {
-  const [row] = await sql(`SELECT spans FROM race_streetview WHERE race_id = $1::uuid`, [raceId]);
+  const [row] = await sql(`SELECT s.spans FROM race_streetview s JOIN race_traces t ON t.race_id=s.race_id WHERE s.race_id=$1::uuid AND s.trace_hash=md5(t.points::text) AND ($2::boolean OR t.source='guide')`, [raceId, publicStravaEnabled()]);
   return (row?.spans as Array<{ fromM: number; toM: number }>) ?? [];
 }
+
+export const getRaceTrace = cache(readRaceTrace);
+
+export const getFieldLevel = cache(readFieldLevel);
+
+export const getStartList = cache(readStartList);
+
+export const getPastEditions = cache(readPastEditions);
+
+export const getMeasuredTiming = cache(readMeasuredTiming);
+
+export const getRaceClimbs = cache(readRaceClimbs);
