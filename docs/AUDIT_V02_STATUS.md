@@ -11,7 +11,7 @@ Décision utilisateur : directions 01 éditorial sport + 03 esprit club pour le 
 ## Preuves et limites
 
 - 17 tests unitaires et 12 tests d’intégration réussis sur la base dédiée. Aucun compte ou jeton de production copié.
-- Build local sous Node 22 réussi ; schéma d’authentification inspecté ; CI et Vercel réussis sur 4bc5e81. Les derniers compléments font l’objet d’une nouvelle recette.
+- Build local sous Node 22 réussi ; schéma d’authentification inspecté ; CI et Vercel réussis sur cda8b09 ; parcours saison vérifié sur cette preview.
 - Les mentions « corrigé » décrivent le scénario couvert, pas une garantie générale d’absence de défaut. Les validations restantes sont nommées ci-dessous.
 - Les usages collectifs Strava et Street View payant restent fermés sans configuration explicite. Les validations contractuelles et de facturation ne se déduisent pas du code.
 
@@ -59,10 +59,10 @@ Décision utilisateur : directions 01 éditorial sport + 03 esprit club pour le 
 | PERF-05 | P1 | Une dépendance routière peut bloquer toute la fiche | IGN borné à 2,5 secondes ; détail continue avec données absentes si fournisseur indisponible. |
 | PERF-06 | P2 | Les lectures répétées et limites de listes demandent une optimisation mesurée | React.cache sur lectures partagées/session/course ; limite carte explicitée à 2 000. Profil sur 10 000 courses/100 000 engagements fictifs : compteur des engagés déplacé après pagination (24 appels au lieu de 10 000) hors tri par engagés. Détails dans RECETTE_V02.md. |
 | PERF-07 | P2 | La région des fonctions mérite une comparaison avec la base et les lecteurs | Base identifiée en eu-west-2 ; branche configurée en lhr1 selon recommandation Vercel. Gain de latence non encore mesuré ; aucune promesse chiffrée. |
-| OPS-01 | P1 | La recette de préversion échouait malgré un déploiement READY | Base isolée et secrets propres à la branche ; 71 migrations appliquées, données fictives et connexion synthétique testées localement. Preview READY sur 4bc5e81 : lecture et écriture de saison, session synthétique et en-têtes vérifiés. Recette des derniers compléments en cours. |
+| OPS-01 | P1 | La recette de préversion échouait malgré un déploiement READY | Base isolée et secrets propres à la branche ; 71 migrations appliquées, données fictives et connexion synthétique testées localement. Preview READY sur cda8b09 : lecture et écriture de saison sans profil fédéral, session synthétique et en-têtes vérifiés. |
 | OPS-02 | P1 | Les logs Actions peuvent publier les adresses des destinataires | Destinataires retirés des logs d’alertes/rappels ; refus fournisseur sans corps de réponse. Recherche ciblée des logs d’e-mails sans résultat. |
 | OPS-03 | P1 | Les pull requests n’ont pas de garde de qualité applicative | CI qualité présente ; main protégé avec quality + Vercel obligatoires, PR et discussions résolues, y compris administrateur. PR #2 reste brouillon. |
-| OPS-04 | P1 | Le bootstrap et l’environnement restent insuffisamment documentés | README/env corrigés, Node 22 fixé, guide de préparation des jetons. Schéma Better Auth inspecté : aucune table/colonne/index manquant ; avertissement int8 lastRequest à documenter. |
+| OPS-04 | P1 | Le bootstrap et l’environnement restent insuffisamment documentés | README/env corrigés, Node 22 fixé, guide de préparation des jetons. Schéma Better Auth inspecté : aucune table/colonne/index manquant ; lastRequest stocke des millisecondes en int8 ; avertissement de comparaison de type Better Auth, sans différence de schéma à appliquer. |
 | OPS-05 | P1 | Les migrations sont non atomiques et le mode à blanc écrit | Lot complet transactionnel, verrou, empreintes strictes, dry-run lecture seule ; commande réelle mise en échec testée : écriture et journal annulés. |
 | OPS-06 | P1 | Les erreurs de données peuvent ressembler à une liste vide ou une disparition | Erreurs visibles sur accueil/calendrier/détail/département/start-list ; session ne masque plus une panne en déconnexion. Autres enrichissements facultatifs restent omis en cas de panne. |
 | OPS-07 | P2 | Les nouveaux contrôles nocturnes ont besoin d’un cycle de recette observable | Garde-fou nocturne non destructif, mode à blanc testé ; collecteur Strava désactivé exclu des alertes. Cycle complet planifié sur environnement isolé et notification réelle non exécutés. |

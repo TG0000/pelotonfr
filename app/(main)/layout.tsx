@@ -15,7 +15,7 @@ export default function MainLayout({
       <a href="#contenu" className="skip-link">
         Aller au contenu
       </a>
-      {process.env.VERCEL_ENV === "preview" && <div className="bg-primary text-primary-foreground text-center text-xs px-4 py-2">Version de test V0.2 · Les courses « Démo » sont fictives.</div>}
+      {process.env.VERCEL_ENV === "preview" && <aside aria-label="Préversion" className="bg-primary text-primary-foreground text-center text-xs px-4 py-2">Version de test V0.2 · Les courses « Démo » sont fictives.</aside>}
       <Navbar />
       <main id="contenu" className="flex-1">
         {children}

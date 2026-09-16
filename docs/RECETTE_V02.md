@@ -25,7 +25,7 @@ Strava/Google OAuth ne sont pas configurés sur cette branche. Les usages collec
 - 12 tests d’intégration sur la base isolée : séparation des comptes, adhésions concurrentes, limites atomiques, contact privé et limite visiteur, rollback, synchronisation/reprise/purge Strava, oppositions durables, migration/rotation des jetons, modération des circuits, dry-run sans écriture, saison sans profil fédéral et compteurs de liste.
 - Aucun e-mail envoyé pour la recette ; aucune requête Strava réelle ni panorama Google payant.
 - Navigateur à 390 px : accueil, calendrier, fiche, contact, saison ; aucun débordement constaté sur ces vues. Axe ne relève aucune violation sur les vues testées après corrections. Les textes de l’illustration demandent une vérification visuelle, axe ne sait pas déterminer leur fond ; ce contrôle ne constitue pas une certification d’accessibilité.
-- Preview distante `4bc5e81` : session synthétique reconnue, ajout avant connexion restauré, API de plan 200, filtre invalide 400, CSP/anti-frame/nosniff/noindex présents. Les derniers compléments sont à revérifier sur leur déploiement.
+- Preview distante `cda8b09` : session synthétique reconnue, ajout avant connexion restauré, API de plan 200, filtre invalide 400, CSP/anti-frame/nosniff/noindex présents. Le programme d’un compte sans profil fédéral est visible. Le contrôle distant a identifié le bandeau de préversion hors repère : il est désormais un `aside` nommé.
 
 ## Mesure des requêtes SQL
 
