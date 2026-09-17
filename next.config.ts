@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   compress: true,
   env: {
     NEXT_PUBLIC_STRAVA_SIGNIN: process.env.STRAVA_CLIENT_ID && process.env.STRAVA_CLIENT_SECRET ? "true" : "false",
+    NEXT_PUBLIC_APPLE_SIGNIN: [process.env.APPLE_CLIENT_ID, process.env.APPLE_TEAM_ID, process.env.APPLE_KEY_ID, process.env.APPLE_PRIVATE_KEY].every(value => Boolean(value?.trim())) ? "true" : "false",
     NEXT_PUBLIC_GOOGLE_SIGNIN: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? "true" : "false",
   },
   // Les adresses de connexion de l'ancien service restent valables.
