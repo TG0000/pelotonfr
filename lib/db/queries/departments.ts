@@ -42,7 +42,7 @@ const SUMMARY_SELECT = `
          count(*) AS total,
          min(extract(year FROM r.race_date))::int AS since,
          count(*) FILTER (WHERE COALESCE(r.race_date_end, r.race_date) >= $1::date AND NOT r.is_cancelled
-                           AND EXISTS (SELECT 1 FROM race_traces t WHERE t.race_id = r.id)) AS with_trace
+                           AND EXISTS (SELECT 1 FROM race_traces t WHERE t.race_id = r.id AND t.source='guide')) AS with_trace
     FROM races r
    WHERE r.is_active = true AND r.department_code IS NOT NULL AND r.department_name IS NOT NULL`;
 

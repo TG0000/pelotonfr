@@ -1,3 +1,4 @@
+import { publicStravaEnabled } from "../../lib/strava/policy";
 /**
  * Reads the climbs around each upcoming race.
  *
@@ -187,6 +188,7 @@ async function storeCircuit(
 }
 
 async function main() {
+  if (!publicStravaEnabled()) { console.log("Collective Strava processing disabled pending authorization."); return; }
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : 60;
   const force = process.argv.includes("--force");

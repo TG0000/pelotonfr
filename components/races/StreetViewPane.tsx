@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye, ExternalLink, Pause, Play, SkipForward } from "lucide-react";
 import { bearingAtIndex, streetViewLink, type CoverageSpan } from "@/lib/streetview";
 import { cn } from "@/lib/utils";
+import { loadMaps } from "@/lib/google-maps-loader";
 
 /**
  * Le panorama qui suit le curseur.
  *
- * Rien n'est chargé tant que le lecteur n'a pas cliqué : Google ne facture
- * que les panoramas ouverts, et un lecteur qui passe ne coûte rien. Une
+ * Rien n'est chargé tant que le lecteur n'a pas cliqué et obtenu une
+ * réservation dans le budget configuré côté serveur. Une
  * fois ouvert, le panorama se place au point choisi sur le profil ou la
  * carte, tourné dans le sens de la course, et la « visite » avance seule
  * tous les cent cinquante mètres.
@@ -17,35 +18,6 @@ import { cn } from "@/lib/utils";
 
 type State = "idle" | "loading" | "ready" | "refused";
 
-declare global {
-  interface Window {
-    __pelotonMaps?: Promise<typeof google.maps>;
-  }
-}
-
-function loadMaps(key: string): Promise<typeof google.maps> {
-  const ready = () => typeof window.google !== "undefined" && typeof window.google.maps?.importLibrary === "function";
-  if (ready()) return Promise.resolve(window.google.maps);
-  if (!window.__pelotonMaps) {
-    window.__pelotonMaps = new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&language=fr`;
-      s.async = true;
-      // Le script s'exécute, puis définit importLibrary un instant plus tard :
-      // on attend la fonction, pas seulement le chargement.
-      const started = Date.now();
-      const poll = () => {
-        if (ready()) resolve(window.google.maps);
-        else if (Date.now() - started > 15_000) reject(new Error("Google Maps n'a pas répondu."));
-        else setTimeout(poll, 50);
-      };
-      s.onload = poll;
-      s.onerror = () => reject(new Error("Le script Google Maps n'a pas chargé."));
-      document.head.appendChild(s);
-    });
-  }
-  return window.__pelotonMaps;
-}
 
 export function StreetViewPane({
   points,
@@ -66,6 +38,11 @@ export function StreetViewPane({
   const host = useRef<HTMLDivElement>(null);
   const pano = useRef<google.maps.StreetViewPanorama | null>(null);
   const service = useRef<google.maps.StreetViewService | null>(null);
+  const reservation = useRef<string | null>(null);
+  useEffect(() => () => {
+    if (pano.current) { google.maps.event.clearInstanceListeners(pano.current); pano.current.setVisible(false); pano.current = null; }
+    service.current = null;
+  }, []);
   const [state, setState] = useState<State>("idle");
   const [reason, setReason] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -82,13 +59,14 @@ export function StreetViewPane({
   const open = useCallback(async () => {
     setState("loading");
     try {
-      const res = await fetch("/api/streetview/session", { method: "POST" });
-      const data = (await res.json()) as { ok: boolean; key?: string; reason?: string };
+      const res = reservation.current ? null : await fetch("/api/streetview/session", { method: "POST" });
+      const data = (res ? await res.json() : { ok: true, key: reservation.current }) as { ok: boolean; key?: string; reason?: string };
       if (!data.ok || !data.key) {
         setReason(data.reason ?? "Street View indisponible.");
         setState("refused");
         return;
       }
+      reservation.current = data.key;
       const maps = await loadMaps(data.key);
       const { StreetViewPanorama, StreetViewService } = (await maps.importLibrary("streetView")) as google.maps.StreetViewLibrary;
       if (!host.current) return;

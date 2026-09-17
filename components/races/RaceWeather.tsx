@@ -145,8 +145,10 @@ export async function RaceWeatherPanel({
 
         <p className={cn("mt-3 text-sm", verdict.tone)}>{verdict.sentence}</p>
 
-        <p className="mt-2 text-xs text-muted-foreground/70">
-          {weather.timingMeasured
+        <p className="mt-2 text-xs text-muted-foreground">
+          {timing.source === "published-meeting"
+            ? "Prévision au premier départ annoncé ; vérifie l’horaire de ta catégorie."
+            : weather.timingMeasured
             ? "Horaire relevé sur une édition précédente."
             : "Horaire estimé d'après la catégorie et la distance."}
         </p>

@@ -111,7 +111,7 @@ export async function fetchRoadFeatures(bounds: {
     OUTPUTFORMAT: "application/json",
     COUNT: "3000",
   });
-  const res = await fetch(`${WFS}?${params}`, { next: { revalidate: 30 * 86_400 } });
+  const res = await fetch(`${WFS}?${params}`, { next: { revalidate: 30 * 86_400 }, signal: AbortSignal.timeout(2500) });
   if (!res.ok) throw new Error(`IGN a répondu ${res.status}`);
   const data = (await res.json()) as { features?: Feature[] };
   return data.features ?? [];

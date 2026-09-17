@@ -1,240 +1,62 @@
-/**
- * Migration runner.
- *
- *   npx tsx scripts/db/migrate.ts            # apply every pending migration
- *   npx tsx scripts/db/migrate.ts --dry-run  # list what would run
- *
- * Applied migrations are recorded in `schema_migrations`, so re-running is safe.
- * Statements are executed one at a time because the Neon HTTP driver does not
- * accept multi-statement strings.
- */
-
+/** Transactional migrations. --dry-run opens a read-only transaction and writes nothing. */
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { neon } from "@neondatabase/serverless";
+import { Client } from "pg";
 import { loadEnv } from "../lib/load-env";
+import { databaseConnectionString } from "../../lib/db/transaction";
 
 loadEnv();
-
-const MIGRATIONS_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "db",
-  "migrations"
-);
-
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error("DATABASE_URL is not set");
-  process.exit(1);
-}
-
-const _neon = neon(DATABASE_URL);
-const sql = (query: string, params: unknown[] = []) =>
-  _neon.query(query, params) as Promise<Record<string, unknown>[]>;
-
-/**
- * Split a SQL file into individual statements.
- * Aware of single quotes, dollar-quoted blocks ($$ ... $$ / $tag$ ... $tag$)
- * and line comments, so semicolons inside them do not split a statement.
- */
-function splitStatements(source: string): string[] {
-  const statements: string[] = [];
-  let current = "";
-  let i = 0;
-  let inSingle = false;
-  let inLineComment = false;
-  let inBlockComment = false;
-  let dollarTag: string | null = null;
-
-  while (i < source.length) {
-    const ch = source[i];
-    const next = source[i + 1];
-
-    if (inLineComment) {
-      current += ch;
-      if (ch === "\n") inLineComment = false;
-      i++;
-      continue;
-    }
-    if (inBlockComment) {
-      current += ch;
-      if (ch === "*" && next === "/") {
-        current += next;
-        i += 2;
-        inBlockComment = false;
-        continue;
-      }
-      i++;
-      continue;
-    }
-    if (dollarTag) {
-      if (source.startsWith(dollarTag, i)) {
-        current += dollarTag;
-        i += dollarTag.length;
-        dollarTag = null;
-        continue;
-      }
-      current += ch;
-      i++;
-      continue;
-    }
-    if (inSingle) {
-      current += ch;
-      // '' is an escaped quote inside a string literal
-      if (ch === "'" && next === "'") {
-        current += next;
-        i += 2;
-        continue;
-      }
-      if (ch === "'") inSingle = false;
-      i++;
-      continue;
-    }
-
-    if (ch === "-" && next === "-") {
-      inLineComment = true;
-      current += ch;
-      i++;
-      continue;
-    }
-    if (ch === "/" && next === "*") {
-      inBlockComment = true;
-      current += ch + next;
-      i += 2;
-      continue;
-    }
-    if (ch === "'") {
-      inSingle = true;
-      current += ch;
-      i++;
-      continue;
-    }
-    const dollarMatch = /^\$[A-Za-z_]*\$/.exec(source.slice(i));
-    if (dollarMatch) {
-      dollarTag = dollarMatch[0];
-      current += dollarTag;
-      i += dollarTag.length;
-      continue;
-    }
-    if (ch === ";") {
-      const trimmed = current.trim();
-      if (trimmed) statements.push(trimmed);
-      current = "";
-      i++;
-      continue;
-    }
-
-    current += ch;
-    i++;
-  }
-
-  const tail = current.trim();
-  if (tail) statements.push(tail);
-  return statements;
-}
-
-/** A statement is only comments / whitespace — nothing to send. */
-function isNoop(statement: string): boolean {
-  const stripped = statement
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/--[^\n]*/g, "")
-    .trim();
-  return stripped.length === 0;
-}
-
-async function ensureMigrationsTable() {
-  await sql(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      filename    VARCHAR(255) PRIMARY KEY,
-      checksum    VARCHAR(64)  NOT NULL,
-      applied_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-      duration_ms INTEGER
-    )
-  `);
-}
+const directory = join(dirname(fileURLToPath(import.meta.url)), "../../db/migrations");
 
 async function main() {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
   const dryRun = process.argv.includes("--dry-run");
-
-  await ensureMigrationsTable();
-
-  const applied = new Map<string, string>();
-  for (const row of await sql(`SELECT filename, checksum FROM schema_migrations`)) {
-    applied.set(row.filename as string, row.checksum as string);
-  }
-
-  const files = readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-
-  if (files.length === 0) {
-    console.log("No migration files found.");
-    return;
-  }
-
-  let ran = 0;
-
-  for (const filename of files) {
-    const source = readFileSync(join(MIGRATIONS_DIR, filename), "utf8");
-    const checksum = createHash("sha256").update(source).digest("hex");
-    const previous = applied.get(filename);
-
-    if (previous) {
-      if (previous !== checksum) {
-        console.warn(
-          `~ ${filename} already applied but its contents changed since. ` +
-            `Add a new migration rather than editing this one.`
-        );
-      } else {
-        console.log(`= ${filename} (already applied)`);
+  const client = new Client({ connectionString: databaseConnectionString(), connectionTimeoutMillis: 10000 });
+  await client.connect();
+  try {
+    // Transaction-scoped lock also works through a transaction-mode connection pool.
+    await client.query(dryRun ? "BEGIN READ ONLY" : "BEGIN");
+    if (!dryRun) await client.query("SELECT pg_advisory_xact_lock(72400302)");
+    const { rows: tables } = await client.query("SELECT to_regclass('public.schema_migrations') AS name");
+    const applied = new Map<string, string>();
+    if (tables[0].name) {
+      const { rows } = await client.query("SELECT filename, checksum FROM schema_migrations");
+      for (const row of rows) applied.set(row.filename, row.checksum);
+    }
+    const files = readdirSync(directory).filter((file) => file.endsWith(".sql")).sort().map((filename) => {
+      const source = readFileSync(join(directory, filename), "utf8");
+      const checksum = createHash("sha256").update(source).digest("hex");
+      if (applied.has(filename) && applied.get(filename) !== checksum) {
+        throw new Error(`CHECKSUM_MISMATCH: ${filename}; restore the applied file and add a new migration`);
       }
-      continue;
-    }
-
-    const statements = splitStatements(source).filter((s) => !isNoop(s));
-
-    if (dryRun) {
-      console.log(`+ ${filename} — ${statements.length} statements (dry run)`);
-      ran++;
-      continue;
-    }
-
-    console.log(`+ ${filename} — running ${statements.length} statements...`);
-    const started = Date.now();
-
-    for (let idx = 0; idx < statements.length; idx++) {
+      return { filename, source, checksum };
+    });
+    // Verify every checksum before the first write.
+    if (!dryRun) await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+      filename varchar(255) PRIMARY KEY, checksum varchar(64) NOT NULL,
+      applied_at timestamptz NOT NULL DEFAULT now(), duration_ms integer)`);
+    for (const file of files) {
+      if (applied.has(file.filename)) continue;
+      if (dryRun) { console.log(`PENDING ${file.filename}`); continue; }
+      const started = Date.now();
       try {
-        await sql(statements[idx]);
-      } catch (err) {
-        const preview = statements[idx].replace(/\s+/g, " ").slice(0, 160);
-        console.error(`\n  statement ${idx + 1}/${statements.length} failed:`);
-        console.error(`  ${preview}`);
-        console.error(`  ${err instanceof Error ? err.message : String(err)}`);
-        process.exit(1);
+        // pg supports the entire SQL file, including quoted blocks and functions.
+        await client.query(file.source);
+        await client.query("INSERT INTO schema_migrations(filename, checksum, duration_ms) VALUES ($1,$2,$3)",
+          [file.filename, file.checksum, Date.now() - started]);
+        console.log(`PREPARED ${file.filename}`);
+      } catch (error) {
+        await client.query("ROLLBACK");
+        const code = error && typeof error === "object" && "code" in error ? String(error.code) : "UNKNOWN";
+        throw new Error(`MIGRATION_FAILED ${file.filename} (${code}); rolled back`);
       }
     }
-
-    const durationMs = Date.now() - started;
-    await sql(
-      `INSERT INTO schema_migrations (filename, checksum, duration_ms) VALUES ($1, $2, $3)`,
-      [filename, checksum, durationMs]
-    );
-    console.log(`  done in ${durationMs}ms`);
-    ran++;
+    await client.query(dryRun ? "ROLLBACK" : "COMMIT");
+    console.log(dryRun ? "Read-only inspection complete." : "All pending migrations committed.");
+  } finally {
+    await client.end();
   }
-
-  console.log(
-    dryRun
-      ? `\n${ran} migration(s) pending.`
-      : `\n${ran} migration(s) applied.`
-  );
 }
-
-main().catch((err) => {
-  console.error("Migration failed:", err);
-  process.exit(1);
-});
+main().catch((error: Error) => { console.error(error.message); process.exitCode = 1; });

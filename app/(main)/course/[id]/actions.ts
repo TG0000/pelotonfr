@@ -1,6 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { publicStravaEnabled } from "@/lib/strava/policy";
+import { resolveUser } from "@/lib/db/queries/alerts";
+import { isUuid } from "@/lib/validation";
+import { consumeLimit } from "@/lib/rate-limit";
 import { getAuthUser } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { getConnection, getAccessToken } from "@/lib/db/queries/strava";
@@ -25,10 +28,14 @@ export async function deposerCircuit(
   raceId: string,
   segmentLink: string
 ): Promise<DepositResult> {
+  if (!publicStravaEnabled()) return { ok: false, message: "Le partage de circuits Strava est temporairement indisponible." };
+  if (!isUuid(raceId) || segmentLink.length > 300) return { ok: false, message: "Course ou lien invalide." };
   const user = await getAuthUser();
   if (!user) return { ok: false, message: "Connecte-toi pour déposer un circuit." };
 
-  const segmentId = Number(segmentLink.match(/(\d{4,})/)?.[1]);
+  const id = await resolveUser(user.id);
+  if (!(await consumeLimit(`circuit:submit:${id}`,3,3600))) return { ok: false, message: "Réessaie dans une heure." };
+  const segmentId = Number(segmentLink.match(/^https:\/\/(?:www\.)?strava\.com\/segments\/(\d{4,})(?:[/?#].*)?$/)?.[1]);
   if (!segmentId) {
     return {
       ok: false,
@@ -36,17 +43,17 @@ export async function deposerCircuit(
     };
   }
 
-  if (!(await getConnection(user.id))) {
+  if (!(await getConnection(id))) {
     return {
       ok: false,
       message: "Relie ton compte Strava dans ton profil : c'est lui qui lit le segment.",
     };
   }
-  const token = await getAccessToken(user.id);
+  const token = await getAccessToken(id);
   if (!token) return { ok: false, message: "Strava n'a pas rendu de jeton, réessaie plus tard." };
 
   try {
-    const out = await depositSegmentCircuit(sql, token, raceId, segmentId);
+    const out = await depositSegmentCircuit(sql, token, raceId, segmentId, id);
     // Le tableau de bord voit passer chaque dépôt : un circuit posé au mauvais
     // endroit se repère là, avant qu'un lecteur ne le signale.
     await createReport({
@@ -55,9 +62,9 @@ export async function deposerCircuit(
       message: `Circuit déposé : segment ${segmentId} « ${out.name} », ${(out.lengthM / 1000).toFixed(1)} km, centré à ${Math.round(out.centreM)} m de la commune.`,
       contact: user.email,
       page: `/course/${raceId}`,
-      userId: user.id,
+      userId: id,
     }).catch(() => {});
-    revalidatePath(`/course/${raceId}`);
+
     return {
       ok: true,
       name: out.name,

@@ -1,3 +1,4 @@
+import { isUuid } from "@/lib/validation";
 import { NextRequest, NextResponse } from "next/server";
 import { getRaceById } from "@/lib/db/queries/races";
 
@@ -7,7 +8,7 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  if (!id?.match(/^[0-9a-f-]{36}$/i)) {
+  if (!isUuid(id)) {
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
   }
 

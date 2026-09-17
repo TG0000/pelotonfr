@@ -10,7 +10,7 @@ import type { SqlLike } from "@/lib/strava/types";
  * village — it did, twenty-nine times, until a circuit was required to be
  * centred on the commune whose name the race carries.
  *
- * A deposit is not an inference, so it outranks both and neither overwrites it.
+ * A deposit is a proposal. It is held for operator review before publication.
  * A Strava segment is the form it takes because that is what a rider has to
  * hand: they find the loop on Strava, paste the link, and the circuit is on the
  * race page for everyone.
@@ -29,11 +29,12 @@ export async function depositSegmentCircuit(
   sql: SqlLike,
   token: string,
   raceId: string,
-  segmentId: number
+  segmentId: number,
+  userId: string
 ): Promise<Deposited> {
   const res = await fetch(
     `https://www.strava.com/api/v3/segments/${segmentId}`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) }
   );
   if (!res.ok) {
     throw new Error(
@@ -98,36 +99,13 @@ export async function depositSegmentCircuit(
     : 0;
 
   await sql(
-    `INSERT INTO race_traces (race_id, source, strava_segment, points, distance_m,
-                              elevation_gain_m, min_elevation_m, max_elevation_m,
-                              bounds, centre)
-     VALUES ($1::uuid, 'depose', $2::bigint, $3::jsonb, $4, $5, $6, $7,
-             $8::jsonb, ST_MakePoint($9::float8, $10::float8)::geography)
-     ON CONFLICT (race_id) DO UPDATE
-        SET source = 'depose', strava_segment = EXCLUDED.strava_segment,
-            points = EXCLUDED.points, distance_m = EXCLUDED.distance_m,
-            elevation_gain_m = EXCLUDED.elevation_gain_m,
-            min_elevation_m = EXCLUDED.min_elevation_m,
-            max_elevation_m = EXCLUDED.max_elevation_m,
-            bounds = EXCLUDED.bounds, centre = EXCLUDED.centre,
-            updated_at = now()`,
-    [
-      raceId,
-      segmentId,
-      JSON.stringify(points),
-      Math.round(lengthM),
-      Math.round(gain),
-      Math.round(Math.min(...alts)),
-      Math.round(Math.max(...alts)),
-      JSON.stringify({
-        west: Math.min(...lngs),
-        south: Math.min(...lats),
-        east: Math.max(...lngs),
-        north: Math.max(...lats),
-      }),
-      centre[1],
-      centre[0],
-    ]
+    `INSERT INTO circuit_submissions(race_id,user_id,segment_id,name,payload) VALUES($1::uuid,$2::uuid,$3,$4,$5::jsonb)`,
+    [raceId,userId,segmentId,segment.name ?? "Circuit",JSON.stringify({
+      points,distance_m:Math.round(lengthM),elevation_gain_m:Math.round(gain),
+      min_elevation_m:Math.round(Math.min(...alts)),max_elevation_m:Math.round(Math.max(...alts)),
+      bounds:{west:Math.min(...lngs),south:Math.min(...lats),east:Math.max(...lngs),north:Math.max(...lats)},
+      centreLng:centre[1],centreLat:centre[0],centreM
+    })]
   );
 
   return {

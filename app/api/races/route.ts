@@ -1,3 +1,4 @@
+import { validRaceFilters } from "@/lib/race-filter-validation";
 import { NextRequest, NextResponse } from "next/server";
 import { getRaces, getRacesForMap } from "@/lib/db/queries/races";
 import type { RaceFilters } from "@/types";
@@ -6,6 +7,7 @@ import type { FederationSlug, Discipline } from "@/lib/constants";
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
 
+  if (!validRaceFilters(searchParams)) return NextResponse.json({ error: "Filtres invalides." }, { status: 400 });
   const filters: Partial<RaceFilters> = {
     fed: searchParams.getAll("fed") as FederationSlug[],
     disc: searchParams.getAll("disc") as Discipline[],
@@ -24,7 +26,7 @@ export async function GET(request: NextRequest) {
   try {
     if (forMap) {
       const races = await getRacesForMap(filters);
-      return NextResponse.json({ races });
+      return NextResponse.json({ races, limited: races.length>=2000, limit:2000 });
     }
 
     const result = await getRaces(filters);

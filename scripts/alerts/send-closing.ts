@@ -92,11 +92,11 @@ async function main() {
             r.id AS race_id, r.name, r.race_date, r.city, r.entries_close_at,
             r.entries_engaged, r.entries_capacity,
             (SELECT count(*) FROM user_favorites f2
-              JOIN club_members m2 ON m2.user_id = f2.user_id
-              JOIN club_members m1 ON m1.user_id = u.id AND m1.club_id = m2.club_id
+              JOIN club_members m2 ON m2.verified_at IS NOT NULL AND m2.user_id = f2.user_id
+              JOIN club_members m1 ON m1.verified_at IS NOT NULL AND m1.user_id = u.id AND m1.club_id = m2.club_id
              WHERE f2.race_id = r.id AND f2.user_id <> u.id) AS club_going,
             EXISTS (SELECT 1 FROM club_entries ce
-                      JOIN club_members m1 ON m1.user_id = u.id AND m1.club_id = ce.club_id
+                      JOIN club_members m1 ON m1.verified_at IS NOT NULL AND m1.user_id = u.id AND m1.club_id = ce.club_id
                      WHERE ce.race_id = r.id) AS club_handled
        FROM user_favorites f
        JOIN users u ON u.id = f.user_id
@@ -118,7 +118,7 @@ async function main() {
   let sent = 0;
   for (const d of due) {
     const { subject, html, text } = render(d);
-    console.log(`  ${d.email.padEnd(30)} ${subject}`);
+    console.log(`  [recipient] ${subject}`);
     if (dryRun) continue;
     try {
       await sendMail({ to: d.email, subject, html, text, from: FROM });

@@ -41,12 +41,12 @@ export async function pendingEntries(
        FROM club_members m
        JOIN clubs c ON c.id = m.club_id
        JOIN users u ON u.id = m.user_id AND u.email IS NOT NULL
-       JOIN club_members rm ON rm.club_id = m.club_id
+       JOIN club_members rm ON rm.club_id = m.club_id AND rm.verified_at IS NOT NULL
        JOIN user_favorites f ON f.user_id = rm.user_id AND f.intent = 'programmee'
        JOIN users ru ON ru.id = rm.user_id
        LEFT JOIN riders ri ON ri.id = ru.rider_id
        JOIN races r ON r.id = f.race_id
-      WHERE m.role = 'responsable'
+      WHERE m.role = 'responsable' AND m.verified_at IS NOT NULL
         AND r.is_cancelled = false
         AND r.entries_close_at IS NOT NULL
         -- Seulement ce que la fédération a écrit. La règle « 20 h trois jours
@@ -193,10 +193,10 @@ export async function sendClubReminders(
   let sent = 0;
   for (const [officerId, races] of byOfficer) {
     const { subject, html, text } = compose(races, site);
-    lines.push(`${races[0].email} — ${subject}`);
+    lines.push(`Rappel préparé : ${races.length} course(s).`);
     for (const r of races) {
       lines.push(
-        `  ${displayRaceName(r.raceName).slice(0, 46)} — ${untilText(r.hoursLeft)} — ${r.riders.join(", ")}`
+        `  ${displayRaceName(r.raceName).slice(0, 46)} — ${untilText(r.hoursLeft)} — ${r.riders.length} coureur(s)`
       );
     }
 

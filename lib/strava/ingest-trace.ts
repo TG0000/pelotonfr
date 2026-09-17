@@ -1,3 +1,4 @@
+import { publicStravaEnabled } from "./policy";
 import { getActivityStreams } from "./client";
 import { summariseTrace } from "@/lib/trace";
 import type { SqlLike } from "./types";
@@ -30,6 +31,7 @@ export async function saveRideTrace(
      l'épreuve — et se dit autrement sur la page. */
   source: "strava" | "parcouru" = "strava"
 ): Promise<TraceOutcome> {
+  if (!publicStravaEnabled()) return "unavailable";
   const streams = await getActivityStreams(token, activityId);
   if (!streams) return "unavailable";
 

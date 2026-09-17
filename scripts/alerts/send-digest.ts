@@ -226,7 +226,7 @@ async function main() {
 
     const { subject, html, text } = renderEmail(rule, matches);
     console.log(
-      `  ${rule.email.padEnd(30)} ${String(matches.length).padStart(2)} course(s) — ${subject}`
+      `  [recipient] ${String(matches.length).padStart(2)} course(s) — ${subject}`
     );
     for (const m of matches.slice(0, 3)) {
       console.log(`      ${formatDate(m.race_date)} — ${m.name.slice(0, 52)}`);

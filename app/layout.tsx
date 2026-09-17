@@ -1,42 +1,36 @@
+import { CANONICAL_SITE_URL } from "@/lib/site-url";
 import type { Metadata } from "next";
-import { Archivo, IBM_Plex_Mono } from "next/font/google";
+import { Manrope, Barlow_Condensed, IBM_Plex_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-/**
- * Two voices, two jobs.
- *
- * Archivo has the sturdy, faintly condensed build of French road signage, which
- * is the register the calendar side of the product speaks in. Plex Mono carries
- * everything measured — dossards, times, placings, points — so a number always
- * looks like a number and columns of them line up.
- */
-const archivo = Archivo({
-  variable: "--font-archivo",
-  subsets: ["latin"],
-  display: "swap",
-});
+const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], display: "swap" });
+const display = Barlow_Condensed({ variable: "--font-display", subsets: ["latin"], weight: ["600", "700", "800"], display: "swap" });
 
 const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
+  preload: false,
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(CANONICAL_SITE_URL),
   title: {
-    default: "PelotonFR — Toutes les courses cyclistes en France",
+    default: "PelotonFR — Ta prochaine course commence ici",
     template: "%s | PelotonFR",
   },
   description:
-    "Retrouvez toutes les courses cyclistes en France : FFC, FSGT, UFOLEP. Calendrier, carte interactive et filtres avancés.",
+    "Trouve les courses cyclistes FFC, FSGT et UFOLEP près de chez toi. Consulte les parcours, prépare ta saison et retrouve ton club.",
+  twitter: { card: "summary_large_image" },
   keywords: ["cyclisme", "course", "FFC", "FSGT", "UFOLEP", "calendrier", "France"],
   openGraph: {
-    title: "PelotonFR",
-    description: "Toutes les courses cyclistes en France",
+    title: "PelotonFR — Ta prochaine course commence ici",
+    description: "Le calendrier du cyclisme amateur : courses, parcours et saison.",
     type: "website",
     locale: "fr_FR",
+    siteName: "PelotonFR",
   },
 };
 
@@ -49,13 +43,13 @@ export default function RootLayout({
       <html
         lang="fr"
         suppressHydrationWarning
-        className={`${archivo.variable} ${plexMono.variable} h-full antialiased`}
+        className={`${manrope.variable} ${display.variable} ${plexMono.variable} h-full antialiased`}
       >
         <head>
           {/* Anti-flash: apply dark class before hydration */}
           <script
             dangerouslySetInnerHTML={{
-              __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`,
+              __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.add('dark')}}catch(e){}})()`,
             }}
           />
         </head>

@@ -47,6 +47,7 @@ export function ViewSwitcher({ current }: { current: RaceView }) {
         <button
           key={value}
           type="button"
+          aria-label={label}
           aria-current={value === current ? "true" : undefined}
           onClick={() => select(value)}
           className={cn(

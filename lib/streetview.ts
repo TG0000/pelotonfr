@@ -6,9 +6,9 @@
  * on le montre : le panorama suit le curseur le long de la boucle, dans le
  * sens de la course, et une « visite » l'avance toute seule.
  *
- * Deux garde-fous contre la facture : le panorama ne se charge qu'au clic, et
- * un compteur par jour refuse au-delà d'un plafond, bien sous les dix mille
- * chargements mensuels offerts.
+ * Le chargement au clic et les plafonds applicatifs limitent les ouvertures.
+ * Ils ne mesurent pas tous les événements facturables : quotas, restrictions
+ * de clé et suivi de facturation doivent aussi être configurés chez Google.
  */
 
 export interface CoverageSpan {
@@ -35,4 +35,10 @@ export function indexAt(points: Array<[number, number, number, number]>, alongM:
   return i < 0 ? points.length - 1 : i;
 }
 
-export const DAILY_CAP = Number(process.env.STREETVIEW_DAILY_CAP ?? 300);
+function cap(value: string | undefined): number {
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n > 0 ? n : 0;
+}
+// Opt in with explicit budgets; no assumed free allowance.
+export const DAILY_CAP = cap(process.env.STREETVIEW_DAILY_CAP);
+export const MONTHLY_CAP = cap(process.env.STREETVIEW_MONTHLY_CAP);

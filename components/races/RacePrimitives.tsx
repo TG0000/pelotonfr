@@ -279,7 +279,7 @@ export function PlaceLabel({
     <span className={cn("truncate", className)}>
       {place.approximate && (
         <span
-          className="text-muted-foreground/70"
+          className="text-muted-foreground"
           title="Commune non communiquée : seul le département est connu"
         >
           ≈{" "}
@@ -287,7 +287,7 @@ export function PlaceLabel({
       )}
       {place.text}
       {place.suffix && (
-        <span className="text-muted-foreground/70"> ({place.suffix})</span>
+        <span className="text-muted-foreground"> ({place.suffix})</span>
       )}
     </span>
   );

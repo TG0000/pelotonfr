@@ -69,49 +69,19 @@ const RULE_COLUMNS = `
   ST_X(r.center::geometry) AS lng
 `;
 
-/**
- * Resolves a Clerk identity to our own user row, recording the email.
- *
- * The email is needed to deliver anything, and Clerk is its source of truth, so
- * it is refreshed on every call rather than captured once at signup.
- */
-export async function resolveUser(
-  authId: string,
-  email?: string | null
-): Promise<string> {
-  /* Les comptes ont changé de service : l'identifiant est nouveau, l'adresse
-     est la même. Une ligne qui porte cette adresse sous l'ancien identifiant
-     est la même personne — sa saison, son club, ses alertes la suivent. */
-  if (email) {
-    /* L'adresse principale, ou l'une des secondaires : Gmail par Google,
-       iCloud par lien — la même personne. La ligne prend le nouvel identifiant
-       et garde son adresse principale. */
-    const moved = await sql(
-      `UPDATE users SET clerk_id = $1::varchar
-        WHERE (lower(email) = lower($2::varchar) OR lower($2::varchar) = ANY(SELECT lower(a) FROM unnest(alias_emails) a))
-          AND clerk_id <> $1::varchar
-          AND NOT EXISTS (SELECT 1 FROM users u2 WHERE u2.clerk_id = $1::varchar)
-        RETURNING id`,
-      [authId, email]
-    );
-    if (moved.length > 0) return moved[0].id as string;
-    /* Déjà rattachée sous cet identifiant, ou identifiée par une adresse
-       secondaire : ne pas créer de doublon avec l'adresse du jour. */
-    const known = await sql(
-      `SELECT id FROM users WHERE clerk_id = $1::varchar
-          OR lower($2::varchar) = ANY(SELECT lower(a) FROM unnest(alias_emails) a)
-        LIMIT 1`,
-      [authId, email]
-    );
-    if (known.length > 0) return known[0].id as string;
-  }
+/** Resolve by immutable auth id only. Email is read from the verified auth record,
+ * never from request parameters or historical aliases. Legacy recovery is explicit. */
+export async function resolveUser(authId: string, _legacyEmail?: string | null): Promise<string> {
+  void _legacyEmail;
+  const [identity] = await sql('SELECT email, "emailVerified", name FROM "user" WHERE id = $1::text', [authId]);
+  if (!identity) throw new Error("Authenticated identity is unavailable");
+  const email = identity.emailVerified === true ? identity.email : null;
   const rows = await sql(
-    `INSERT INTO users (clerk_id, email)
-     VALUES ($1::varchar, $2::varchar)
-     ON CONFLICT (clerk_id) DO UPDATE SET
-       email = COALESCE(EXCLUDED.email, users.email)
+    `INSERT INTO users (clerk_id, email, display_name)
+     VALUES ($1::varchar, $2::varchar, $3::varchar)
+     ON CONFLICT (clerk_id) DO UPDATE SET email = EXCLUDED.email
      RETURNING id`,
-    [authId, email ?? null]
+    [authId, email, String(identity.name ?? "").slice(0, 100) || null]
   );
   return rows[0].id as string;
 }

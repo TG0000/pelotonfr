@@ -1,3 +1,5 @@
+import { CookieConsent } from "@/components/layout/CookieConsent";
+import { PlanProvider } from "@/hooks/usePlan";
 import { Beacon } from "@/components/layout/Beacon";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -8,12 +10,13 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
+    <PlanProvider>
       {/* Reaching the races by keyboard meant tabbing through the whole
           navigation on every page. */}
       <a href="#contenu" className="skip-link">
         Aller au contenu
       </a>
+      {process.env.VERCEL_ENV === "preview" && <aside aria-label="Préversion" className="bg-primary text-primary-foreground text-center text-xs px-4 py-2">Version de test V0.2 · Les courses « Démo » sont fictives.</aside>}
       <Navbar />
       <main id="contenu" className="flex-1">
         {children}
@@ -21,6 +24,7 @@ export default function MainLayout({
         <Beacon />
       </main>
       <Footer />
-    </>
+      <CookieConsent />
+    </PlanProvider>
   );
 }

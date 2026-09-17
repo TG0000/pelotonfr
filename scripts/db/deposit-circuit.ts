@@ -1,3 +1,4 @@
+import { publicStravaEnabled } from "../../lib/strava/policy";
 /**
  * Puts a circuit on a race by hand, from a Strava segment.
  *
@@ -44,7 +45,9 @@ async function resolveRace(needle: string): Promise<{ id: string; name: string }
 }
 
 async function main() {
-  const [needle, segmentArg] = process.argv.slice(2);
+  if (!publicStravaEnabled()) throw new Error("Public Strava use is disabled.");
+  const [needle, segmentArg, userId] = process.argv.slice(2);
+  if (!UUID.test(userId ?? "")) throw new Error("Specify the contributing internal user ID as the third argument.");
   if (!needle || !segmentArg) {
     console.error("usage : deposit-circuit.ts <course> <segment|url>");
     process.exit(1);
@@ -56,13 +59,13 @@ async function main() {
   const race = await resolveRace(needle);
 
   const [conn] = await sql(
-    `SELECT user_id FROM strava_connections ORDER BY updated_at DESC LIMIT 1`
+    `SELECT user_id FROM strava_connections WHERE user_id=$1::uuid`,[userId]
   );
   if (!conn) throw new Error("Aucun compte Strava connecté.");
   const token = await getAccessToken((conn as { user_id: string }).user_id);
   if (!token) throw new Error("Le jeton Strava n'a pas pu être rafraîchi.");
 
-  const out = await depositSegmentCircuit(sql, token, race.id, segmentId);
+  const out = await depositSegmentCircuit(sql, token, race.id, segmentId, userId);
 
   console.log(`${race.name}`);
   console.log(

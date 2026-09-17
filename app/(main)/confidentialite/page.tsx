@@ -1,79 +1,16 @@
 import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Confidentialité",
-  description: "Ce que PelotonFR garde de vous, pourquoi, et comment le retirer.",
-};
-
-/**
- * Ce que le site garde d'un coureur, dit comme on le dirait à un coéquipier.
- *
- * Il y a trois sources : le compte (Clerk), les sorties Strava si on les a
- * reliées, et ce qu'on a mis dans son calendrier. Rien n'est vendu, rien n'est
- * suivi par de la publicité, et tout se retire.
- */
+import Link from "next/link";
+export const metadata: Metadata = { title: "Confidentialité et données personnelles", alternates: { canonical: "/confidentialite" }, description: "Les données utilisées par PelotonFR et les moyens de demander leur correction ou leur suppression." };
 export default function Confidentialite() {
-  return (
-    <article className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="font-heading text-3xl font-bold">Confidentialité</h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        Le calendrier se consulte sans compte et sans traceur. Ce qui suit ne
-        concerne que celles et ceux qui en créent un.
-      </p>
-
-      <section className="mt-8 space-y-2 text-sm leading-relaxed">
-        <h2 className="font-heading text-lg font-semibold">Le compte</h2>
-        <p>
-          La connexion est assurée par Clerk, qui conserve votre adresse
-          e-mail et, si vous l&apos;utilisez, votre identifiant Google ou Apple.
-          PelotonFR n&apos;y garde que ce que vous y mettez : les courses de
-          votre saison, vos alertes, votre club et votre catégorie.
-        </p>
-      </section>
-
-      <section className="mt-8 space-y-2 text-sm leading-relaxed">
-        <h2 className="font-heading text-lg font-semibold">Strava</h2>
-        <p>
-          Si vous reliez Strava, le site lit vos sorties pour reconnaître
-          celles qui correspondent à une course et en tirer le tracé. Le tracé
-          d&apos;une course devient visible par tous ; vos sorties, votre
-          fréquence cardiaque et votre puissance ne le sont jamais. Le lien se
-          coupe depuis votre profil ou depuis Strava, et les sorties sont alors
-          effacées.
-        </p>
-      </section>
-
-      <section className="mt-8 space-y-2 text-sm leading-relaxed">
-        <h2 className="font-heading text-lg font-semibold">E-mails</h2>
-        <p>
-          Vous ne recevez que ce que vous avez demandé : une alerte quand une
-          course qui vous correspond paraît, un rappel avant la clôture des
-          engagements de votre club. Chaque message contient de quoi
-          l&apos;arrêter.
-        </p>
-      </section>
-
-      <section className="mt-8 space-y-2 text-sm leading-relaxed">
-        <h2 className="font-heading text-lg font-semibold">Cookies</h2>
-        <p>
-          Un seul, celui de la session de connexion. Aucune mesure d&apos;audience
-          tierce, aucune publicité.
-        </p>
-      </section>
-
-      <section className="mt-8 space-y-2 text-sm leading-relaxed">
-        <h2 className="font-heading text-lg font-semibold">Retirer ses données</h2>
-        <p>
-          Écrivez à{" "}
-          <a href="mailto:contact@pelotonfr.fr" className="underline">
-            contact@pelotonfr.fr
-          </a>{" "}
-          : le compte et tout ce qui s&apos;y rattache sont supprimés sous
-          quinze jours. Un coureur qui souhaite que son nom n&apos;apparaisse
-          plus dans les listes d&apos;engagés ou les classements peut le demander
-          de la même façon.
-        </p>
-      </section>
-    </article>
-  );
+  return <article className="mx-auto max-w-2xl px-4 py-10 space-y-8 text-sm leading-relaxed">
+    <header><h1 className="font-heading text-4xl font-bold">Confidentialité et données personnelles</h1><p className="mt-3 text-muted-foreground">Le calendrier est accessible sans compte. Cette page décrit aussi les données liées aux comptes, aux sources sportives publiques et au fonctionnement du site.</p></header>
+    <section className="space-y-2"><h2 className="text-xl font-semibold">Responsable et finalités</h2><p>Théo Guyard est responsable des traitements de PelotonFR. Tu peux le joindre par <Link href="/contact" className="underline">le formulaire de contact et son suivi privé</Link>. Version de cette notice : 17 septembre 2026.</p><p>Le compte, la saison et les fonctions demandées servent à exécuter le service. La sécurité, le traitement des demandes et la présentation des sources sportives publiques reposent sur l’intérêt légitime à faire fonctionner un calendrier fiable, sous réserve de tes droits. La mesure d’audience facultative repose sur ton consentement. Les données de compte nécessaires sont signalées dans les formulaires ; le calendrier reste accessible sans compte.</p></section>
+    <section className="space-y-2"><h2 className="text-xl font-semibold">Ton compte et ta saison</h2><p>PelotonFR utilise Better Auth pour la connexion. L’adresse vérifiée, le nom choisi, les sessions et les liens avec Google ou Strava sont stockés dans la base PostgreSQL hébergée chez Neon. Les pages et les traitements applicatifs sont hébergés par Vercel.</p><p>Les courses enregistrées, alertes, préférences et rattachements au club servent aux fonctions que tu utilises. Sélectionner une fiche de coureur ne constitue pas une vérification d’identité. L’accès partagé d’un club nécessite une validation.</p></section>
+    <section className="space-y-2"><h2 className="text-xl font-semibold">Strava</h2><p>La connexion est facultative. Tu choisis la période des activités à importer. Les activités cyclistes peuvent comprendre leur nom, leur date, leur position de départ, la distance, le dénivelé, la durée et les mesures sportives disponibles. Les jetons d’accès sont chiffrés au repos.</p><p>La déconnexion depuis le profil supprime les activités importées, les mesures du compte Strava et les tracés attribuables à ces activités ou à ton compte. La révocation est demandée à Strava ; si son service ne répond pas, le jeton chiffré est conservé dans une file de réessai dédiée jusqu’au traitement de la demande.</p><p>Les usages collectifs de données Strava sont désactivés dans la V0.2 en attendant leur validation. Les anciennes données agrégées sans provenance individuelle font l’objet d’une revue avant toute éventuelle réactivation.</p></section>
+    <section className="space-y-2"><h2 className="text-xl font-semibold">Résultats et listes publiques</h2><p>Les sources sportives peuvent publier des noms, clubs, catégories, résultats ou listes d’engagés. Ces données permettent de retrouver une épreuve et ses résultats. La fiche renvoie vers la source disponible. Signale une erreur ou une demande d’opposition via <Link href="/contact" className="underline">Contact</Link> en indiquant les pages concernées.</p></section>
+    <section className="space-y-2"><h2 className="text-xl font-semibold">E-mails et contact</h2><p>Les liens de connexion et messages demandés sont transmis au prestataire d’envoi configuré, Brevo ou Resend. Une adresse non vérifiée ne reçoit pas les alertes de saison.</p><p>Le formulaire de contact ne demande ni compte ni adresse e-mail. Il conserve le message et la réponse, accessibles avec un code privé dont seule l’empreinte est stockée. Les demandes traitées sont supprimées par la maintenance quotidienne 90 jours après leur dernière mise à jour. Les demandes ouvertes restent disponibles jusqu’à leur traitement.</p></section>
+    <section id="cookies" className="space-y-2 scroll-mt-24"><h2 className="text-xl font-semibold">Navigation, cartes et mesure d’audience</h2><p>Pour limiter les abus, des compteurs temporaires utilisent une empreinte protégée de l’adresse IP, sans conserver l’adresse dans ces compteurs. Les compteurs expirés sont supprimés après sept jours par la maintenance quotidienne. Les cookies de session permettent de rester connecté. Le navigateur conserve aussi des préférences, comme le thème choisi. Avec ton consentement uniquement, une mesure interne enregistre les pages publiques consultées et une localisation approximative fournie par l’hébergeur, sans identifiant de suivi ni association à un compte. Les pages personnelles ne sont pas mesurées ; les vues sont supprimées après 90 jours.</p><p>Les cartes et photographies affichées peuvent contacter leurs fournisseurs, notamment les services cartographiques, Panoramax, Mapillary ou Google lorsque ces vues sont activées. Ces fournisseurs reçoivent les informations nécessaires à la requête, notamment l’adresse IP. Les polices sont servies par le site.</p><p>« Accepter » autorise la mesure d’audience ; « Refuser » la laisse désactivée. Le choix, conservé six mois dans un cookie nécessaire, peut être modifié à tout moment avec « Gérer mes cookies » dans le pied de page. Aucun cookie publicitaire n’est utilisé.</p></section>
+    <section className="space-y-2"><h2 className="text-xl font-semibold">Conservation et destinataires</h2><p>Les données du compte et de saison sont conservées pendant l’utilisation du compte puis traitées lors d’une demande de fermeture ; les résultats publics font l’objet d’une demande distincte si tu souhaites aussi leur retrait. Les sessions et liens de connexion ont leur propre expiration. Les oppositions sont conservées tant que les collectes pourraient republier les données concernées ; les publications sportives historiques restent consultables tant qu’elles servent le calendrier et les résultats, sous réserve de rectification ou d’opposition.</p><p>L’accès administratif est réservé aux opérateurs autorisés. Les membres vérifiés d’un même club voient les informations partagées prévues par le service. Vercel, Neon et le prestataire d’e-mail interviennent pour l’hébergement et l’envoi. La base principale est située à Londres, au Royaume-Uni ; les prestataires et réseaux de diffusion peuvent traiter certaines données dans d’autres pays, notamment aux États-Unis. Leurs conditions et accords de traitement encadrent ces opérations ; la localisation de la base ne signifie pas que tous les traitements ont lieu dans l’Union européenne.</p></section>
+    <section className="space-y-2"><h2 className="text-xl font-semibold">Corriger ou retirer des données</h2><p>Utilise <Link href="/contact" className="underline">le formulaire de contact</Link> pour demander l’accès, la correction ou la suppression de tes données, ou signaler une republication. Conserve la référence et le code pour lire notre réponse. Une vérification proportionnée peut être nécessaire pour éviter de modifier les données d’une autre personne. Après validation d’une opposition, les résultats concernés sont retirés ; des empreintes de l’identifiant UCI et, si nécessaire, du nom sont conservées pour empêcher la republication par les collecteurs. Ces empreintes servent uniquement au rapprochement et restent des données personnelles.</p><p>Selon ta situation, tu peux exercer tes droits d’accès, de rectification, d’effacement, de limitation, d’opposition et de portabilité, et retirer un consentement sans remettre en cause les opérations antérieures. Une réponse est normalement apportée dans le délai légal d’un mois, avec information en cas de prolongation permise. Tu peux aussi adresser une réclamation à la <a href="https://www.cnil.fr/fr/plaintes" className="underline">CNIL</a>. PelotonFR ne prend pas de décision produisant un effet juridique sur toi au moyen d’un profilage automatisé.</p></section>
+  </article>;
 }

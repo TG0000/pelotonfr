@@ -58,6 +58,7 @@ export async function RaceBrief({
     daysLeft,
     startHour: timing.startHour,
     timingMeasured: timing.measured,
+    timingSource: timing.source,
     entriesEngaged: race.entriesEngaged ?? null,
     entriesCapacity: race.entriesCapacity ?? null,
     entriesCloseAt: race.entriesCloseAt ?? null,

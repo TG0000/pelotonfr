@@ -216,6 +216,7 @@ async function getOrCreateRider(
     [uciId, lastName, firstName || null, normalized, clubId]
   );
 
+  if (!rows[0]) return null; // A reviewed opposition can suppress the import.
   const id = rows[0].id as string;
   cache.set(uciId, id);
   return id;

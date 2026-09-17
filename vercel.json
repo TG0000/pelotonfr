@@ -8,5 +8,8 @@
       "path": "/api/cron/club",
       "schedule": "0 17 * * *"
     }
+  ],
+  "regions": [
+    "lhr1"
   ]
 }

@@ -39,9 +39,9 @@ export function toDateOnly(value: DateLike): string | null {
   return toDateOnly(parsed);
 }
 
-/** Today's calendar date where the process runs, not shifted into UTC. */
-export function todayISO(): string {
-  return toDateOnly(new Date()) ?? new Date().toISOString().split("T")[0];
+/** The calendar is French even when the function executes in another region. */
+export function todayISO(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
 /** Midday UTC on the given calendar date — safe to format in any timezone. */

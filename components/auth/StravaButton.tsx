@@ -29,20 +29,23 @@ export function StravaButton({
 }) {
   const { data } = useSession();
   const [busy, setBusy] = useState(false);
+  const [error,setError] = useState("");
   const signedIn = Boolean(data?.user);
   const text = label ?? (signedIn ? "Connecter Strava" : "Continuer avec Strava");
 
   async function go() {
-    setBusy(true);
-    const res = signedIn
-      ? await authClient.linkSocial({ provider: "strava", callbackURL })
-      : await authClient.signIn.social({ provider: "strava", callbackURL });
-    // En cas de succès le navigateur part vers Strava ; on ne revient ici
-    // qu'en cas d'échec.
-    if (res.error) setBusy(false);
+    setBusy(true); setError("");
+    try {
+      const res = signedIn
+        ? await authClient.linkSocial({ provider: "strava", callbackURL })
+        : await authClient.signIn.social({ provider: "strava", callbackURL });
+      if (res.error) throw new Error();
+    } catch { setError("La connexion Strava a échoué. Réessaie ou utilise ton e-mail."); }
+    finally { setBusy(false); }
   }
 
   return (
+    <>
     <button
       type="button"
       onClick={go}
@@ -63,5 +66,7 @@ export function StravaButton({
       )}
       {text}
     </button>
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    </>
   );
 }

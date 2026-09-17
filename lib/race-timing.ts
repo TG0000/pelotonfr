@@ -19,6 +19,7 @@ export interface RaceTiming {
   durationMinutes: number;
   /** True when this comes from a ride actually recorded on the course. */
   measured: boolean;
+  source?: "published-meeting" | "historical" | "estimated";
 }
 
 const YOUTH = ["u7", "u9", "u11", "u13"];
@@ -70,4 +71,19 @@ export function formatHour(hour: number): string {
   const h = Math.floor(hour);
   const m = Math.round((hour - h) * 60);
   return m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, "0")}`;
+}
+
+export function parsePublishedHour(value: string | null): number | null {
+  const match = value?.trim().match(/^(\d{1,2})\s*(?:h|:)\s*(\d{2})?\s*$/i);
+  if (!match) return null;
+  const hour=Number(match[1]), minute=Number(match[2] ?? 0);
+  return hour<24 && minute<60 ? hour+minute/60 : null;
+}
+export function resolveTiming(input: { categories:string[]; discipline:string; distanceKm:number|null; startTime:string|null; bibPickupTime:string|null; historical:{startHour:number;durationMinutes:number}|null }): RaceTiming {
+  const estimated=estimateTiming(input.categories,input.discipline,input.distanceKm);
+  const published=parsePublishedHour(input.startTime);
+  if(published!==null)return {...estimated,startHour:published,source:"published-meeting"};
+  if(input.historical)return {...input.historical,measured:true,source:"historical"};
+  const bib=parsePublishedHour(input.bibPickupTime);
+  return {...estimated,startHour:bib===null?estimated.startHour:Math.min(23.5,Math.max(estimated.startHour,bib+0.5)),source:"estimated"};
 }

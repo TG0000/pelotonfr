@@ -11,9 +11,9 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 /** Les couleurs de la marque, écrites en dur : le générateur d'image ne lit pas le CSS. */
-const NAVY = "#0f172a";
-const PAPER = "#f8fafc";
-const YELLOW = "#f5c400";
+const NAVY = "#19283f";
+const PAPER = "#faf7ef";
+const YELLOW = "#ff805b";
 const FED: Record<string, string> = { ffc: "#3b82f6", fsgt: "#22c55e", ufolep: "#f97316" };
 
 /**

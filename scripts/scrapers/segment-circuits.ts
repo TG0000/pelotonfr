@@ -1,3 +1,4 @@
+import { publicStravaEnabled } from "../../lib/strava/policy";
 /**
  * Les circuits reconnus dans l'index des segments traversés.
  *
@@ -33,6 +34,7 @@ async function segmentPolyline(token: string, id: number): Promise<string | null
 }
 
 async function main() {
+  if (!publicStravaEnabled()) { console.log("Collective Strava processing disabled pending authorization."); return; }
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : 200;
   const readsArg = process.argv.find((a) => a.startsWith("--reads="));

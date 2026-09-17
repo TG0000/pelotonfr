@@ -14,7 +14,7 @@
  */
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "../scrapers/utils/db";
-import { getOrCreateVenueFromCity } from "../scrapers/utils/venues";
+import { getOrCreateVenueFromCity, normalizePlace } from "../scrapers/utils/venues";
 import { townFrom } from "../scrapers/utils/town-from";
 import { trackRun } from "../lib/track-run";
 import { isPointToPoint } from "../scrapers/utils/point-to-point";
@@ -68,7 +68,10 @@ async function main() {
       === town.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, "");
     if (same && r.lat != null) continue;
 
-    const venueId = await getOrCreateVenueFromCity(sql, town, { departmentCode: dept }, cache);
+    // A dry run only consults existing venues; it never creates or geocodes one.
+    const venueId = dry
+      ? ((await sql("SELECT id FROM venues WHERE normalized_city=$1 AND department_code=$2 LIMIT 1", [normalizePlace(town),dept]))[0]?.id as string | undefined)
+      : await getOrCreateVenueFromCity(sql, town, { departmentCode: dept }, cache);
     if (!venueId) { unknown++; continue; }
     const [v] = (await sql(
       `SELECT city, department_code, ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lng FROM venues WHERE id = $1::uuid`,
@@ -98,4 +101,5 @@ async function main() {
   return { seen: rows.length, written: moved + departed, metadata: { moved, departed, unknown } };
 }
 
-trackRun(sql, "place-check", main);
+if (process.argv.includes("--dry-run")) void main();
+else void trackRun(sql, "place-check", main);

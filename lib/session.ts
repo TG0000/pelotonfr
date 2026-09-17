@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import { auth as betterAuth } from "@/lib/auth";
 
@@ -14,25 +15,23 @@ import { auth as betterAuth } from "@/lib/auth";
 export interface AuthUser {
   id: string;
   email: string;
+  emailVerified: boolean;
   name: string | null;
   firstName: string | null;
 }
 
-export async function getAuthUser(): Promise<AuthUser | null> {
-  try {
+export const getAuthUser = cache(async (): Promise<AuthUser | null> => {
     const session = await betterAuth.api.getSession({ headers: await headers() });
     if (!session?.user) return null;
     const name = session.user.name?.trim() || null;
     return {
       id: session.user.id,
       email: session.user.email,
+      emailVerified: session.user.emailVerified,
       name,
       firstName: name ? name.split(/\s+/)[0] : null,
     };
-  } catch {
-    return null;
-  }
-}
+});
 
 /** `{ userId }` — null quand personne n'est connecté. */
 export async function auth(): Promise<{ userId: string | null }> {

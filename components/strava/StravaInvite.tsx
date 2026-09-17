@@ -17,6 +17,7 @@ export function StravaInvite({
   compact?: boolean;
   className?: string;
 }) {
+  if (process.env.NEXT_PUBLIC_STRAVA_SIGNIN !== "true") return null;
   return (
     <div
       className={cn(
@@ -36,12 +37,12 @@ export function StravaInvite({
               {!compact && " — chaque sortie du jour J reliée au classement et au plateau."}
             </li>
             <li>
-              <span className="font-medium text-foreground">Le circuit dessiné</span>
-              {!compact && " — votre trace devient le parcours que tout le peloton consulte."}
+              <span className="font-medium text-foreground">Vos sorties au même endroit</span>
+              {!compact && " — une synchronisation privée, sur la période que vous choisissez."}
             </li>
             <li>
-              <span className="font-medium text-foreground">Rien n&apos;est publié</span>
-              {!compact && " — lecture seule, et vous déconnectez quand vous voulez."}
+              <span className="font-medium text-foreground">Lecture seule</span>
+              {!compact && " — aucune écriture sur Strava, et vous pouvez déconnecter à tout moment."}
             </li>
           </ul>
         </div>

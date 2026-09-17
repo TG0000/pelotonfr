@@ -1,5 +1,7 @@
 "use client";
 
+import { useCookieConsent } from "./CookieConsent";
+import { analyticsAllowed } from "@/lib/consent";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
@@ -11,8 +13,9 @@ import { usePathname } from "next/navigation";
  */
 export function Beacon() {
   const pathname = usePathname();
+  const consent = useCookieConsent();
   useEffect(() => {
-    if (!pathname || pathname.startsWith("/admin")) return;
+    if (!analyticsAllowed(consent) || !pathname || ["/admin", "/profil", "/club", "/ma-saison", "/alertes", "/contact", "/coureur"].some(prefix => pathname.startsWith(prefix))) return;
     const body = JSON.stringify({ path: pathname });
     try {
       if (!navigator.sendBeacon?.("/api/beacon", new Blob([body], { type: "application/json" }))) {
@@ -21,6 +24,6 @@ export function Beacon() {
     } catch {
       // Pas de balise, pas de drame.
     }
-  }, [pathname]);
+  }, [pathname, consent]);
   return null;
 }

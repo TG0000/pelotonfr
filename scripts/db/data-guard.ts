@@ -1,6 +1,6 @@
 /**
- * Le garde-fou des données : chaque nuit, il cherche ce qui casse et répare
- * ce qui se répare seul.
+ * Le garde-fou des données : chaque nuit, il signale les anomalies sans
+ * supprimer ni réapparier des données sur une heuristique.
  *
  *   npx tsx scripts/db/data-guard.ts [--dry-run]
  *
@@ -42,12 +42,9 @@ async function main() {
         WHERE a.start_location IS NOT NULL AND r.location IS NOT NULL
           AND ST_Distance(a.start_location, r.location) > 80000`
     )) as Row[];
-    let fixed = 0;
-    if (!dry && bad.length) {
-      const r = await sql(`UPDATE strava_activities SET race_id = NULL, race_match_method = 'none' WHERE id = ANY($1::uuid[]) RETURNING id`, [bad.map((b) => b.id)]);
-      fixed = r.length;
-    }
-    await record("sortie rattachée trop loin", bad.length, fixed, bad, "déliée");
+    const fixed = 0;
+
+    await record("sortie rattachée trop loin", bad.length, fixed, bad, "à examiner ; conservée");
     tally(bad.length, fixed);
   }
 
@@ -58,15 +55,9 @@ async function main() {
          FROM race_traces t JOIN races r ON r.id = t.race_id
         WHERE t.centre IS NOT NULL AND r.location IS NOT NULL AND ST_Distance(t.centre, r.location) > 50000`
     )) as Row[];
-    let fixed = 0;
-    if (!dry && bad.length) {
-      for (const b of bad) {
-        await sql(`INSERT INTO trace_checks (race_id, old_source, verdict, reason) VALUES ($1::uuid, $2, 'audit', $3)`, [b.race_id, b.source, `tracé à ${b.km} km de la commune, retiré par le garde-fou`]);
-      }
-      const r = await sql(`DELETE FROM race_traces WHERE race_id = ANY($1::uuid[]) RETURNING race_id`, [bad.map((b) => b.race_id)]);
-      fixed = r.length;
-    }
-    await record("tracé loin de la course", bad.length, fixed, bad, "retiré");
+    const fixed = 0;
+
+    await record("tracé loin de la course", bad.length, fixed, bad, "à examiner ; conservé");
     tally(bad.length, fixed);
   }
 
@@ -77,12 +68,9 @@ async function main() {
          FROM races c JOIN races p ON p.id = c.previous_race_id
         WHERE c.department_code IS NOT NULL AND p.department_code IS NOT NULL AND c.department_code <> p.department_code`
     )) as Row[];
-    let fixed = 0;
-    if (!dry && bad.length) {
-      const r = await sql(`UPDATE races SET previous_race_id = NULL WHERE id = ANY($1::uuid[]) RETURNING id`, [bad.map((b) => b.id)]);
-      fixed = r.length;
-    }
-    await record("édition d'un autre département", bad.length, fixed, bad, "délié");
+    const fixed = 0;
+
+    await record("édition d'un autre département", bad.length, fixed, bad, "à examiner ; conservé");
     tally(bad.length, fixed);
   }
 
@@ -98,14 +86,8 @@ async function main() {
     const riders = (await sql(`SELECT id, normalized_name FROM riders WHERE normalized_name = ANY($1::text[])`, [[...wanted.keys()]])) as Row[];
     const byName = new Map<string, string[]>();
     for (const r of riders) byName.set(String(r.normalized_name), [...(byName.get(String(r.normalized_name)) ?? []), String(r.id)]);
-    let fixed = 0;
-    for (const [k, ids] of wanted) {
-      const c = byName.get(k);
-      if (!c || c.length !== 1) continue;
-      if (!dry) await sql(`UPDATE engagements SET rider_id = $1::uuid, match_method = 'name_only' WHERE id = ANY($2::uuid[])`, [c[0], ids]);
-      fixed += ids.length;
-    }
-    await record("engagés sans coureur", rows.length, fixed, rows.slice(0, 5).map((r) => ({ nom: `${r.last_name_raw} ${r.first_name_raw ?? ""}` })), "réappariés quand le nom est unique");
+    const fixed = 0;
+    await record("engagés sans coureur", rows.length, fixed, rows.slice(0, 5).map((r) => ({ nom: `${r.last_name_raw} ${r.first_name_raw ?? ""}` })), "rapprochement à examiner");
     tally(rows.length, fixed);
   }
 
@@ -145,9 +127,9 @@ async function main() {
   // 9. Prévision aberrante.
   {
     const bad = (await sql(`SELECT race_id, wind_kmh, temp_c FROM race_forecast WHERE wind_kmh > 120 OR temp_c < -25 OR temp_c > 48`)) as Row[];
-    let fixed = 0;
-    if (!dry && bad.length) fixed = (await sql(`DELETE FROM race_forecast WHERE wind_kmh > 120 OR temp_c < -25 OR temp_c > 48 RETURNING race_id`)).length;
-    await record("prévision aberrante", bad.length, fixed, bad, "supprimée, relue la nuit suivante");
+    const fixed = 0;
+
+    await record("prévision aberrante", bad.length, fixed, bad, "à examiner ; conservée");
     tally(bad.length, fixed);
   }
 
@@ -162,8 +144,9 @@ async function main() {
     tally(bad.length, 0);
   }
 
-  console.log(`\n${totalFound} anomalie(s) trouvée(s), ${totalFixed} corrigée(s) d'office.`);
+  console.log(`\n${totalFound} anomalie(s) trouvée(s), ${totalFixed} corrigée(s) ; aucune suppression automatique.`);
   return { seen: totalFound, written: totalFixed };
 }
 
-trackRun(sql, "data-guard", main);
+if (dry) void main();
+else void trackRun(sql, "data-guard", main);

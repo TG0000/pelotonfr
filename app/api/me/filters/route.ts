@@ -1,3 +1,6 @@
+import { consumeLimit } from "@/lib/rate-limit";
+import { jsonObject } from "@/lib/request-security";
+import { mutationOriginAllowed } from "@/lib/request-security";
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/session";
 import { resolveUser } from "@/lib/db/queries/alerts";
@@ -23,9 +26,13 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (!mutationOriginAllowed(req)) return NextResponse.json({error:"Origine refusée."},{status:403});
   const id = await me();
   if (!id) return NextResponse.json({ ok: false }, { status: 401 });
-  const body = (await req.json().catch(() => ({}))) as { filters?: unknown };
+  if (!(await consumeLimit(`filters:${id}`,60,60))) return NextResponse.json({error:"Trop de demandes. Réessaie dans une minute."},{status:429});
+  const body = await jsonObject(req);
+  if (!body) return NextResponse.json({error:"Demande invalide."},{status:400});
+
   const filters = typeof body.filters === "string" ? body.filters.slice(0, 2000) : "";
   await setUserFilters(id, filters);
   return NextResponse.json({ ok: true });

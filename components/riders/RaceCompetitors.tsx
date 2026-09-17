@@ -1,3 +1,4 @@
+import { categoryLabel } from "@/lib/categories";
 import Link from "next/link";
 import { Users, TrendingUp, RotateCcw, Trophy, Info } from "lucide-react";
 import { getRaceCompetitors } from "@/lib/db/queries/rider-profile";
@@ -14,7 +15,7 @@ import type { RaceCompetitor } from "@/lib/db/queries/rider-profile";
 
 const KIND_LABEL: Record<string, { text: string; className: string; icon: typeof TrendingUp }> = {
   in_form: {
-    text: "En forme",
+    text: "Résultats récents",
     className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
     icon: TrendingUp,
   },
@@ -66,7 +67,7 @@ function CompetitorRow({ competitor }: { competitor: RaceCompetitor }) {
 
           {competitor.category && (
             <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-              {competitor.category}
+              {categoryLabel(competitor.category)}
             </span>
           )}
 
@@ -116,9 +117,9 @@ export async function RaceCompetitors({ raceId }: { raceId: string }) {
     return null;
   }
 
-  if (data.competitors.length === 0) return null;
+  if (data.competitors.length === 0 || data.source === "startlist") return null;
 
-  const confirmed = data.source === "startlist";
+  const confirmed: boolean = false;
   const regional = data.source === "regional";
   const toWatch = data.competitors.filter(
     (c) => c.kind === "in_form" || c.kind === "returning"

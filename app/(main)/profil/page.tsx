@@ -7,8 +7,7 @@ import type { StravaPanelState } from "@/components/strava/StravaPanel";
 import { currentUser } from "@/lib/session";
 import { resolveUser } from "@/lib/db/queries/alerts";
 import { getConnection } from "@/lib/db/queries/strava";
-import { authorizeUrl, stravaConfigured } from "@/lib/strava/client";
-import { getSiteUrl } from "@/lib/site-url";
+import { stravaConfigured } from "@/lib/strava/client";
 import { getRiderSeason } from "@/lib/db/queries/points";
 import { PointsCounter } from "@/components/profil/PointsCounter";
 import { EmailPrompt } from "@/components/profil/EmailPrompt";
@@ -36,11 +35,7 @@ async function loadStravaState(clerkId: string): Promise<StravaPanelState> {
   return {
     configured: true,
     connection,
-    // The Clerk id travels through OAuth as `state` and is checked on return,
-    // which is what stops another site initiating the connection.
-    authorizeUrl: connection
-      ? null
-      : authorizeUrl(`${await getSiteUrl()}/api/strava/callback`, clerkId),
+    authorizeUrl: null,
   };
 }
 

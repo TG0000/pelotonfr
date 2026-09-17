@@ -27,9 +27,8 @@ export function DepositCircuit({ raceId }: { raceId: string }) {
     e.preventDefault();
     if (!link.trim()) return;
     startTransition(async () => {
-      const out = await deposerCircuit(raceId, link.trim());
-      setResult(out);
-      if (out.ok) router.refresh();
+      try { const out = await deposerCircuit(raceId, link.trim()); setResult(out); if (out.ok) router.refresh(); }
+      catch { setResult({ok:false,message:"Le dépôt est indisponible. Réessaie dans un instant."}); }
     });
   }
 
@@ -39,7 +38,7 @@ export function DepositCircuit({ raceId }: { raceId: string }) {
       <div className="rounded-xl border border-dashed border-border bg-surface-1 p-4">
         {result?.ok ? (
           <p className="text-sm">
-            Circuit déposé : « {result.name} »,{" "}
+            Circuit proposé : « {result.name} »,{" "}
             <span className="font-mono tabular-nums">{result.km} km</span> et{" "}
             <span className="font-mono tabular-nums">{result.gainM} m</span> de dénivelé.
             {result.centreM > 2500 && (
@@ -49,7 +48,7 @@ export function DepositCircuit({ raceId }: { raceId: string }) {
               </span>
             )}
             <span className="mt-1 block text-muted-foreground">
-              La page se recharge avec le tracé, le relief et le vent dessus.
+              Ta proposition est en attente de vérification. Le circuit public reste inchangé avant validation.
             </span>
           </p>
         ) : (
@@ -57,7 +56,7 @@ export function DepositCircuit({ raceId }: { raceId: string }) {
             <p className="text-sm text-muted-foreground">
               Personne n&rsquo;a encore tracé ce circuit. Si tu le connais, colle le
               lien du segment Strava qui fait la boucle : le parcours, le
-              relief et le vent apparaîtront pour tout le monde.
+              relief et le vent pourront être publiés après vérification.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input

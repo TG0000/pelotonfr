@@ -42,10 +42,8 @@ export function OrganiserBriefing({
 
       <dl className="flex flex-col gap-3 text-sm">
         {circuitM && (
-          <div className="flex items-start gap-2.5">
-            <RotateCw className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <div>
-              <dt className="sr-only">Circuit</dt>
+          <div className="relative pl-7">
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground"><RotateCw aria-hidden className="absolute left-0 top-0.5 size-4" />Circuit</dt>
               <dd>
                 <span className="font-mono tabular-nums">
                   {(circuitM / 1000).toFixed(1)} km
@@ -66,28 +64,22 @@ export function OrganiserBriefing({
                   </span>
                 )}
               </dd>
-            </div>
           </div>
         )}
 
         {startTime && (
-          <div className="flex items-start gap-2.5">
-            <Clock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <div>
+          <div className="relative pl-7">
               <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                Premier départ de la réunion
+                <Clock aria-hidden className="absolute left-0 top-0.5 size-4" />Premier départ de la réunion
               </dt>
               <dd className="font-mono tabular-nums">{startTime}</dd>
-            </div>
           </div>
         )}
 
         {hasPickup && (
-          <div className="flex items-start gap-2.5">
-            <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <div>
+          <div className="relative pl-7">
               <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                Remise des dossards
+                <MapPin aria-hidden className="absolute left-0 top-0.5 size-4" />Remise des dossards
               </dt>
               <dd>
                 {bibPickupTime && (
@@ -98,7 +90,6 @@ export function OrganiserBriefing({
                 {bibPickupTime && bibPickupPlace && " — "}
                 {bibPickupPlace}
               </dd>
-            </div>
           </div>
         )}
       </dl>

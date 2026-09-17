@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import type { Race } from "@/types";
 import { cn } from "@/lib/utils";
 import { PlanButton } from "./PlanButton";
@@ -23,6 +23,7 @@ interface RaceCardProps {
   /** Today, as YYYY-MM-DD. Passed in rather than read here so the card renders
       from its props alone and the server and client agree on the date. */
   today?: string;
+  nowMs?: number;
 }
 
 /**
@@ -38,6 +39,7 @@ export function RaceCard({
   showDistance,
   myCategories,
   today,
+  nowMs,
 }: RaceCardProps) {
   const date = parseRaceDate(race.raceDate);
   const now = today ? parseRaceDate(today).getTime() : null;
@@ -47,13 +49,12 @@ export function RaceCard({
     date.getTime() - now < 7 * 24 * 60 * 60 * 1000;
 
   return (
-    <Link
-      href={`/course/${race.id}`}
+    <article
       className={cn(
-        "group relative flex items-center gap-4 px-3 py-3 sm:px-4",
+        "group relative flex min-w-0 items-center gap-2 px-3 py-3 sm:px-4",
         "rounded-xl border border-transparent bg-surface-1",
         "transition-colors hover:border-border hover:bg-surface-2",
-        race.isCancelled && "opacity-60"
+        race.isCancelled && "border-dashed border-border"
       )}
     >
       {/* The federation is a colour on the edge, not another badge competing
@@ -66,6 +67,7 @@ export function RaceCard({
         )}
       />
 
+      <Link href={`/course/${race.id}`} className="flex min-w-0 flex-1 items-center gap-3">
       <DateBlock
         date={race.raceDate}
         dateEnd={race.raceDateEnd}
@@ -90,13 +92,13 @@ export function RaceCard({
           )}
         </div>
 
-        <div className="mt-1 flex items-center gap-2 min-w-0">
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
           <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
           <PlaceLabel race={race} className="text-sm text-muted-foreground" />
           <DisciplineTag discipline={race.discipline} raceType={race.raceType} />
         </div>
 
-        <div className="mt-1 flex items-center gap-2 min-w-0">
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
           <FederationMark slug={race.federationSlug} withLabel />
           <CategorySummary
             categories={race.categories}
@@ -105,8 +107,8 @@ export function RaceCard({
           {/* La date que personne ne voit à temps : la clôture des engagements,
               quand elle tombe dans la semaine. Déduite, elle est marquée. */}
           {(() => {
-            if (!race.entriesCloseAt || now === null) return null;
-            const hours = (new Date(race.entriesCloseAt).getTime() - now) / 3_600_000;
+            if (!race.entriesCloseAt || nowMs == null) return null;
+            const hours = (new Date(race.entriesCloseAt).getTime() - nowMs) / 3_600_000;
             if (hours < 0 || hours > 24 * 7) return null;
             const days = Math.floor(hours / 24);
             const label = hours < 24 ? `clôture ${hours < 1 ? "imminente" : `dans ${Math.floor(hours)} h`}` : `clôture dans ${days} j`;
@@ -160,11 +162,11 @@ export function RaceCard({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      </Link>
+      <div className="flex shrink-0 flex-col items-center gap-2">
         {showDistance && <DistanceTag km={race.distanceFromUserKm} />}
         <PlanButton raceId={race.id} compact />
-        <ChevronRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
       </div>
-    </Link>
+    </article>
   );
 }

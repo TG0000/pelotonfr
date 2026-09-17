@@ -53,7 +53,7 @@ async function requestToken(body: Record<string, string>): Promise<TokenResponse
   });
 
   if (!res.ok) {
-    throw new Error(`Strava token request failed (${res.status}): ${await res.text()}`);
+    throw new Error(`STRAVA_TOKEN_${res.status}`);
   }
   return (await res.json()) as TokenResponse;
 }
@@ -423,4 +423,18 @@ export async function listRoutes(accessToken: string, athleteId: number): Promis
     if (batch.length < 100) break;
   }
   return routes;
+}
+
+/** One bounded page, with an upper time boundary stable across the job. */
+export async function listActivitiesPage(token: string, after: Date, before: Date, page: number, perPage = 50): Promise<StravaActivity[]> {
+  const query = new URLSearchParams({ after: String(Math.floor(after.getTime()/1000)), before: String(Math.floor(before.getTime()/1000)), page: String(page), per_page: String(perPage) });
+  const response = await fetch(`${STRAVA_API}/athlete/activities?${query}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error(`STRAVA_ACTIVITIES_${response.status}`);
+  const rows: unknown = await response.json();
+  if (!Array.isArray(rows) || rows.length > perPage) throw new Error("STRAVA_INVALID_PAGE");
+  return rows as StravaActivity[];
+}
+export async function revokeToken(token: string): Promise<boolean> {
+  const response = await fetch("https://www.strava.com/oauth/deauthorize", { method: "POST", headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
+  return response.ok;
 }
