@@ -1,3 +1,4 @@
+import { appleProvider } from "@/lib/apple-auth";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { genericOAuth, magicLink } from "better-auth/plugins";
@@ -88,20 +89,17 @@ const stravaProvider = stravaConfigured()
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || (process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL}` : undefined),
-  trustedOrigins: [process.env.BETTER_AUTH_URL, process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined, process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : undefined].filter((value): value is string => Boolean(value)),
+  trustedOrigins: ["https://appleid.apple.com", process.env.BETTER_AUTH_URL, process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined, process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : undefined].filter((value): value is string => Boolean(value)),
   secret: process.env.BETTER_AUTH_SECRET,
   database: getDatabasePool(),
   rateLimit: { enabled: true, storage: "database", window: 60, max: 60 },
   emailAndPassword: { enabled: false },
-  socialProviders:
-    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-      ? {
-          google: {
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-          },
-        }
-      : {},
+  socialProviders: {
+    apple: appleProvider,
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? {
+      google: { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET },
+    } : {}),
+  },
   emailVerification: {
     expiresIn: 900,
     sendVerificationEmail: async ({ user, url }) => {

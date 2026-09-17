@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, UserRound } from "lucide-react";
 import { authClient, useSession, signOut } from "@/lib/auth-client";
+import { AppleButton } from "./AppleButton";
 import { GoogleButton } from "./GoogleButton";
 import { StravaButton } from "./StravaButton";
 import { buttonVariants } from "@/lib/button-variants";
@@ -64,25 +65,32 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
   }
 
   const google = process.env.NEXT_PUBLIC_GOOGLE_SIGNIN === "true";
+  const apple = process.env.NEXT_PUBLIC_APPLE_SIGNIN === "true";
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      {/* Strava d'abord : c'est là que sont les coureurs, et le compte se
-          crée avec les sorties déjà reliées. */}
-      {process.env.NEXT_PUBLIC_STRAVA_SIGNIN === "true" && <>
-      <StravaButton callbackURL={callbackURL} className="w-full" />
-      <p className="text-[11px] text-muted-foreground">
-        Vos sorties sont reliées à vos courses ; nous ne publions rien sur Strava.
-      </p>
-      <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        ou par e-mail
-        <span className="h-px flex-1 bg-border" />
+      {google ? <GoogleButton callbackURL={callbackURL} /> : null}
+      {apple ? <AppleButton callbackURL={callbackURL} /> : null}
+      {process.env.NEXT_PUBLIC_STRAVA_SIGNIN === "true" ? <section aria-label="Connexion Strava" className="rounded-xl border border-border bg-background p-3">
+        <div className="mb-3 flex items-center justify-between gap-2"><span className="text-sm font-semibold">Avec Strava</span><span className="rounded-full bg-surface-2 px-2 py-1 text-xs text-muted-foreground">Facultatif</span></div>
+        <StravaButton callbackURL={callbackURL} className="w-full" />
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Retrouve ensuite tes sorties dans ta saison. Tu choisis quand les importer et sur quelle période.</p>
+        <details className="mt-3 border-t pt-3 text-sm">
+          <summary className="cursor-pointer font-semibold underline-offset-4 hover:underline">Quelles données sont utilisées ?</summary>
+          <ul className="mt-3 space-y-2 pl-4 list-disc text-muted-foreground leading-relaxed">
+            <li>Accès en lecture à ton profil et à tes activités, y compris privées selon les autorisations accordées.</li>
+            <li>Aucune activité créée, modifiée ou publiée sur Strava.</li>
+            <li>Tu peux déconnecter Strava et supprimer les activités importées depuis ton profil.</li>
+          </ul>
+          <a href="/confidentialite" className="mt-3 inline-block underline">En savoir plus sur tes données</a>
+        </details>
+      </section> : null}
+      <div className="flex items-center gap-3 py-1 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />{google || apple || process.env.NEXT_PUBLIC_STRAVA_SIGNIN === "true" ? "ou avec ton e-mail" : "Avec ton e-mail"}<span className="h-px flex-1 bg-border" />
       </div>
-      </>}
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Votre e-mail
+          Ton e-mail
         </span>
         <input
           type="email"
@@ -91,27 +99,17 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="vous@exemple.fr"
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+          className="min-h-11 rounded-lg border border-border bg-background px-3 py-2 text-sm"
         />
       </label>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <button
         type="submit"
         disabled={state === "sending" || !email}
-        className={cn(buttonVariants({ size: "sm" }), "w-full")}
+        className={cn(buttonVariants({ size: "sm" }), "min-h-11 w-full")}
       >
         {state === "sending" ? "Envoi…" : "Recevoir mon lien de connexion"}
       </button>
-      {google && (
-        <>
-          <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
-            ou
-            <span className="h-px flex-1 bg-border" />
-          </div>
-          <GoogleButton callbackURL={callbackURL} />
-        </>
-      )}
       <p className="text-[11px] text-muted-foreground">
         En créant un compte, tu acceptes les <a href="/cgu" className="underline">CGU</a>. Consulte aussi la <a href="/confidentialite" className="underline">confidentialité</a>.
       </p>
@@ -164,10 +162,10 @@ function SignInDialog({
       <DialogTrigger {...nativeProps} className={classes}>
         {label}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Pour construire votre saison et retrouver vos courses.</DialogDescription>
+          <DialogDescription>Retrouve ta saison et les courses de ton club.</DialogDescription>
         </DialogHeader>
         <SignInForm callbackURL={callbackURL} />
       </DialogContent>

@@ -5,17 +5,7 @@ import { Loader2 } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
-/**
- * Le bouton Strava, à la couleur de Strava.
- *
- * L'orange est le leur, pas le nôtre — comme le « G » de Google, un bouton
- * qui ne ressemble pas à la marque est un bouton qu'on hésite à cliquer.
- * Strava demande d'ailleurs que « Connect with Strava » garde cette forme.
- *
- * Un seul bouton pour deux situations : personne n'est connecté, alors Strava
- * crée le compte ; quelqu'un l'est déjà, alors Strava se rattache au sien.
- * Dans les deux cas on revient sur `callbackURL` avec les sorties à relier.
- */
+/** Strava remains recognizable; the darker orange keeps small white text readable. */
 export function StravaButton({
   callbackURL = "/profil?strava=ok",
   label,
@@ -50,10 +40,11 @@ export function StravaButton({
       type="button"
       onClick={go}
       disabled={busy}
+      aria-busy={busy}
       className={cn(
         "inline-flex items-center justify-center gap-2.5 rounded-full font-semibold text-white transition-colors",
-        "bg-[#fc4c02] hover:bg-[#e34402] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#fc4c02]/50 disabled:opacity-70",
-        size === "lg" ? "h-12 px-6 text-base" : "h-10 px-4 text-sm",
+        "bg-[#c63e02] hover:bg-[#a63200] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#fc4c02]/50 disabled:opacity-70",
+        size === "lg" ? "min-h-12 px-6 py-2 text-base" : "min-h-11 px-3 py-2 text-sm",
         className
       )}
     >
