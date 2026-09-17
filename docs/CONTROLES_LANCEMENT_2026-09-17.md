@@ -37,6 +37,14 @@ Contrôles du 17 septembre 2026, à la demande de Théo. Publication autorisée 
 - La note Lighthouse est une observation de laboratoire sur une page et un appareil simulé. Les pages de carte restent dépendantes du fournisseur et du réseau.
 - Aucune valeur secrète, aucun compte réel et aucune sauvegarde ne sont inclus dans le dépôt.
 
+## Vérification finale locale
+
+Après corrections : aucun débordement à 320, 390 et 1440 px ; `/api/plan` et `/api/auth/get-session` renvoient `private, no-store`, la date impossible `dateFrom=2026-02-31` est refusée en 400. Axe 4.12.1 : zéro violation en clair et sombre, un contrôle de contraste manuel sur l’illustration. Les contrôles GitHub `quality` et `Vercel` sont verts sur `8ee82a1`.
+
+Le candidat CLI initial a été refusé par Vercel car l’adresse d’auteur Git locale n’est pas associée au compte autorisé. Aucun domaine n’a basculé. L’enregistrement du présent rapport via le compte GitHub authentifié permet d’utiliser son identité réelle pour la suite, sans changer les permissions du projet.
+
+Limite observée : une réponse IGN WFS de plus de 2 Mo dépasse le cache de données Next.js ; cette réponse externe peut être relue. Les caches applicatifs annoncés ci-dessus ne garantissent donc pas la mise en cache de chaque réponse fournisseur.
+
 ## Préparation de la production
 
 - Sauvegarde PostgreSQL custom locale protégée avant changement : 58 453 410 octets, catalogue lisible, 305 entrées. Vérification du catalogue, pas une restauration complète de répétition.
