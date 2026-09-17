@@ -160,9 +160,12 @@ test("Legacy token encryption is atomic, dry by default and idempotent; concurre
   await pool.query(`INSERT INTO "user"(id,name,email,"emailVerified") VALUES($1,'Token fixture',$2,true)`,[authId,`${authId}@example.test`]);user=await resolveUser(authId);
   await pool.query(`INSERT INTO account(id,"accountId","providerId","userId","accessToken","refreshToken") VALUES($1,$2,'strava',$3,$4,$5)`,[accountId,"fixture-"+authId,authId,"a".repeat(40),"b".repeat(40)]);
   await pool.query("INSERT INTO strava_connections(user_id,athlete_id,access_token,refresh_token,expires_at,scope) VALUES($1,$2,$3,$4,now()-interval '1 hour','read')",[user,Date.now(),"a".repeat(40),"b".repeat(40)]);
-  assert.deepEqual(await migrateStravaTokens(),{business:1,auth:1});
+  await pool.query(`INSERT INTO account(id,"accountId","providerId","userId","accessToken") VALUES($1,$1,'google',$2,'ya29.fixture-google')`,[randomUUID(),authId]);
+  assert.deepEqual(await migrateStravaTokens(),{business:1,auth:2});
   assert.equal((await pool.query("SELECT access_token FROM strava_connections WHERE user_id=$1",[user])).rows[0].access_token,"a".repeat(40));
-  assert.deepEqual(await migrateStravaTokens(true),{business:1,auth:1});assert.deepEqual(await migrateStravaTokens(true),{business:0,auth:0});
+  assert.deepEqual(await migrateStravaTokens(true),{business:1,auth:2});assert.deepEqual(await migrateStravaTokens(true),{business:0,auth:0});
+  const google=(await pool.query(`SELECT "accessToken" FROM account WHERE "userId"=$1 AND "providerId"='google'`,[authId])).rows[0];
+  assert.equal(await symmetricDecrypt({key:process.env.BETTER_AUTH_SECRET!,data:google.accessToken}),"ya29.fixture-google");
   const tokens=await Promise.all([getAccessToken(user),getAccessToken(user),getAccessToken(user)]);
   assert.deepEqual(tokens,["c".repeat(40),"c".repeat(40),"c".repeat(40)]);assert.equal(refreshes,1);
   const business=(await pool.query("SELECT refresh_token FROM strava_connections WHERE user_id=$1",[user])).rows[0];assert.equal(openToken(business.refresh_token),"d".repeat(40));

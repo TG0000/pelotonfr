@@ -9,6 +9,7 @@ const display = Barlow_Condensed({ variable: "--font-display", subsets: ["latin"
 
 const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
+  preload: false,
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   display: "swap",
@@ -22,12 +23,14 @@ export const metadata: Metadata = {
   },
   description:
     "Trouve les courses cyclistes FFC, FSGT et UFOLEP près de chez toi. Consulte les parcours, prépare ta saison et retrouve ton club.",
+  twitter: { card: "summary_large_image" },
   keywords: ["cyclisme", "course", "FFC", "FSGT", "UFOLEP", "calendrier", "France"],
   openGraph: {
-    title: "PelotonFR",
+    title: "PelotonFR — Ta prochaine course commence ici",
     description: "Le calendrier du cyclisme amateur : courses, parcours et saison.",
     type: "website",
     locale: "fr_FR",
+    siteName: "PelotonFR",
   },
 };
 

@@ -79,9 +79,8 @@ Décision utilisateur : directions 01 éditorial sport + 03 esprit club pour le 
 | NEW-06 | P1 | Le nouveau place-check peut écrire même en mode à blanc | Dry-run sans création de lieu ni journal ; inspection des seuls lieux existants, inconnus laissés à examiner ; commande testée en base isolée. |
 | NEW-07 | P2 | La correction de catégories ne répare pas automatiquement les valeurs déjà remplies | Relecture périodique des catégories déjà remplies et mise à jour si différentes ; --categories --force pour reprise ciblée. Collecte réelle volontairement non exécutée en production. |
 
-## Avant fusion
+## Publication autorisée le 17 septembre 2026
 
-1. Confirmer les scénarios navigateur sur la dernière preview, puis tester les connexions externes avec les comptes autorisés.
-2. Traiter ou arbitrer explicitement les validations restantes du tableau ; ne pas activer Strava collectif avant revue contractuelle.
-3. Préparer sauvegarde, clés, migration de jetons et revue des adhésions historiques ; aucune commande de production exécutée ici.
-4. Obtenir le retour utilisateur sur la V0.2 et son autorisation explicite de publication. La PR reste en brouillon.
+Théo a validé l’identité et demandé la mise en production après ses 23 contrôles. Consulter [la recette de lancement](CONTROLES_LANCEMENT_2026-09-17.md) pour les corrections complémentaires, la sauvegarde, la migration et les limites de validation. Les configurations opérateur, clés et migrations sont désormais préparées en production ; la conversion des jetons accompagne la bascule.
+
+Restent les essais OAuth/e-mail avec le compte du titulaire, le premier cycle nocturne complet et les validations juridiques/contractuelles externes. Strava collectif et Street View sans budget restent fermés. Ces réserves ne sont pas effacées par la publication.

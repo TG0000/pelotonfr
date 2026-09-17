@@ -108,7 +108,7 @@ export function RaceRoad({
                 title={v.reading?.note ?? undefined}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={v.hasCrop ? `/api/road-view/${v.pictureId}.jpg` : v.url} alt={v.reading?.note ?? "Photo de la route"} loading="lazy" className="h-28 w-44 rounded-lg border border-border object-cover" />
+                <img src={v.hasCrop ? `/api/road-view/${v.pictureId}.jpg` : v.url} alt={v.reading?.note ?? "Photo de la route"} loading="lazy" decoding="async" width={176} height={112} className="h-28 w-44 rounded-lg border border-border object-cover" />
                 <div className="mt-1 text-xs">
                   <span className="font-mono tabular-nums text-muted-foreground">km {((v.alongM ?? 0) / 1000).toFixed(1).replace(".", ",")}</span>{" "}
                   {v.reading?.surface}

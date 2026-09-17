@@ -21,7 +21,7 @@ Strava/Google OAuth ne sont pas configurés sur cette branche. Les usages collec
 ## Contrôles techniques
 
 - TypeScript, ESLint, tests et build sous Node 22.
-- 17 tests unitaires : identité, chiffrement, transport e-mail simulé, dates de Paris, horaires, validation des requêtes/filtres, workflow YAML, panne/reprise Google et couverture inconnue.
+- 18 tests unitaires : identité, chiffrement, transport e-mail simulé, dates de Paris, horaires, validation des requêtes/filtres, workflow YAML, panne/reprise Google et couverture inconnue.
 - 12 tests d’intégration sur la base isolée : séparation des comptes, adhésions concurrentes, limites atomiques, contact privé et limite visiteur, rollback, synchronisation/reprise/purge Strava, oppositions durables, migration/rotation des jetons, modération des circuits, dry-run sans écriture, saison sans profil fédéral et compteurs de liste.
 - Aucun e-mail envoyé pour la recette ; aucune requête Strava réelle ni panorama Google payant.
 - Navigateur à 390 px : accueil, calendrier, fiche, contact, saison ; aucun débordement constaté sur ces vues. Axe ne relève aucune violation sur les vues testées après corrections. Les textes de l’illustration demandent une vérification visuelle, axe ne sait pas déterminer leur fond ; ce contrôle ne constitue pas une certification d’accessibilité.
@@ -43,6 +43,6 @@ Après modification : décompte global 35,8 ms, carte plafonnée à 2 000 résul
 
 Vercel confirme les fonctions de la préversion en `lhr1`, dans la région de la base (Londres). Aucun gain spécifique au changement de région n’est revendiqué.
 
-## Avant les premiers vrais utilisateurs
+## Lancement du 17 septembre 2026
 
-Consulter le [registre détaillé des 61 constats](AUDIT_V02_STATUS.md). Restent notamment la recette OAuth/e-mail réelle, le cycle nocturne complet, la configuration des opérateurs, la préparation des migrations de production et la validation externe des traitements/conditions Strava. Les données historiques sans provenance restent hors publication. La fusion et la mise en production attendent la validation de Théo.
+Théo a autorisé la publication après les [23 contrôles de lancement](CONTROLES_LANCEMENT_2026-09-17.md). Cette recette de preview reste distincte de la production : base et comptes synthétiques, OAuth volontairement absent. Les préparatifs de production et les réserves restantes sont documentés dans le nouveau rapport et le [registre des 61 constats](AUDIT_V02_STATUS.md).

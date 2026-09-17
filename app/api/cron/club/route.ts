@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
 
   try {
     await processRevocations(1);
+    await sql("DELETE FROM page_views WHERE seen_at < now()-interval '90 days'");
     await sql("DELETE FROM request_limits WHERE expires_at < now()-interval '7 days'");
     await sql("DELETE FROM support_requests WHERE status='traite' AND updated_at < now()-interval '90 days'");
     const result = await sendClubReminders(sql, { withinHours: 48 });

@@ -31,5 +31,5 @@ future paid premium analysis. Do not infer billing rules from a colour theme.
 
 Work on codex/v0.2-audit-brand in the separate worktree. Do not alter the user's
 original checkout or its uncommitted AGENTS.md. Keep docs/AUDIT_V02_STATUS.md
-honest about remaining work. This is a draft PR, with no production promotion.
+honest about remaining work. On 17 September 2026 the user authorized production publication after the 23 launch checks. Complete those checks and prepare production migrations, secrets and recovery before publishing.
 Never use production data for preview accounts or copy production OAuth tokens.

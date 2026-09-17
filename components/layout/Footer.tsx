@@ -1,3 +1,4 @@
+import { CookiePreferencesButton } from "./CookieConsent";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Logo } from "@/components/brand/Logo";
@@ -25,6 +26,8 @@ export function Footer() {
               Blog
             </Link>
             <Link href="/contact" className="hover:text-foreground transition-colors">Contact</Link>
+            <Link href="/cgu" className="hover:text-foreground">CGU</Link>
+            <CookiePreferencesButton />
             <Link href="/mentions-legales" className="hover:text-foreground transition-colors">
               Mentions légales
             </Link>

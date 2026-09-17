@@ -1,0 +1,19 @@
+# PelotonFR
+
+> Calendrier indépendant du cyclisme amateur en France : FFC, FSGT et UFOLEP. Les informations officielles des organisateurs restent la référence.
+
+PelotonFR aide à rechercher des épreuves, consulter leurs sources et préparer une saison. Une course enregistrée dans une saison ne constitue pas une inscription. Les horaires estimés et les tracés doivent être vérifiés auprès de l’organisateur. Les données de démonstration sont explicitement marquées « Démo ».
+
+## Pages publiques
+- [Accueil](https://pelotonfr.vercel.app/)
+- [Calendrier](https://pelotonfr.vercel.app/calendrier)
+- [Départements](https://pelotonfr.vercel.app/departement)
+- [Blog](https://pelotonfr.vercel.app/blog)
+- [Plan du site](https://pelotonfr.vercel.app/sitemap.xml)
+
+## Informations et droits
+- [Conditions d’utilisation](https://pelotonfr.vercel.app/cgu)
+- [Confidentialité](https://pelotonfr.vercel.app/confidentialite)
+- [Contact](https://pelotonfr.vercel.app/contact)
+
+Les espaces personnels et les données Strava privées ne sont pas des sources publiques. Ce fichier fournit des repères de lecture ; il n’accorde aucune licence supplémentaire sur les données, images ou marques des fournisseurs et ne remplace pas robots.txt.

@@ -113,7 +113,7 @@ export function SignInForm({ callbackURL = "/ma-saison" }: { callbackURL?: strin
         </>
       )}
       <p className="text-[11px] text-muted-foreground">
-        Pas de mot de passe : un lien par e-mail, et un compte se crée au premier.
+        En créant un compte, tu acceptes les <a href="/cgu" className="underline">CGU</a>. Consulte aussi la <a href="/confidentialite" className="underline">confidentialité</a>.
       </p>
     </form>
   );

@@ -14,9 +14,7 @@ const SITE = CANONICAL_SITE_URL;
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const fixed: MetadataRoute.Sitemap = [
     { url: SITE, changeFrequency: "daily", priority: 1 },
-    { url: `${SITE}/courses`, changeFrequency: "daily", priority: 0.9 },
     { url: `${SITE}/calendrier`, changeFrequency: "daily", priority: 0.8 },
-    { url: `${SITE}/carte`, changeFrequency: "daily", priority: 0.7 },
     { url: `${SITE}/departement`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${SITE}/blog`, changeFrequency: "weekly", priority: 0.6 },
     ...ARTICLES.map((a) => ({
@@ -25,6 +23,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly" as const,
       priority: 0.6,
     })),
+    { url: `${SITE}/cgu`, changeFrequency: "yearly", priority: 0.1 },
+    { url: `${SITE}/contact`, changeFrequency: "yearly", priority: 0.1 },
     { url: `${SITE}/mentions-legales`, changeFrequency: "yearly", priority: 0.1 },
     { url: `${SITE}/confidentialite`, changeFrequency: "yearly", priority: 0.1 },
   ];
@@ -41,7 +41,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     races = (await sql(
       `SELECT id::text, updated_at::text
          FROM races
-        WHERE COALESCE(race_date_end, race_date) >= (now() AT TIME ZONE 'Europe/Paris')::date AND is_cancelled = false
+        WHERE COALESCE(race_date_end, race_date) >= (now() AT TIME ZONE 'Europe/Paris')::date AND is_cancelled = false AND is_active = true
         ORDER BY race_date
         LIMIT 5000`,
       []

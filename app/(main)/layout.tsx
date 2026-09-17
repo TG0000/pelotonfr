@@ -1,3 +1,4 @@
+import { CookieConsent } from "@/components/layout/CookieConsent";
 import { PlanProvider } from "@/hooks/usePlan";
 import { Beacon } from "@/components/layout/Beacon";
 import { Navbar } from "@/components/layout/Navbar";
@@ -23,6 +24,7 @@ export default function MainLayout({
         <Beacon />
       </main>
       <Footer />
+      <CookieConsent />
     </PlanProvider>
   );
 }

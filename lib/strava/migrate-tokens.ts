@@ -21,11 +21,11 @@ export async function migrateStravaTokens(apply=false):Promise<{business:number;
     if(apply)await client.query("UPDATE strava_connections SET access_token=$2,refresh_token=$3 WHERE user_id=$1",[row.user_id,access,refresh]);
    }
   }
-  const accounts=await client.query('SELECT id,"accessToken","refreshToken" FROM account WHERE "providerId"=\'strava\' FOR UPDATE');
+  const accounts=await client.query('SELECT id,"providerId","accessToken","refreshToken" FROM account WHERE "providerId" IN (\'strava\',\'google\') FOR UPDATE');
   for(const row of accounts.rows){
    const convert=async(value:string|null)=>{
     if(!value)return value;
-    if(/^[a-f0-9]{40}$/i.test(value))return symmetricEncrypt({key:secret,data:value});
+    if((row.providerId === "strava" && /^[a-f0-9]{40}$/i.test(value)) || (row.providerId === "google" && /^(ya29\.|1\/)/.test(value))) return symmetricEncrypt({key:secret,data:value});
     await symmetricDecrypt({key:secret,data:value});return value;
    };
    const access=await convert(row.accessToken),refresh=await convert(row.refreshToken);

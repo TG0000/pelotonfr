@@ -1,3 +1,4 @@
+import { analyticsAllowed, CONSENT_COOKIE } from "@/lib/consent";
 import { jsonObject, mutationOriginAllowed, visitorKey } from "@/lib/request-security";
 import { consumeLimit } from "@/lib/rate-limit";
 import { NextRequest, NextResponse } from "next/server";
@@ -12,12 +13,13 @@ import { isOperator } from "@/lib/admin";
  * site est lu en ce moment.
  */
 export async function POST(request: NextRequest) {
+  if (!analyticsAllowed(request.cookies.get(CONSENT_COOKIE)?.value)) return new NextResponse(null, { status: 204 });
   if (!mutationOriginAllowed(request)) return NextResponse.json({ok:false},{status:403});
   if (!(await consumeLimit(`beacon:${visitorKey(request)}`,60,60))) return NextResponse.json({ok:false},{status:429});
   const body=await jsonObject(request,1024);
   if(!body || typeof body.path!=="string" || !body.path.startsWith("/")) return NextResponse.json({ok:false},{status:400});
   const path=body.path.split(/[?#]/)[0].slice(0,200);
-  if (path.startsWith("/admin") || path.startsWith("/api")) {
+  if (["/admin", "/api", "/profil", "/club", "/ma-saison", "/alertes", "/contact", "/coureur"].some(prefix => path.startsWith(prefix))) {
     return NextResponse.json({ ok: true });
   }
 
@@ -25,18 +27,9 @@ export async function POST(request: NextRequest) {
   const num = (v: string | null) => (v && Number.isFinite(Number(v)) ? Number(v) : null);
   const city = h.get("x-vercel-ip-city");
 
-  /* L'opérateur regarde son site cent fois par jour : ses vues sont marquées
-     et sortent des chiffres. Reconnu par sa session, et par un cookie posé la
-     première fois, pour que ses passages déconnectés sur le même navigateur
-     comptent pareil. */
-  let operator = request.cookies.get("pelotonfr.op")?.value === "1";
-  if (!operator) {
-    try {
-      operator = await isOperator();
-    } catch {
-      operator = false;
-    }
-  }
+  // Exclure les vues de l'opérateur reconnu par sa session, sans identifiant de suivi.
+  let operator = false;
+  try { operator = await isOperator(); } catch { /* session indisponible */ }
 
   try {
     await recordPageView({
@@ -52,6 +45,6 @@ export async function POST(request: NextRequest) {
     // Une vue perdue ne vaut pas une erreur pour le lecteur.
   }
   const res = NextResponse.json({ ok: true });
-  if (operator) res.cookies.set("pelotonfr.op", "1", { maxAge: 60 * 60 * 24 * 365, path: "/", sameSite: "lax" });
+
   return res;
 }

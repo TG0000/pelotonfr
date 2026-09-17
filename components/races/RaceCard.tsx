@@ -51,7 +51,7 @@ export function RaceCard({
   return (
     <article
       className={cn(
-        "group relative flex items-center gap-2 px-3 py-3 sm:px-4",
+        "group relative flex min-w-0 items-center gap-2 px-3 py-3 sm:px-4",
         "rounded-xl border border-transparent bg-surface-1",
         "transition-colors hover:border-border hover:bg-surface-2",
         race.isCancelled && "border-dashed border-border"
