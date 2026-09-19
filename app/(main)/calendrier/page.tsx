@@ -30,14 +30,25 @@ import {
   toGridRace,
 } from "@/components/races/MonthGrid";
 import { todayISO } from "@/lib/date";
+import { displayRaceName } from "@/lib/race-name";
+import { CANONICAL_SITE_URL } from "@/lib/site-url";
 import { toRaceMarker, type Race, type PaginatedRaces } from "@/types";
 import type { FederationSlug, Discipline } from "@/lib/constants";
 
-export const metadata: Metadata = {
-  title: "Calendrier des courses",
-  description:
-    "Filtrez les courses par période, fédération et catégorie, puis lisez-les en calendrier, en liste ou sur la carte.",
-};
+/* Le millésime se lit dans le titre — « calendrier cycliste 2027 » est une
+   recherche à part entière — mais écrit en dur il se périme le 1er janvier,
+   et un titre qui annonce l'an dernier fait fuir avant le clic. */
+export function generateMetadata(): Metadata {
+  return {
+    title: `Calendrier des courses cyclistes ${new Date().getFullYear()}`,
+    description:
+      "Toutes les courses cyclistes en France, FFC, FSGT et UFOLEP : filtrez par période, département et catégorie, puis lisez-les en calendrier, en liste ou sur la carte.",
+    /* Chaque filtre fabrique une adresse. Sans cette ligne, « courses FFC en
+       mai dans le 53 » et « courses FSGT » sont pour Google deux pages de plus
+       à explorer, qui disent la même chose que celle-ci. */
+    alternates: { canonical: "/calendrier" },
+  };
+}
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -255,6 +266,11 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
         : "toutes les courses à venir";
   const heading = rawHeading.charAt(0).toUpperCase() + rawHeading.slice(1);
 
+  /* La page la plus haute du site dit ce qu'elle contient. Sans cette liste,
+     c'est une grille de mois dont les cases sont des liens : un moteur y voit
+     de la navigation, pas des épreuves datées. */
+  const listees = (view === "liste" ? listResult.races : calendarRaces).slice(0, 50);
+
   return (
     <div
       className={
@@ -263,6 +279,26 @@ export default async function CalendrierPage({ searchParams }: PageProps) {
           : "mx-auto w-full max-w-7xl px-4 py-8"
       }
     >
+      {listees.length > 0 && (
+        <script
+          type="application/ld+json"
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "ItemList",
+              name: "Courses cyclistes à venir en France",
+              numberOfItems: listees.length,
+              itemListElement: listees.map((r, i) => ({
+                "@type": "ListItem",
+                position: i + 1,
+                url: `${CANONICAL_SITE_URL}/course/${r.id}`,
+                name: displayRaceName(r.name),
+              })),
+            }),
+          }}
+        />
+      )}
       <header
         className={
           view === "carte"

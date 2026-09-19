@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { listDepartments } from "@/lib/db/queries/departments";
+import { Breadcrumb } from "@/components/seo/Breadcrumb";
 
 export const metadata: Metadata = {
   title: "Courses cyclistes par département",
   description:
     "Le calendrier des courses cyclistes FFC, FSGT et UFOLEP, département par département : dates, lieux, catégories et circuits.",
+  alternates: { canonical: "/departement" },
 };
 
 export const revalidate = 3600;
@@ -28,6 +30,7 @@ export default async function DepartementsPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10">
+      <Breadcrumb trail={[{ href: "/", label: "Accueil" }]} current="Départements" />
       <header className="mb-8">
         <div className="mb-1 flex items-center gap-2">
           <MapPin className="size-5 text-primary" />

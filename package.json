@@ -10,6 +10,7 @@
     "scrape": "tsx scripts/scrapers/run-all.ts",
     "scrape:history": "tsx scripts/scrapers/ffc-history.ts",
     "scrape:results": "tsx scripts/scrapers/ffc-results.ts",
+    "seo:indexnow": "tsx scripts/seo/indexnow.ts",
     "geocode": "tsx scripts/scrapers/geocode-only.ts",
     "db:reidentify": "tsx scripts/db/reidentify-events.ts",
     "db:archive-report": "tsx scripts/db/archive-report.ts",

@@ -1,6 +1,9 @@
 import { requestTime } from "@/lib/request-time";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Breadcrumb } from "@/components/seo/Breadcrumb";
+import { CANONICAL_SITE_URL } from "@/lib/site-url";
+import { displayRaceName } from "@/lib/race-name";
 import { notFound } from "next/navigation";
 import { ArrowRight, MapPin } from "lucide-react";
 import { RaceCard } from "@/components/races/RaceCard";
@@ -10,6 +13,7 @@ import {
   getDepartment,
   getDepartmentRaces,
   getDepartmentTowns,
+  getNeighbourDepartments,
   listDepartments,
 } from "@/lib/db/queries/departments";
 import { todayISO } from "@/lib/date";
@@ -70,9 +74,10 @@ export default async function DepartementPage({ params }: PageProps) {
   const d = await getDepartment(code);
   if (!d) notFound();
 
-  const [races, towns] = await Promise.all([
+  const [races, towns, voisins] = await Promise.all([
     getDepartmentRaces(code),
     getDepartmentTowns(code),
+    getNeighbourDepartments(code).catch(() => []),
   ]);
   const today = todayISO();
   const year = Number(today.slice(0, 4));
@@ -80,11 +85,36 @@ export default async function DepartementPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-10">
-      <nav className="mb-4 text-xs text-muted-foreground">
-        <Link href="/departement" className="hover:text-foreground">Départements</Link>
-        <span className="mx-1.5">/</span>
-        <span className="font-mono tabular-nums">{d.code}</span>
-      </nav>
+      <Breadcrumb
+        trail={[
+          { href: "/", label: "Accueil" },
+          { href: "/departement", label: "Départements" },
+        ]}
+        current={`${d.name} (${d.code})`}
+      />
+
+      {/* La liste des courses, dite aux moteurs : une page de département qui
+          énumère ses épreuves datées vaut mieux qu'un texte où elles se
+          devinent. C'est la page qui peut se classer sur « courses cyclistes
+          en Mayenne », il faut qu'elle dise de quoi elle est faite. */}
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            name: `Courses cyclistes ${inDepartment(d.name)}`,
+            numberOfItems: races.length,
+            itemListElement: races.slice(0, 50).map((r, i) => ({
+              "@type": "ListItem",
+              position: i + 1,
+              url: `${CANONICAL_SITE_URL}/course/${r.id}`,
+              name: displayRaceName(r.name),
+            })),
+          }),
+        }}
+      />
 
       <header className="mb-8">
         <div className="mb-1 flex items-center gap-2">
@@ -122,7 +152,11 @@ export default async function DepartementPage({ params }: PageProps) {
       {races.length === 0 ? (
         <EmptyState
           title={`Aucune course à venir ${inDepartment(d.name)}`}
-          action="Les calendriers fédéraux sont relus chaque nuit ; élargissez aux départements voisins en attendant."
+          action={
+            voisins.some((v) => v.upcoming > 0)
+              ? "Les calendriers fédéraux sont relus chaque nuit ; voici ce qui se court juste à côté."
+              : "Les calendriers fédéraux sont relus chaque nuit ; ouvrez la carte pour élargir."
+          }
         >
           <Link href="/calendrier?vue=carte" className="text-sm font-medium text-primary underline underline-offset-4">
             Ouvrir la carte
@@ -134,6 +168,30 @@ export default async function DepartementPage({ params }: PageProps) {
             <RaceCard key={race.id} race={race} nowMs={requestTime()} today={today} />
           ))}
         </div>
+      )}
+
+      {voisins.length > 0 && (
+        <section className="mt-10 border-t pt-6">
+          <h2 className="font-heading text-lg font-semibold">À côté</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Un dimanche sans course chez soi se court dans le département d&apos;à côté.
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {voisins.map((v) => (
+              <li key={v.code}>
+                <Link
+                  href={`/departement/${v.code}`}
+                  className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-accent"
+                >
+                  {v.name}
+                  <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                    {v.upcoming > 0 ? `${v.upcoming} à venir` : "—"}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <div className="mt-8 flex flex-wrap gap-3">

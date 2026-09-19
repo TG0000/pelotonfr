@@ -2,6 +2,7 @@ import { sql } from "../index";
 import { todayISO } from "@/lib/date";
 import { buildRaceFromRow } from "./races";
 import { publicStravaEnabled } from "@/lib/strava/policy";
+import { metresBetween } from "@/lib/polyline";
 import type { Race } from "@/types";
 
 /**
@@ -101,4 +102,79 @@ export async function getDepartmentTowns(code: string, limit = 8): Promise<strin
     [code, limit]
   );
   return rows.map((r) => String(r.city));
+}
+
+export interface NeighbourDepartment {
+  code: string;
+  name: string;
+  upcoming: number;
+}
+
+interface DepartmentCentre extends NeighbourDepartment {
+  lat: number;
+  lng: number;
+}
+
+let centresCache: { at: number; rows: DepartmentCentre[] } | null = null;
+const CENTRES_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * Le centre de gravité des courses de chaque département, calculé une fois.
+ *
+ * Une agrégation sur toute la table par page de département, c'est une
+ * centaine de fois le même calcul : à la construction du site, les quatre-
+ * vingt-quinze pages sont rendues à la file et la base a refusé les
+ * connexions avant la fin. Une seule lecture, gardée dix minutes, sert tout
+ * le monde — et la page se revalide de toute façon toutes les heures.
+ */
+async function departmentCentres(): Promise<DepartmentCentre[]> {
+  if (centresCache && Date.now() - centresCache.at < CENTRES_TTL_MS) return centresCache.rows;
+  const rows = (await sql(
+    `SELECT department_code AS code,
+            min(department_name) AS name,
+            ST_Y(ST_Centroid(ST_Collect(location::geometry))) AS lat,
+            ST_X(ST_Centroid(ST_Collect(location::geometry))) AS lng,
+            count(*) FILTER (WHERE COALESCE(race_date_end, race_date) >= $1::date)::int AS upcoming
+       FROM races
+      WHERE is_active = true AND department_code IS NOT NULL AND location IS NOT NULL
+      GROUP BY department_code`,
+    [todayISO()]
+  )) as Array<Record<string, unknown>>;
+  const centres = rows.map((r) => ({
+    code: String(r.code),
+    name: r.name != null ? String(r.name) : `Département ${String(r.code)}`,
+    lat: Number(r.lat),
+    lng: Number(r.lng),
+    upcoming: Number(r.upcoming ?? 0),
+  }));
+  centresCache = { at: Date.now(), rows: centres };
+  return centres;
+}
+
+/**
+ * Les départements d'à côté, calculés sur les courses elles-mêmes.
+ *
+ * Un coureur qui ne trouve rien chez lui le week-end prochain roule à
+ * quarante minutes de là : lui dire « élargissez aux départements voisins »
+ * sans lui donner les liens, c'est le renvoyer à sa barre de recherche. Et
+ * pour Google, cent pages de département qui ne se citent jamais sont cent
+ * culs-de-sac ; reliées entre elles, elles forment le maillage qui les fait
+ * remonter sur « course cycliste » suivi d'un nom de département.
+ *
+ * Le voisinage vient du centre de gravité des courses connues, pas d'une
+ * table de frontières à tenir à jour : ce qui compte ici n'est pas de partager
+ * une limite administrative, c'est d'être à portée de voiture.
+ */
+export async function getNeighbourDepartments(code: string, limit = 6): Promise<NeighbourDepartment[]> {
+  const centres = await departmentCentres();
+  const ici = centres.find((c) => c.code === code);
+  if (!ici) return [];
+  return centres
+    .filter((c) => c.code !== code)
+    .map((c) => ({ ...c, d: metresBetween([ici.lat, ici.lng], [c.lat, c.lng]) }))
+    /* Un département sans course à venir reste un lien valable, mais il passe
+       derrière : on propose d'abord là où il y a quelque chose à courir. */
+    .sort((a, b) => Number(a.upcoming === 0) - Number(b.upcoming === 0) || a.d - b.d)
+    .slice(0, limit)
+    .map(({ code: c, name, upcoming }) => ({ code: c, name, upcoming }));
 }

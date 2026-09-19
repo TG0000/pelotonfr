@@ -45,7 +45,7 @@ export function SavedSearchLink({ className }: { className?: string }) {
 
   return (
     <Link
-      href={`/courses?${saved}`}
+      href={`/calendrier?${saved}`}
       className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5", className)}
     >
       Mes courses

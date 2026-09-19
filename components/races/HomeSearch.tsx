@@ -10,7 +10,7 @@ export function HomeSearch() {
   function handleSelect(result: GeocodingResult | null) {
     if (!result) return;
     router.push(
-      `/courses?lat=${result.lat}&lng=${result.lng}&radius=50`
+      `/calendrier?vue=liste&lat=${result.lat}&lng=${result.lng}&radius=50`
     );
   }
 
