@@ -319,20 +319,31 @@ async function readFieldLevel(raceId: string): Promise<FieldLevel | null> {
        SELECT r.previous_race_id FROM races r JOIN chain ON r.id = chain.id WHERE r.previous_race_id IS NOT NULL
      ),
      past AS (
-       SELECT r.id
+       SELECT r.id, r.race_date,
+              EXTRACT(YEAR FROM (r.race_date + INTERVAL '2 months'))::int AS season
          FROM races r JOIN me ON (r.event_id = me.event_id AND r.event_id IS NOT NULL) OR r.id IN (SELECT id FROM chain)
         WHERE r.race_date <= me.race_date
      ),
+     /* Les classés, c'est-à-dire les coureurs qui ont un rang : les abandons
+        figurent aussi dans la grille, et la fédération publie souvent deux
+        grilles pour la même épreuve. Compter les lignes annonçait « 1 159
+        classés » pour un peloton de 175. */
      per_edition AS (
-       SELECT rr.race_id, count(*)::int AS classified
+       SELECT rr.race_id,
+              count(DISTINCT rr.rider_id) FILTER (WHERE rr.rank IS NOT NULL)::int AS classified
          FROM race_results rr WHERE rr.race_id IN (SELECT id FROM past)
         GROUP BY rr.race_id
      ),
+     /* Le niveau du peloton se lit au classement de la saison où il a couru,
+        pas à celui d'aujourd'hui : appliquer le classement 2026 à une édition
+        de 2023 décalait la médiane de deux cents places. */
      ranked AS (
-       SELECT ri.current_rank
+       SELECT COALESCE(rk.rank, ri.current_rank) AS current_rank
          FROM race_results rr
+         JOIN past p ON p.id = rr.race_id
          JOIN riders ri ON ri.id = rr.rider_id
-        WHERE rr.race_id IN (SELECT id FROM past) AND ri.current_rank IS NOT NULL
+         LEFT JOIN rider_rankings rk ON rk.rider_id = ri.id AND rk.season = p.season
+        WHERE COALESCE(rk.rank, ri.current_rank) IS NOT NULL
      ),
      rides AS (
        SELECT (a.distance_m / NULLIF(a.moving_time_s, 0)) * 3.6 AS kmh

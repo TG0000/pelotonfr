@@ -36,15 +36,25 @@ export async function getRiderSeason(userId: string): Promise<RiderSeason | null
   if (!u) return null;
   const { from, to, season } = seasonBounds();
   const rows = await sql(
-    `SELECT rr.rank, ra.race_date, ra.name, ra.categories,
-            (SELECT count(*) FROM race_results x
-              WHERE x.race_id = rr.race_id AND x.grid_uid IS NOT DISTINCT FROM rr.grid_uid) AS classified
-       FROM race_results rr
-       JOIN races ra ON ra.id = rr.race_id
-      WHERE rr.rider_id = $1::uuid
-        AND ra.race_date >= $2::date AND ra.race_date <= $3::date
-        AND ra.discipline = 'route'
-      ORDER BY ra.race_date DESC`,
+    /* Une course, une place. La fédération publie souvent deux grilles pour
+       la même épreuve — celle de la catégorie et le scratch — et compter les
+       lignes faisait d'un seul dimanche deux victoires et douze points : 251
+       coureurs sur-comptés, dont 26 à qui le compteur annonçait une montée
+       qu'ils n'avaient pas décrochée. On garde la meilleure place de la
+       journée, celle de sa propre grille. */
+    `SELECT * FROM (
+       SELECT DISTINCT ON (rr.race_id)
+              rr.rank, ra.race_date, ra.name, ra.categories,
+              (SELECT count(*) FROM race_results x
+                WHERE x.race_id = rr.race_id AND x.grid_uid IS NOT DISTINCT FROM rr.grid_uid) AS classified
+         FROM race_results rr
+         JOIN races ra ON ra.id = rr.race_id
+        WHERE rr.rider_id = $1::uuid
+          AND ra.race_date >= $2::date AND ra.race_date <= $3::date
+          AND ra.discipline = 'route'
+        ORDER BY rr.race_id, rr.rank ASC NULLS LAST
+     ) une_place_par_course
+      ORDER BY race_date DESC`,
     [u.rider_id, from, to]
   );
   return {
