@@ -30,7 +30,15 @@ export interface QueuedMiss {
 /** Why a list could not be placed, said the way it would be said out loud. */
 export const MISS_REASONS: Record<string, string> = {
   "no-race-that-day": "Aucune course à cette date au fichier",
-  "below-threshold": "Une course existe ce jour-là, le nom ne concorde pas",
+  "below-threshold": "Une course existe ce jour-là, ni le nom ni le lieu ne concordent",
+  /* L'adresse ne porte que le nom de l'épreuve — « bretagne-classic-cic »,
+     « liege-bastogne-liege-hommes ». On ne sait pas où, donc on ne propose
+     rien : un candidat à quatre cents kilomètres n'est pas une proposition. */
+  "no-commune-in-path": "L'adresse ne nomme aucune commune : rien à comparer",
+  /* Le rapprochement d'aujourd'hui la placerait ; elle n'attend plus qu'un
+     clic, parce que l'article n'est souvent plus publié et qu'on ne peut donc
+     pas relire ses engagés tout seuls. */
+  "now-matchable": "Se rattacherait maintenant — à confirmer",
   "no-entrants": "Article publié sans liste exploitable",
   "unreadable-slug": "Adresse illisible : ni date ni commune",
 };
@@ -101,23 +109,50 @@ export async function getStartlistQueue(limit = 60): Promise<QueuedMiss[]> {
   });
 }
 
-/** How much is waiting, split the way the work itself splits. */
-export async function getQueueSummary(): Promise<{
+/**
+ * Ce qui attend, réparti comme le travail se répartit.
+ *
+ * « 180 listes publiées sans course » mettait dans le même sac quatre
+ * situations qui ne demandent pas la même chose : une course hors couverture,
+ * une adresse qui ne nomme aucune commune, un article sans liste exploitable,
+ * et — seul cas qui demande vraiment une décision — une course candidate ce
+ * jour-là. Un seul grand nombre ne dit pas quoi faire ; réparti, il le dit.
+ */
+export interface QueueSummary {
   open: number;
+  /** Une course candidate, plausible, ce jour-là : c'est là qu'on arbitre. */
   arbitrable: number;
+  /** Aucune course à cette date : un trou de couverture, pas un arbitrage. */
+  aucuneCourse: number;
+  /** L'adresse ne nomme que l'épreuve : il n'y a rien à comparer. */
+  sansCommune: number;
+  /** L'article existe mais ne publie pas de liste. */
+  sansEngages: number;
+  /**
+   * Rattachées depuis, sans que personne n'ait eu à trancher : la course est
+   * entrée au calendrier après coup, ou le rapprochement s'est corrigé.
+   */
   resolved: number;
-}> {
+}
+
+export async function getQueueSummary(): Promise<QueueSummary> {
   const [row] = await sql(
-    `SELECT COUNT(*) FILTER (WHERE resolved_at IS NULL AND dismissed_at IS NULL) AS open,
-            COUNT(*) FILTER (WHERE resolved_at IS NULL AND dismissed_at IS NULL
-                             AND best_score >= 0.35)                              AS arbitrable,
-            COUNT(*) FILTER (WHERE resolved_at IS NOT NULL)                      AS resolved
-       FROM startlist_misses`
+    `SELECT COUNT(*) FILTER (WHERE ouvert)                                   AS open,
+            COUNT(*) FILTER (WHERE ouvert AND best_race_id IS NOT NULL)      AS arbitrable,
+            COUNT(*) FILTER (WHERE ouvert AND miss_reason = 'no-race-that-day')    AS aucune_course,
+            COUNT(*) FILTER (WHERE ouvert AND miss_reason IN ('no-commune-in-path', 'unreadable-slug')) AS sans_commune,
+            COUNT(*) FILTER (WHERE ouvert AND miss_reason = 'no-entrants')   AS sans_engages,
+            COUNT(*) FILTER (WHERE resolved_at IS NOT NULL)                  AS resolved
+       FROM (SELECT *, resolved_at IS NULL AND dismissed_at IS NULL AS ouvert
+               FROM startlist_misses) q`
   );
   const r = (row ?? {}) as Record<string, unknown>;
   return {
     open: Number(r.open ?? 0),
     arbitrable: Number(r.arbitrable ?? 0),
+    aucuneCourse: Number(r.aucune_course ?? 0),
+    sansCommune: Number(r.sans_commune ?? 0),
+    sansEngages: Number(r.sans_engages ?? 0),
     resolved: Number(r.resolved ?? 0),
   };
 }

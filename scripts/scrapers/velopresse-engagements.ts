@@ -26,6 +26,13 @@ import { loadEnv, requireEnv } from "../lib/load-env";
 import { fetchHtml, politeDelay } from "./utils/http";
 import { createSql } from "./utils/db";
 import { meetingKey } from "./utils/upsert-races";
+import {
+  chargerCommunes,
+  communesCitees,
+  kmEntre,
+  normaliser,
+  type Commune,
+} from "./utils/communes";
 import { startRun } from "../lib/track-run";
 
 loadEnv();
@@ -501,7 +508,70 @@ interface RaceLookup {
   bestScore?: number;
   /** Carried so an unplaced list can propose the race it nearly matched. */
   bestRaceId?: string;
+  /** L'adresse ne nomme aucune commune connue : il n'y a rien à comparer. */
+  aucuneCommune?: boolean;
 }
+
+/**
+ * L'adresse parle-t-elle d'un endroit proche de cette course ?
+ *
+ * « oui » quand la course porte elle-même le nom d'une commune citée, ou
+ * quand la plus proche est à portée. « non » quand l'adresse nomme des
+ * communes et qu'aucune n'est près. « inconnu » quand elle n'en nomme aucune
+ * — un titre de course pur, « bretagne-classic-cic » — ou quand la course
+ * n'a pas de coordonnées : on ne peut alors rien affirmer, et refuser sur
+ * une absence de preuve écarterait de bons rattachements.
+ */
+type Voisinage = "oui" | "non" | "inconnu";
+
+function voisinage(
+  citees: Commune[],
+  course: { lat: number | null; lng: number | null; nom: string; ville: string | null },
+  seuilKm: number
+): Voisinage {
+  if (citees.length === 0) return "inconnu";
+  /* La course qui s'appelle comme la commune citée est la bonne, même quand
+     ses coordonnées disent autre chose : « Vitrai sous l'Aigle » est placée à
+     Ornes, dans la Meuse, et c'est le placement qui est faux, pas la liste. */
+  const foin = ` ${normaliser(`${course.nom} ${course.ville ?? ""}`)} `;
+  for (const c of citees) {
+    const nom = normaliser(c.nom);
+    if (nom.length >= 4 && foin.includes(` ${nom} `)) return "oui";
+  }
+  if (course.lat === null || course.lng === null) return "inconnu";
+  const plusProche = Math.min(
+    ...citees.map((c) => kmEntre([course.lat as number, course.lng as number], [c.lat, c.lng]))
+  );
+  return plusProche <= seuilKm ? "oui" : "non";
+}
+
+/**
+ * À quelle distance une commune citée par l'adresse reste la même course.
+ *
+ * Ce seuil ne sert qu'à décider ce qu'on propose à l'arbitrage, pas à défaire
+ * un rattachement que le nom a emporté. Mesuré sur les huit cent seize listes
+ * déjà rattachées : refuser sur la distance en corrigeait trois — la liste de
+ * Pont-Audemer partie sur « Tugny et pont » dans l'Aisne — et en cassait cinq,
+ * toutes des courses dont c'est le *placement* qui est faux. « Équeurdreville »
+ * est placée à Avranches, « Le Prix des Pirons » à Vienne en Isère au lieu de
+ * la Vienne. Tant que ces courses sont mal placées, la distance accuse la
+ * liste au lieu d'accuser le placement.
+ *
+ * Proposer, en revanche, demande une raison positive : une proposition qu'on
+ * ne peut pas défendre fait perdre son temps à celui qui la lit, et il cesse
+ * de lire la file.
+ */
+const CANDIDAT_KM = 60;
+
+/**
+ * Sous ce score, la ressemblance est une coïncidence.
+ *
+ * Il en faut deux : le nom *et* le lieu. Le seul lieu propose une course à
+ * zéro de score parce qu'elle se court dans le bon canton ; le seul nom
+ * proposait le Tour de la Boëme, à La Couronne en Charente, pour la liste du
+ * Tour de l'Orne.
+ */
+const CANDIDAT_MIN_SCORE = 0.35;
 
 /**
  * Finds the race this start list belongs to.
@@ -522,15 +592,26 @@ export async function findRaces(prefix: string, date: Date): Promise<RaceLookup>
   const iso = date.toISOString().split("T")[0];
   const candidates = communeCandidates(prefix);
 
-  const rows = (await sql(
-    `SELECT r.id, r.name, r.categories, lower(r.city) AS city,
-            v.normalized_city AS venue_city
-       FROM races r
-       LEFT JOIN venues v ON v.id = r.venue_id
-                          AND v.geo_precision <> 'department'
-      WHERE r.race_date = $1::date`,
-    [iso]
-  )) as Array<Record<string, unknown>>;
+  const [rows, index] = await Promise.all([
+    sql(
+      `SELECT r.id, r.name, r.categories, lower(r.city) AS city,
+              v.normalized_city AS venue_city,
+              ST_Y(r.location::geometry) AS lat,
+              ST_X(r.location::geometry) AS lng
+         FROM races r
+         LEFT JOIN venues v ON v.id = r.venue_id
+                            AND v.geo_precision <> 'department'
+        WHERE r.race_date = $1::date`,
+      [iso]
+    ) as Promise<Array<Record<string, unknown>>>,
+    chargerCommunes(),
+  ]);
+
+  /* Les communes que l'adresse nomme, lues une fois pour toutes les courses
+     du jour. C'est ce qui manquait : le rapprochement se faisait sur la seule
+     ressemblance des mots, et proposait le Tour de la Boëme, à La Couronne en
+     Charente, pour la liste du Tour de l'Orne. */
+  const citees = communesCitees(prefix, index);
 
   const scored = rows
     .map((row) => {
@@ -547,11 +628,18 @@ export async function findRaces(prefix: string, date: Date): Promise<RaceLookup>
           score = Math.max(score, similarity(cand, hay), containment(cand, hay));
         }
       }
+      const lieu = {
+        lat: row.lat != null ? Number(row.lat) : null,
+        lng: row.lng != null ? Number(row.lng) : null,
+        nom: name,
+        ville: (row.city as string | null) ?? null,
+      };
       return {
         id: row.id as string,
         name,
         categories: (row.categories as string[]) ?? [],
         score,
+        candidat: voisinage(citees, lieu, CANDIDAT_KM),
       };
     })
     .sort((a, b) => b.score - a.score);
@@ -559,14 +647,23 @@ export async function findRaces(prefix: string, date: Date): Promise<RaceLookup>
   // Below this the "match" is coincidence; a start list attached to the wrong
   // race is worse than none.
   const MIN_SCORE = 0.62;
-  const best = scored[0];
+
+  const retenues = scored.filter((r) => r.score >= MIN_SCORE);
+
+  /* Ce qu'on propose à l'arbitrage demande l'inverse : une raison positive.
+     Sans elle, la file affichait trente-cinq candidats dont trente et un
+     absurdes, et un opérateur qui lit ça cesse de lire la file. */
+  const proposable = scored.find(
+    (r) => r.score >= CANDIDAT_MIN_SCORE && r.candidat === "oui"
+  );
 
   return {
-    races: scored.filter((r) => r.score >= MIN_SCORE),
+    races: retenues,
     sameDayCount: scored.length,
-    bestName: best?.name,
-    bestScore: best?.score,
-    bestRaceId: best?.id,
+    bestName: proposable?.name,
+    bestScore: proposable?.score,
+    bestRaceId: proposable?.id,
+    aucuneCommune: citees.length === 0,
   };
 }
 
@@ -683,6 +780,7 @@ type Miss =
   | "unreadable-slug"
   | "no-race-that-day"
   | "below-threshold"
+  | "no-commune-in-path"
   | "no-entrants";
 
 interface Ingested {
@@ -733,9 +831,17 @@ export async function ingestArticle(path: string, dryRun: boolean): Promise<Inge
       stored: 0,
       matched: 0,
       race: null,
-      // Distinguishing these two is the whole point: one means the race is
-      // outside our coverage, the other means our matching is too strict.
-      miss: found.sameDayCount === 0 ? "no-race-that-day" : "below-threshold",
+      /* Trois cas, et les distinguer est tout l'intérêt de la file. La course
+         est hors de notre couverture ; notre rapprochement est trop strict ;
+         ou l'adresse ne nomme aucune commune — « bretagne-classic-cic »,
+         « liege-bastogne-liege-hommes » — auquel cas il n'y a rien à comparer
+         et proposer un candidat serait un piège, pas une proposition. */
+      miss:
+        found.sameDayCount === 0
+          ? "no-race-that-day"
+          : found.aucuneCommune
+            ? "no-commune-in-path"
+            : "below-threshold",
       commune: parsed.commune,
       date: iso,
       bestCandidate: found.bestName,

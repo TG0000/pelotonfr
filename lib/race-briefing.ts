@@ -282,12 +282,17 @@ export function parseBriefing(pageText: string): Briefing {
   const categories = categoriesFromLists(text);
   /* Sous le titre, la fiche écrit le département en toutes lettres, puis
      « CONTACTER L'ORGANISATEUR » ; plus bas, « ORGANISATEUR » puis le club. */
-  const dep = text.match(/(\S+(?:\s+\S+){0,3})\s+CONTACTER L'ORGANISATEUR/);
+  /* Les libellés sont écrits en capitales par une feuille de style, pas dans
+     le document : le texte dit « Contacter l'organisateur » et
+     « OrganisateurSC SARREGUEMINESDurée1 jour ». Les expressions qui
+     exigeaient des capitales et des espaces ne reconnaissaient donc plus
+     rien, et ni le département ni l'organisateur n'ont été lus depuis. */
+  const dep = text.match(/(\S+(?:\s+\S+){0,3})\s+contacter l'organisateur/i);
   const words = dep ? dep[1].split(/\s+/) : [];
   const departmentCandidates = words.map((_, i) => words.slice(i).join(" "));
-  // Le dernier « ORGANISATEUR » avant « DURÉE » : le premier est celui du
-  // bouton « CONTACTER L'ORGANISATEUR », pas le club.
-  const org = text.match(/\bORGANISATEUR\s+((?:(?!ORGANISATEUR).){3,80}?)\s+(?:DURÉE|DUREE)/);
+  // Le dernier « Organisateur » avant « Durée » : le premier est celui du
+  // bouton « Contacter l'organisateur », pas le club.
+  const org = text.match(/\bOrganisateur\s*((?:(?!Organisateur).){3,80}?)\s*Dur[ée]e/i);
   const organizer = org ? org[1].trim() : null;
 
   return { bibPickupTime, bibPickupPlace, circuitM, lapCount, entriesCloseAt, placesLeft, placesTotal, categories, departmentCandidates, organizer };

@@ -21,7 +21,6 @@
     "db:recompute-categories": "tsx scripts/db/recompute-categories.ts",
     "scrape:affiches": "tsx scripts/scrapers/velopresse-affiches.ts",
     "scrape:briefing": "tsx scripts/scrapers/ffc-briefing.ts",
-    "scrape:segments": "tsx scripts/scrapers/strava-segments.ts",
     "scrape:engagements": "tsx scripts/scrapers/velopresse-engagements.ts",
     "scrape:guides": "tsx scripts/scrapers/velopresse-guides.ts",
     "scrape:guides:vision": "tsx scripts/scrapers/guide-vision.ts",
@@ -40,6 +39,7 @@
     "scrape:segments:index": "tsx scripts/scrapers/segment-circuits.ts",
     "scrape:efforts": "tsx scripts/scrapers/strava-efforts.ts",
     "db:link-editions": "tsx scripts/db/link-editions.ts",
+    "db:requeue-startlists": "tsx scripts/db/requeue-startlists.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "test:integration": "tsx --test tests/integration/*.test.ts"

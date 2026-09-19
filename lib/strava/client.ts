@@ -228,11 +228,10 @@ export async function getActivityStreams(
   return { latlng, altitude, distance };
 }
 
-/** Thrown rather than swallowed: see exploreSegments. */
 /**
  * Strava refuse — pas « il n'y a rien ici ».
  *
- * `segments/explore` a répondu 401 pendant deux nuits, et chaque refus était
+ * L'explorateur de segments répondait 401 pendant deux nuits, et chaque refus était
  * lu comme un secteur vide : neuf cents lectures dépensées, trois cents
  * courses marquées lues sans avoir été regardées. Un refus arrête la passe.
  */
@@ -260,74 +259,6 @@ export interface StravaSegment {
   points: string | null;
   endLat: number | null;
   endLng: number | null;
-}
-
-/**
- * The notable climbs inside a geographic box.
- *
- * Strava answers with at most ten segments per call, ranked by its own notion
- * of interest, so a sector is asked twice: once without a category filter for
- * whatever is locally ridden, and once restricted to categorised climbs, which
- * surfaces the ones that actually decide a race.
- */
-export async function exploreSegments(
-  token: string,
-  bounds: { south: number; west: number; north: number; east: number },
-  options: { minCategory?: number; maxCategory?: number } = {}
-): Promise<StravaSegment[]> {
-  const params = new URLSearchParams({
-    bounds: `${bounds.south},${bounds.west},${bounds.north},${bounds.east}`,
-    activity_type: "riding",
-  });
-  if (options.minCategory !== undefined) {
-    params.set("min_cat", String(options.minCategory));
-    params.set("max_cat", String(options.maxCategory ?? 5));
-  }
-
-  const res = await fetch(`${STRAVA_API}/segments/explore?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  /* A refusal is not an empty sector.
-     Returning [] on any failure made a rate limit indistinguishable from
-     "there is nothing here", so a caller marked races as read that had never
-     been looked at. Strava allows 100 reads per fifteen minutes and 1 000 per
-     day, and says so in these headers. */
-  if (res.status === 429) {
-    const usage = res.headers.get("x-readratelimit-usage") ?? "?";
-    const limit = res.headers.get("x-readratelimit-limit") ?? "?";
-    throw new StravaRateLimitError(
-      `Strava read limit reached (${usage} of ${limit}).`
-    );
-  }
-  if (res.status === 401 || res.status === 403) {
-    throw new StravaAuthError(`Strava refuse segments/explore (${res.status}) : ce point d'entrée n'est plus ouvert à cette application.`);
-  }
-  if (!res.ok) return [];
-
-  const body = (await res.json()) as {
-    segments?: Array<Record<string, unknown>>;
-  };
-
-  return (body.segments ?? []).map((s) => {
-    const start = (s.start_latlng as [number, number] | undefined) ?? undefined;
-    const end = (s.end_latlng as [number, number] | undefined) ?? undefined;
-    return {
-      id: Number(s.id),
-      name: String(s.name ?? "").slice(0, 160),
-      distanceM: Number(s.distance ?? 0),
-      averageGrade: Number(s.avg_grade ?? 0),
-      elevationM: s.elev_difference === undefined ? null : Number(s.elev_difference),
-      climbCategory: s.climb_category === undefined ? null : Number(s.climb_category),
-      startLat: start?.[0] ?? null,
-      startLng: start?.[1] ?? null,
-      // The explorer already carries the shape, so recognising a circuit costs
-      // no extra request at all.
-      points: (s.points as string | undefined) ?? null,
-      endLat: end?.[0] ?? null,
-      endLng: end?.[1] ?? null,
-    };
-  });
 }
 
 export function authorizeUrl(redirectUri: string, state: string): string {

@@ -7,6 +7,7 @@
  * lignes contre un paquet.
  */
 
+import * as cheerio from "cheerio";
 const USER_AGENT =
   "PelotonFR/2.0 (+https://pelotonfr.com/contact)";
 
@@ -89,3 +90,22 @@ export async function fetchHtml(url: string): Promise<string> {
 /** Polite delay between requests (ms) */
 export const politeDelay = (ms = 800) =>
   new Promise((resolve) => setTimeout(resolve, ms + Math.random() * 400));
+
+/**
+ * Le texte d'une page, tel qu'un lecteur le voit.
+ *
+ * `cheerio.load(html)("body").text()` ne fait ni l'un ni l'autre. Elle rend
+ * aussi le contenu des balises `<style>` et `<script>` : sur une fiche de
+ * compétition FFC, cent kilo-octets de CSS et de code pour quatre kilo-octets
+ * de contenu, et le lecteur cherchait « circuit de 7 km » dans une feuille de
+ * style. Et elle colle les éléments voisins les uns aux autres : la fiche
+ * écrit le libellé et la valeur dans deux balises, ce qui donne
+ * « OrganisateurSC SARREGUEMINESDurée1 jour » — où aucune expression ne
+ * reconnaît plus rien.
+ */
+export function pageText(html: string): string {
+  const $ = cheerio.load(html);
+  $("script, style, noscript, template").remove();
+  const espace = $.html().replace(/<[^>]+>/g, " ");
+  return cheerio.load(espace).root().text().replace(/\s+/g, " ").trim();
+}

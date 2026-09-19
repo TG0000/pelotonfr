@@ -19,10 +19,9 @@
  * search should be centred on, and it is what a rider needs on the morning.
  */
 
-import * as cheerio from "cheerio";
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "./utils/db";
-import { fetchHtml, politeDelay } from "./utils/http";
+import { fetchHtml, pageText, politeDelay } from "./utils/http";
 import { parseBriefing, parseStages } from "../../lib/race-briefing";
 import { normalizeCategories } from "../../lib/categories";
 import { startRun } from "../lib/track-run";
@@ -114,7 +113,11 @@ async function main() {
 
   const races = (await sql(
     `SELECT id, name, city, department_code, source_url,
-            race_date, race_date_end
+            race_date, race_date_end,
+            -- Ce qu'on tient déjà, pour savoir si la page apprend quelque
+            -- chose ou si elle répète. « A appris » doit vouloir dire appris.
+            bib_pickup_time, bib_pickup_place, circuit_m, lap_count,
+            entries_close_at, entries_capacity, organizer
        FROM races
       WHERE federation_id = 1
         AND source_url LIKE '%/calendrier/competition/%'
@@ -142,6 +145,15 @@ async function main() {
   let withStages = 0;
   let withCategories = 0;
   let withDepartment = 0;
+  /* Ce que la page a réellement appris au fichier, quoi que ce soit.
+     Le compte rendu disait « 34 sur 1 393 » : il comparait le nombre de
+     fiches ouvertes au seul nombre de lieux de retrait de dossard, alors que
+     la même passe pose aussi les catégories, le département, l'organisateur,
+     le circuit, la clôture des engagements et les étapes. Trente-quatre lieux
+     sur mille trois cent quatre-vingt-treize fiches n'était pas un écart :
+     c'était une mesure qui ne mesurait pas ce qu'elle annonçait. */
+  let apporte = 0;
+  let lues = 0;
 
   for (const race of races) {
     try {
@@ -151,7 +163,7 @@ async function main() {
         continue;
       }
       const html = await fetchHtml(race.source_url as string);
-      const text = cheerio.load(html)("body").text();
+      const text = pageText(html);
       const brief = parseBriefing(text);
 
       let point: { lat: number; lng: number } | null = null;
@@ -203,12 +215,15 @@ async function main() {
          toutes les listes de départ de la journée, dont la féminine, ouverte
          à tous les niveaux. Quand le titre parle, on ne touche à rien. */
       const fromTitle = normalizeCategories(race.name as string, "ffc");
+      let ditCategories = false;
+      let ditDepartement = false;
+      let ditEtapes = false;
       if (brief.categories.length > 0 && fromTitle.length === 0) {
         const r = await sql(
           `UPDATE races SET categories = $2::text[] WHERE id = $1::uuid AND categories IS DISTINCT FROM $2::text[] RETURNING id`,
           [race.id, brief.categories]
         );
-        if (r.length) withCategories++;
+        if (r.length) { withCategories++; ditCategories = true; }
       }
       if (brief.departmentCandidates.length > 0 && !race.department_code) {
         for (const candidate of brief.departmentCandidates) {
@@ -221,7 +236,7 @@ async function main() {
               RETURNING r.id`,
             [race.id, candidate]
           );
-          if (r.length) { withDepartment++; break; }
+          if (r.length) { withDepartment++; ditDepartement = true; break; }
         }
       }
       if (brief.organizer) {
@@ -273,6 +288,7 @@ async function main() {
             );
           }
           withStages++;
+          ditEtapes = true;
           console.log(
             `  ${String(race.name).slice(0, 38).padEnd(40)} ${stages.length} étapes`
           );
@@ -282,6 +298,20 @@ async function main() {
       if (brief.circuitM) withCircuit++;
       if (brief.bibPickupPlace) withPlace++;
       if (point) located++;
+      lues++;
+      /* Une fiche qui redit ce qu'on savait n'a rien appris. Sans cette
+         comparaison, le compte rendu affichait cent pour cent chaque nuit,
+         parce que toute fiche FFC porte au moins sa date de clôture. */
+      const neuf =
+        (brief.bibPickupPlace && brief.bibPickupPlace !== race.bib_pickup_place) ||
+        (brief.bibPickupTime && brief.bibPickupTime !== race.bib_pickup_time) ||
+        (brief.circuitM && brief.circuitM !== Number(race.circuit_m)) ||
+        (brief.lapCount && brief.lapCount !== Number(race.lap_count)) ||
+        (brief.placesTotal != null && brief.placesTotal !== Number(race.entries_capacity)) ||
+        (brief.organizer && !race.organizer) ||
+        (brief.entriesCloseAt && !race.entries_close_at) ||
+        ditCategories || ditDepartement || ditEtapes;
+      if (neuf) apporte++;
 
       if (brief.circuitM || point) {
         console.log(
@@ -308,16 +338,30 @@ async function main() {
   }
 
   console.log(
-    `\n${withCircuit} circuits annoncés par l'organisateur, ` +
-      `${withPlace} lieux de retrait, dont ${located} situés précisément, ` +
-      `${withStages} courses par étapes détaillées, ` +
+    `\n${lues} fiches lues sur ${races.length} proposées ; ${apporte} ont appris quelque chose.\n` +
+      `  ${withCircuit} circuits annoncés par l'organisateur, ` +
+      `${withPlace} lieux de retrait dont ${located} situés précisément,\n` +
+      `  ${withStages} courses par étapes détaillées, ` +
       `${withCategories} catégories posées depuis les critères d'admissibilité, ${withDepartment} départements posés.`
   );
 
   return {
-    seen: races.length,
-    written: withPlace,
-    metadata: { circuits: withCircuit, located, stages: withStages },
+    /* Les fiches réellement ouvertes, pas celles que la requête a proposées :
+       en relecture des catégories, la plupart sont écartées sans être lues
+       parce que leur titre dit déjà la catégorie, et les compter comme vues
+       faisait passer une passe de trois cents lectures pour mille quatre
+       cents. */
+    seen: lues,
+    written: apporte,
+    metadata: {
+      circuits: withCircuit,
+      places: withPlace,
+      located,
+      stages: withStages,
+      categories: withCategories,
+      departments: withDepartment,
+      proposees: races.length,
+    },
   };
 }
 

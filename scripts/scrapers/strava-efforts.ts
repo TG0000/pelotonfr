@@ -19,7 +19,13 @@ loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
 
 async function main() {
-  if (!publicStravaEnabled()) { console.log("Collective Strava processing disabled pending authorization."); return; }
+  /* Un retrait volontaire se dit, sinon il ne se distingue pas d'une panne :
+     la page d'état a montré « Bosses Strava — à l'arrêt » pendant cinq jours
+     pour un collecteur qui sortait proprement par cette porte. */
+  if (!publicStravaEnabled()) {
+    console.log("Traitement collectif Strava désactivé : la porte premium est fermée.");
+    return { skipped: "la porte premium est fermée (ENABLE_PUBLIC_STRAVA=false)" };
+  }
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : 60;
 
