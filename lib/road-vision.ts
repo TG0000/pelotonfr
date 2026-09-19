@@ -231,7 +231,7 @@ export function summarise(readings: RoadReading[]): RoadSeen | null {
   else parts.push(surface);
   if (worst === "dégradé") parts.push("par endroits dégradé");
   if (gravelSpots > 0) parts.push(`gravillons vus sur ${gravelSpots} photo${gravelSpots > 1 ? "s" : ""}`);
-  if (potholeSpots > 0) parts.push(`nids-de-poule sur ${potholeSpots}`);
+  if (potholeSpots > 0) parts.push(`nids-de-poule sur ${potholeSpots} photo${potholeSpots > 1 ? "s" : ""}`);
   if (severe.length > 0) parts.push(`${severe.length} danger${severe.length > 1 ? "s" : ""} à anticiper (${[...new Set(severe.map((h) => h.kind))].join(", ")})`);
   const verdict =
     surface === "enrobé grenu" && worst === "bon" && gravelSpots === 0 && potholeSpots === 0 && severe.length === 0
