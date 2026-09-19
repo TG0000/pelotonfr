@@ -6,7 +6,7 @@ L’intégration Better Auth est prête mais inactive. Le compte Apple Developer
 
 1. Obtenir un abonnement Apple Developer actif, seulement sur décision du propriétaire.
 2. Enregistrer un App ID principal avec Sign in with Apple, puis un **Services ID** web associé. Le Services ID, pas le Bundle ID natif, devient `APPLE_CLIENT_ID`.
-3. Enregistrer le domaine `pelotonfr.vercel.app` et le retour exact `https://pelotonfr.vercel.app/api/auth/callback/apple`. Pour une recette, enregistrer séparément un domaine HTTPS stable ; Apple refuse localhost.
+3. Enregistrer le domaine `pelotonfr.com` et le retour exact `https://pelotonfr.com/api/auth/callback/apple`. Apple refuse localhost : c'est pour ça que cette étape attendait un vrai domaine.
 4. Créer la clé Sign in with Apple et conserver son fichier `.p8` dans un emplacement protégé. Ne pas le coller dans GitHub, une PR ou une conversation.
 5. Configurer côté Vercel, environnement concerné : `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`. La clé accepte les retours ligne réels ou `\n`. Aucun secret `NEXT_PUBLIC_*`.
 6. Reconstruire le déploiement : le bouton n’apparaît que lorsque les quatre variables sont renseignées. Le JWT client est signé en ES256 à l’initialisation serveur, durée 180 jours ; pas de JWT statique à recopier périodiquement. La clé Apple reste révocable et doit être renouvelée si compromise.
