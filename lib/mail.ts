@@ -31,6 +31,7 @@ export async function sendMail(mail: Mail): Promise<void> {
   if (isPlaceholderEmail(mail.to)) throw new Error("MAIL_RECIPIENT_UNVERIFIED");
 
   const from = mail.from ?? process.env.ALERT_FROM_EMAIL ?? DEFAULT_FROM;
+  const replyTo = process.env.ALERT_REPLY_TO?.trim() || null;
 
   const brevo = process.env.BREVO_API_KEY;
   if (brevo) {
@@ -41,6 +42,10 @@ export async function sendMail(mail: Mail): Promise<void> {
       headers: { "api-key": brevo, "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         sender,
+        /* L'expéditeur est une adresse du domaine, authentifiée : c'est ce qui
+           fait arriver le courrier. Mais personne ne relève cette boîte, alors
+           une réponse part vers une adresse qui existe vraiment. */
+        ...(replyTo ? { replyTo: parseFrom(replyTo) } : {}),
         to: [{ email: mail.to }],
         subject: mail.subject,
         textContent: mail.text,
@@ -59,7 +64,7 @@ export async function sendMail(mail: Mail): Promise<void> {
     method: "POST",
     signal: AbortSignal.timeout(15_000),
     headers: { Authorization: `Bearer ${resend}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: mail.to, subject: mail.subject, text: mail.text, html: mail.html }),
+    body: JSON.stringify({ from, to: mail.to, subject: mail.subject, text: mail.text, html: mail.html, ...(replyTo ? { reply_to: replyTo } : {}) }),
   });
   if (!res.ok) throw new Error(`MAIL_PROVIDER_RESEND_${res.status}`);
 }
