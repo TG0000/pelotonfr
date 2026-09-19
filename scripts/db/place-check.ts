@@ -16,21 +16,12 @@ import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "../scrapers/utils/db";
 import { getOrCreateVenueFromCity, normalizePlace } from "../scrapers/utils/venues";
 import { townFrom } from "../scrapers/utils/town-from";
+import { departmentFromCode } from "../scrapers/utils/ffc-code";
 import { trackRun } from "../lib/track-run";
 import { isPointToPoint } from "../scrapers/utils/point-to-point";
 
 loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
-
-/** Le département dans le code de compétition FFC : C41 42 005 042 → 42. */
-export function departmentFromCode(sourceUrl: string | null): string | null {
-  const m = /\/competition\/\d{4}\/[A-Z]?(\d{2})(\d{2})\d+\//.exec(sourceUrl ?? "");
-  if (!m) return null;
-  const d = m[2];
-  if (d === "97") return null; // outre-mer : trois chiffres, pas dans le code
-  if (d === "20") return null; // Corse : 2A / 2B, pas dans le code
-  return d;
-}
 
 async function main() {
   const dry = process.argv.includes("--dry-run");
