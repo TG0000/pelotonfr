@@ -209,6 +209,39 @@ export function seasonBounds(today = new Date()): { from: string; to: string; se
   return { from: `${season - 1}-11-01`, to: `${season}-10-31`, season };
 }
 
+/**
+ * La fenêtre sur laquelle juger la forme d'un coureur.
+ *
+ * Ce qui intéresse un adversaire, c'est la saison en cours : un palmarès de
+ * carrière dit qui on a été, pas qui se présente dimanche. Mais en novembre et
+ * en décembre la saison neuve est vide, et n'afficher que zéro victoire serait
+ * plus faux encore. Pendant ces deux premiers mois, la fenêtre remonte donc
+ * jusqu'à la fin de la saison précédente — août, septembre, octobre — puis se
+ * referme sur la seule saison en cours dès le 1er janvier.
+ */
+export function formWindow(today = new Date()): {
+  from: string;
+  to: string;
+  season: number;
+  withPreviousTail: boolean;
+} {
+  const { from: seasonFrom, season } = seasonBounds(today);
+  const twoMonthsIn = new Date(`${seasonFrom}T00:00:00Z`);
+  twoMonthsIn.setUTCMonth(twoMonthsIn.getUTCMonth() + 2);
+  const withPreviousTail = today < twoMonthsIn;
+  if (!withPreviousTail) {
+    return { from: seasonFrom, to: today.toISOString().slice(0, 10), season, withPreviousTail };
+  }
+  const back = new Date(`${seasonFrom}T00:00:00Z`);
+  back.setUTCMonth(back.getUTCMonth() - 3);
+  return {
+    from: back.toISOString().slice(0, 10),
+    to: today.toISOString().slice(0, 10),
+    season,
+    withPreviousTail,
+  };
+}
+
 /** Le courrier de demande de descente, prêt à relire et à signer. */
 export function downgradeLetter(input: {
   firstName: string;

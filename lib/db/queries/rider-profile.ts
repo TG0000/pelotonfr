@@ -1,3 +1,4 @@
+import { formWindow } from "@/lib/category-rules";
 import { toDateOnly } from "@/lib/date";
 import { CATEGORIES, normalizeCategories } from "@/lib/categories";
 import { sql } from "../index";
@@ -466,6 +467,10 @@ export interface RaceCompetitor {
   currentRank: number | null;
   bestPoints: number | null;
   bestSeason: number | null;
+  /* Le palmarès de la saison, pas celui de la carrière : ce qui intéresse un
+     adversaire, c'est qui se présente dimanche, pas qui on a été. La fenêtre
+     remonte à la fin de la saison précédente pendant les deux premiers mois,
+     quand la saison neuve est encore vide. */
   winCount: number | null;
   podiumCount: number | null;
   resultCount: number | null;
@@ -567,13 +572,37 @@ function eligibleFor(
   };
 }
 
+/**
+ * Le palmarès d'un coureur sur la fenêtre de forme.
+ *
+ * Une course ne compte qu'une fois : la fédération publie souvent deux
+ * classements pour la même épreuve, et compter les lignes doublerait les
+ * victoires. Les abandons, sans rang, ne comptent pas comme départs marqués.
+ */
+const SEASON_TALLY = `
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS races,
+           COUNT(*) FILTER (WHERE rank = 1)::int             AS wins,
+           COUNT(*) FILTER (WHERE rank BETWEEN 1 AND 3)::int AS podiums
+      FROM (
+        SELECT DISTINCT ON (s.race_id) s.rank
+          FROM race_results s
+          JOIN races sa ON sa.id = s.race_id
+         WHERE s.rider_id = r.id
+           AND sa.race_date >= $3::date AND sa.race_date <= $4::date
+         ORDER BY s.race_id, s.rank ASC NULLS LAST
+      ) une_par_course
+  ) saison ON true`;
+
 export async function getRaceCompetitors(
   raceId: string,
   limit = 40
 ): Promise<{
   competitors: RaceCompetitor[];
   source: "startlist" | "history" | "regional";
+  window: ReturnType<typeof formWindow>;
 }> {
+  const window = formWindow();
   const [[entered], [target]] = await Promise.all([
     sql(`SELECT COUNT(*) AS n FROM engagements WHERE race_id = $1`, [raceId]),
     sql(`SELECT categories FROM races WHERE id = $1`, [raceId]),
@@ -592,12 +621,14 @@ export async function getRaceCompetitors(
                 COALESCE(r.category, e.category_raw) AS category,
                 r.id AS rider_id, r.uci_id,
                 r.current_points, r.current_rank, r.best_points, r.best_season,
-                r.win_count, r.podium_count, r.result_count,
+                COALESCE(saison.wins, 0)    AS win_count,
+                COALESCE(saison.podiums, 0) AS podium_count,
+                COALESCE(saison.races, 0)   AS result_count,
                 COALESCE(rec.races, 0)   AS recent_races,
                 COALESCE(rec.podiums, 0) AS recent_podiums
            FROM engagements e
            LEFT JOIN riders r ON r.id = e.rider_id
-           LEFT JOIN clubs c  ON c.id = r.current_club_id
+           LEFT JOIN clubs c  ON c.id = r.current_club_id${SEASON_TALLY}
            LEFT JOIN LATERAL (
              SELECT COUNT(*) AS races,
                     COUNT(*) FILTER (WHERE rr.rank BETWEEN 1 AND 3) AS podiums
@@ -610,7 +641,7 @@ export async function getRaceCompetitors(
           WHERE e.race_id = $1
           ORDER BY COALESCE(r.current_points, -1) DESC, e.last_name_raw
           LIMIT $2`,
-        [raceId, limit]
+        [raceId, limit, window.from, window.to]
       )
     : await sql(
         `WITH target AS (
@@ -630,13 +661,15 @@ export async function getRaceCompetitors(
                 r.last_name, r.first_name, c.name AS club_name, r.category,
                 r.id AS rider_id, r.uci_id,
                 r.current_points, r.current_rank, r.best_points, r.best_season,
-                r.win_count, r.podium_count, r.result_count,
+                COALESCE(saison.wins, 0)    AS win_count,
+                COALESCE(saison.podiums, 0) AS podium_count,
+                COALESCE(saison.races, 0)   AS result_count,
                 COALESCE(rec.races, 0)   AS recent_races,
                 COALESCE(rec.podiums, 0) AS recent_podiums
            FROM race_results rr
            JOIN past p ON p.id = rr.race_id
            JOIN riders r ON r.id = rr.rider_id
-           LEFT JOIN clubs c ON c.id = r.current_club_id
+           LEFT JOIN clubs c ON c.id = r.current_club_id${SEASON_TALLY}
            LEFT JOIN LATERAL (
              SELECT COUNT(*) AS races,
                     COUNT(*) FILTER (WHERE r2.rank BETWEEN 1 AND 3) AS podiums
@@ -648,11 +681,11 @@ export async function getRaceCompetitors(
            ) rec ON true
           GROUP BY r.id, r.last_name, r.first_name, c.name, r.category, r.uci_id,
                    r.current_points, r.current_rank, r.best_points, r.best_season,
-                   r.win_count, r.podium_count, r.result_count,
+                   saison.wins, saison.podiums, saison.races,
                    rec.races, rec.podiums
           ORDER BY COALESCE(r.current_points, -1) DESC
           LIMIT $2`,
-        [raceId, limit]
+        [raceId, limit, window.from, window.to]
       );
 
   const competitors = rows.map((row) => {
@@ -693,6 +726,7 @@ export async function getRaceCompetitors(
     return {
       competitors: shortlist,
       source: hasStartList ? "startlist" : "history",
+      window,
     };
   }
 
@@ -703,10 +737,11 @@ export async function getRaceCompetitors(
   // Over-fetch, because the department's best-ranked riders are the most likely
   // to be the wrong category and the list should still come back full.
   return {
-    competitors: (await getRegionalField(raceId, limit * 4))
+    competitors: (await getRegionalField(raceId, limit * 4, window))
       .filter(eligible)
       .slice(0, limit),
     source: "regional",
+    window,
   };
 }
 
@@ -718,7 +753,8 @@ export async function getRaceCompetitors(
  */
 async function getRegionalField(
   raceId: string,
-  limit: number
+  limit: number,
+  window: ReturnType<typeof formWindow>
 ): Promise<RaceCompetitor[]> {
   const rows = await sql(
     `WITH target AS (
@@ -728,14 +764,16 @@ async function getRegionalField(
             r.last_name, r.first_name, c.name AS club_name, r.category,
             r.id AS rider_id, r.uci_id,
             r.current_points, r.current_rank, r.best_points, r.best_season,
-            r.win_count, r.podium_count, r.result_count,
+            COALESCE(saison.wins, 0)    AS win_count,
+            COALESCE(saison.podiums, 0) AS podium_count,
+            COALESCE(saison.races, 0)   AS result_count,
             COUNT(*)                                        AS recent_races,
             COUNT(*) FILTER (WHERE rr.rank BETWEEN 1 AND 3) AS recent_podiums
        FROM race_results rr
        JOIN races ra ON ra.id = rr.race_id
        JOIN target t ON true
        JOIN riders r ON r.id = rr.rider_id
-       LEFT JOIN clubs c ON c.id = r.current_club_id
+       LEFT JOIN clubs c ON c.id = r.current_club_id${SEASON_TALLY}
       WHERE ra.department_code IS NOT NULL
         AND ra.department_code = t.department_code
         AND ra.race_date >= t.race_date - INTERVAL '150 days'
@@ -746,10 +784,10 @@ async function getRegionalField(
         AND (t.categories = '{}' OR ra.categories && t.categories)
       GROUP BY r.id, r.last_name, r.first_name, c.name, r.category, r.uci_id,
                r.current_points, r.current_rank, r.best_points, r.best_season,
-               r.win_count, r.podium_count, r.result_count
+               saison.wins, saison.podiums, saison.races
       ORDER BY COUNT(*) DESC, COALESCE(r.current_points, 0) DESC
       LIMIT $2`,
-    [raceId, limit]
+    [raceId, limit, window.from, window.to]
   );
 
   return rows.map((row) => {
