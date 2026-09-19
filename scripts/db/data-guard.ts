@@ -137,8 +137,11 @@ async function main() {
   // 10. Collecteurs muets : ont vu, n'ont rien écrit, deux nuits de suite.
   {
     const bad = (await sql(
+      /* Le garde-fou ne corrige plus rien depuis la v0.2 : il regarde. Il
+         écrit donc zéro chaque nuit, et se signalait lui-même comme muet. */
       `SELECT collector, count(*) AS nights FROM collector_runs
         WHERE started_at > now() - interval '2 days' AND items_seen > 0 AND items_written = 0
+          AND collector <> 'data-guard'
         GROUP BY collector HAVING count(*) >= 2`
     )) as Row[];
     await record("collecteur muet deux nuits", bad.length, 0, bad, "à regarder");
