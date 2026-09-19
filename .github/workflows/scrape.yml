@@ -127,6 +127,7 @@ jobs:
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
           BREVO_FROM_EMAIL: ${{ secrets.BREVO_FROM_EMAIL }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
+          ALERT_REPLY_TO: ${{ secrets.ALERT_REPLY_TO }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           NEXT_PUBLIC_SITE_URL: https://pelotonfr.com
         run: npm run alerts:send
@@ -137,6 +138,7 @@ jobs:
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
           BREVO_FROM_EMAIL: ${{ secrets.BREVO_FROM_EMAIL }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
+          ALERT_REPLY_TO: ${{ secrets.ALERT_REPLY_TO }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           NEXT_PUBLIC_SITE_URL: https://pelotonfr.com
         run: npm run alerts:closing
