@@ -34,7 +34,7 @@ const MAILER = Boolean(process.env.BREVO_API_KEY || process.env.RESEND_API_KEY);
  * ALERT_FROM_EMAIL switches sending over with no code change.
  */
 const FROM = process.env.ALERT_FROM_EMAIL ?? "PelotonFR <onboarding@resend.dev>";
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://pelotonfr.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://pelotonfr.com";
 
 const FEDERATION_LABEL: Record<string, string> = {
   ffc: "FFC",

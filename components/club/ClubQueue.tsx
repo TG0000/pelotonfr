@@ -40,7 +40,7 @@ export function ClubQueue({
       ...races.filter((r) => !r.handled).map(line),
       ...(races.some((r) => r.handled) ? ["", "Déjà engagés", ...races.filter((r) => r.handled).map(line)] : []),
       "",
-      "Pour être de la liste : passe la course en « programmée » sur pelotonfr.vercel.app",
+      "Pour être de la liste : passe la course en « programmée » sur pelotonfr.com",
     ].join("\n");
     try {
       await navigator.clipboard.writeText(text);

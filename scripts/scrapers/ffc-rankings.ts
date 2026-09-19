@@ -115,7 +115,7 @@ async function fetchPage(
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "PelotonFR/2.0 (+https://pelotonfr.vercel.app/contact)",
+      "User-Agent": "PelotonFR/2.0 (+https://pelotonfr.com/contact)",
       Accept: "application/json",
     },
     body,

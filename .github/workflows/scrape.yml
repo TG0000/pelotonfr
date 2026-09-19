@@ -29,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -128,7 +128,7 @@ jobs:
           BREVO_FROM_EMAIL: ${{ secrets.BREVO_FROM_EMAIL }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          NEXT_PUBLIC_SITE_URL: https://pelotonfr.vercel.app
+          NEXT_PUBLIC_SITE_URL: https://pelotonfr.com
         run: npm run alerts:send
       - name: Send closing notices
         if: ${{ !inputs.federation }}
@@ -138,7 +138,7 @@ jobs:
           BREVO_FROM_EMAIL: ${{ secrets.BREVO_FROM_EMAIL }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          NEXT_PUBLIC_SITE_URL: https://pelotonfr.vercel.app
+          NEXT_PUBLIC_SITE_URL: https://pelotonfr.com
         run: npm run alerts:closing
 
       # The collectors now record every run, so a step that is skipped or
@@ -193,7 +193,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
