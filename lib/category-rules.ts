@@ -158,19 +158,20 @@ export function assess(input: {
 
   let verdict: string;
   if (rule && next) {
+    const byAbove = rule.winAboveCounts && winsAbove >= 1;
     const parts: string[] = [];
     parts.push(`${wins} victoire${wins > 1 ? "s" : ""} sur ${rule.wins}`);
-    if (rule.winAboveCounts && winsAbove > 0) {
-      parts.push(`${winsAbove} victoire${winsAbove > 1 ? "s" : ""} au-dessus, et une suffit`);
-    }
     if (rule.points != null) parts.push(`${points} point${points > 1 ? "s" : ""} sur ${rule.points}`);
-    const done =
-      wins >= rule.wins ||
-      (rule.winAboveCounts && winsAbove >= 1) ||
-      (rule.points != null && points >= rule.points);
-    verdict = done
-      ? `Tu as de quoi monter en ${catLabel(next)} : ${parts.join(", ")}. La montée est automatique, tu as trois jours francs pour changer de licence.`
-      : `Vers ${catLabel(next)} : ${parts.join(", ")}.`;
+    const done = wins >= rule.wins || byAbove || (rule.points != null && points >= rule.points);
+    const monte = `La montée est automatique, tu as trois jours francs pour changer de licence.`;
+    if (byAbove && wins < rule.wins) {
+      verdict = `Tu as de quoi monter en ${catLabel(next)} : une victoire au-dessus de ta catégorie suffit, et tu en as ${winsAbove === 1 ? "une" : winsAbove}. ${monte}`;
+    } else if (done) {
+      verdict = `Tu as de quoi monter en ${catLabel(next)} : ${parts.join(", ")}. ${monte}`;
+    } else {
+      verdict = `Vers ${catLabel(next)} : ${parts.join(", ")}.`;
+      if (rule.winAboveCounts) verdict += ` Une victoire dans une catégorie au-dessus suffirait à elle seule.`;
+    }
   } else {
     verdict = "Au sommet de l'échelle : rien à monter.";
   }
