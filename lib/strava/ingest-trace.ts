@@ -92,6 +92,16 @@ export async function saveRideTrace(
     ]
   );
 
+  if (rows.length > 0) {
+    /* Le tracé a changé : les photos de la route et la couverture Street View
+       étaient positionnées le long de l'ancien. Gardées, elles annoncent leurs
+       dangers au mauvais kilomètre et faussent les portions sans photo. La
+       relecture de la nuit les repose sur le nouveau tracé — c'est déjà ce que
+       fait la validation d'un circuit déposé. */
+    await sql(`DELETE FROM road_views WHERE race_id = $1::uuid`, [raceId]);
+    await sql(`DELETE FROM race_streetview WHERE race_id = $1::uuid`, [raceId]);
+  }
+
   if (rows.length > 0 && existing) {
     const oldSource = String(existing.source);
     const oldPts = existing.points as Array<[number, number, number, number]>;

@@ -3,7 +3,7 @@ import { fetchRoadFeatures, readRoad, type RoadReport } from "@/lib/road";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { SectionHeading } from "./StartList";
 import type { RoadView } from "@/lib/db/queries/road";
-import { hazardsAlong, blindSpots, textureVerdict, recentCutoff, seenSentence, type RoadSeen } from "@/lib/road-vision";
+import { hazardsAlong, blindSpots, textureVerdict, recentCutoff, seenSentence, readablePictures, type RoadSeen } from "@/lib/road-vision";
 import { detectLaps } from "@/lib/trace";
 import { cn } from "@/lib/utils";
 
@@ -16,8 +16,22 @@ import { cn } from "@/lib/utils";
  */
 export async function getRoadReport(trace: RaceTrace): Promise<RoadReport | null> {
   try {
-    const features = await fetchRoadFeatures(trace.bounds);
-    return readRoad(trace.points, features);
+    /* Un tour, pas l'enregistrement entier. Le tableau s'intitule « sur le
+       tour » et chacun de ses kilomètres était multiplié par le nombre de
+       tours : à Giberville, quarante-deux tours de deux kilomètres donnaient
+       « Rue Pasteur 41,6 km » pour un kilomètre de rue, et la même rue
+       apparaissait plusieurs fois. Les pourcentages, eux, tenaient. */
+    const lap = detectLaps(trace.points).lap ?? trace.points;
+    const lngs = lap.map((p) => p[0]);
+    const lats = lap.map((p) => p[1]);
+    const bounds = {
+      west: Math.min(...lngs),
+      south: Math.min(...lats),
+      east: Math.max(...lngs),
+      north: Math.max(...lats),
+    };
+    const features = await fetchRoadFeatures(bounds);
+    return readRoad(lap, features);
   } catch {
     return null;
   }
@@ -45,8 +59,10 @@ export function RaceRoad({
 }) {
   if (!report && views.length === 0) return null;
   const shown = report?.stretches.slice(0, 6) ?? [];
-  const readable = views.filter((v) => v.reading && v.reading.surface !== "inconnu");
-  const hazards = hazardsAlong(views);
+  const readable = readablePictures(views);
+  // Les dangers viennent des mêmes photos que le reste du panneau : afficher
+  // le danger d'une photo qu'on refuse de montrer se contredit tout seul.
+  const hazards = hazardsAlong(readable);
   const grain = textureVerdict(views);
   // Composant serveur : la date est lue une fois au rendu, pas à chaque ligne.
   const cutoff = recentCutoff();

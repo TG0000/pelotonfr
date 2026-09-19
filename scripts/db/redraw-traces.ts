@@ -97,6 +97,12 @@ async function write(
       (Math.min(...lats) + Math.max(...lats)) / 2,
     ]
   );
+
+  /* Le tracé vient de changer de forme : les photos de la route et la
+     couverture Street View étaient mesurées le long de l'ancien. Gardées,
+     elles annoncent leurs dangers au mauvais kilomètre. */
+  await sql(`DELETE FROM road_views WHERE race_id = $1::uuid`, [raceId]);
+  await sql(`DELETE FROM race_streetview WHERE race_id = $1::uuid`, [raceId]);
 }
 
 /** The shape is fixed; only the ground under it can be read better. */

@@ -328,6 +328,15 @@ export async function upsertRaces(
             -- titre énonce sont donc comparées à la ligne, pas à l'empreinte.
             OR (cardinality(EXCLUDED.categories) > 0
                 AND races.categories IS DISTINCT FROM EXCLUDED.categories)
+            -- Même raison, deux drapeaux qui s'allumaient sans pouvoir
+            -- s'éteindre. Une annulation posée par les listings de presse
+            -- restait à vie alors que la fédération n'annonce rien : la
+            -- course disparaissait du calendrier, de la recherche, des
+            -- alertes et du sitemap, définitivement. Et une course retirée
+            -- une nuit parce qu'une page ne s'est pas chargée ne revenait
+            -- jamais, puisque la source la republie à l'identique.
+            OR races.is_cancelled IS DISTINCT FROM EXCLUDED.is_cancelled
+            OR races.is_active = false
          RETURNING xmax`,
         [
           race.externalId,

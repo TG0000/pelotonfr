@@ -189,6 +189,21 @@ function surfaceLabel(surface: Surface): string {
  * ce dont personne n'a besoin. Le panneau, lui, doit dire quelque chose — et
  * surtout ne pas confondre « rien à signaler » avec « on n'a pas su lire ».
  */
+/**
+ * Les photos dont la lecture compte, une fois pour toutes.
+ *
+ * Le panneau gardait celles dont la surface est connue, le brief celles qui
+ * ont une lecture quelconque, et la liste des dangers les prenait toutes.
+ * Résultat possible sur la même page : le panneau annonce « sans photo de
+ * km 2,0 à 4,5 » pendant que le brief n'y voit aucun trou, et un danger
+ * s'affiche au kilomètre d'une photo que le panneau refuse de montrer.
+ */
+export function readablePictures<T extends { reading: { surface: Surface } | null }>(
+  views: T[]
+): T[] {
+  return views.filter((v) => v.reading != null && v.reading.surface !== "inconnu");
+}
+
 export function seenSentence(seen: RoadSeen | null): string {
   if (!seen) return "Revêtement trop incertain sur ces photos pour se prononcer.";
   if (seen.verdict) return seen.verdict;
@@ -216,7 +231,7 @@ export function summarise(readings: RoadReading[]): RoadSeen | null {
   else parts.push(surface);
   if (worst === "dégradé") parts.push("par endroits dégradé");
   if (gravelSpots > 0) parts.push(`gravillons vus sur ${gravelSpots} photo${gravelSpots > 1 ? "s" : ""}`);
-  if (potholeSpots > 0) parts.push(`nids-de-poule sur ${potholeSpots}`);
+  if (potholeSpots > 0) parts.push(`nids-de-poule sur ${potholeSpots} photo${potholeSpots > 1 ? "s" : ""}`);
   if (severe.length > 0) parts.push(`${severe.length} danger${severe.length > 1 ? "s" : ""} à anticiper (${[...new Set(severe.map((h) => h.kind))].join(", ")})`);
   const verdict =
     surface === "enrobé grenu" && worst === "bon" && gravelSpots === 0 && potholeSpots === 0 && severe.length === 0
