@@ -29,8 +29,16 @@ export interface IndexNowResult {
   ok: boolean;
 }
 
-/** Au plus 10 000 adresses par envoi, dit le protocole. */
-const MAX_PAR_ENVOI = 10_000;
+/**
+ * Mille adresses par envoi.
+ *
+ * Le protocole en annonce dix mille, mais le point d'entrée partagé a refusé
+ * un envoi de 1 985 adresses par un 403 — le code qu'il réserve d'ordinaire à
+ * une clé invalide, alors que la même clé passait sur un envoi plus court.
+ * Essayé par paliers : 10, 100, 500 et 1 000 passent, à la suite les uns des
+ * autres. On s'en tient donc à mille, et on souffle entre deux envois.
+ */
+const MAX_PAR_ENVOI = 1_000;
 
 export async function submitToIndexNow(urls: string[]): Promise<IndexNowResult[]> {
   const host = new URL(CANONICAL_SITE_URL).host;
@@ -48,6 +56,7 @@ export async function submitToIndexNow(urls: string[]): Promise<IndexNowResult[]
     /* 200 et 202 valent tous deux acceptation : le second dit « clé reçue,
        vérification en cours ». Tout le reste est un refus qu'il faut lire. */
     results.push({ submitted: lot.length, status: res.status, ok: res.status === 200 || res.status === 202 });
+    if (i + MAX_PAR_ENVOI < uniques.length) await new Promise((r) => setTimeout(r, 2_000));
   }
   return results;
 }
