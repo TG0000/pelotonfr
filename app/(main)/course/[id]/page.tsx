@@ -60,8 +60,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
        porte donc la commune, le département, la date en toutes lettres et la
        discipline, et la page dit son adresse canonique — indispensable depuis
        qu'elle vit sur deux domaines. */
-    const title = raceTitle(race);
-    const description = raceDescription(race);
+    /* Une course passée ne se cherche pas comme une course à venir : on tape
+       « résultats » et un millésime, pas une date. */
+    const past = (race.raceDateEnd ?? race.raceDate) < todayISO();
+    const title = raceTitle(race, past);
+    const description = raceDescription(race, past);
     return {
       title,
       description,
