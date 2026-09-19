@@ -152,7 +152,7 @@ async function main() {
      de cette course-là. La fiche, elle, décrit toutes les listes de départ du
      jour : la liste féminine est ouverte à tous les niveaux, faute d'effectif,
      et la réunir avec la masculine rendait une course d'Access 1 ouverte aux
-     Élites. Le titre fait foi, et on le réapplique. */
+     Élites. Le titre fait foi. */
   {
     const rows = (await sql(
       `SELECT id, name, categories FROM races
@@ -168,17 +168,10 @@ async function main() {
         stored.length === titre.length && titre.every((c) => stored.includes(c));
       if (!same) bad.push({ id: row.id, name: row.name, base: stored.join(","), titre: titre.join(",") });
     }
-    let fixed = 0;
-    if (!dry) {
-      for (const b of bad) {
-        await sql(`UPDATE races SET categories = $2::text[] WHERE id = $1::uuid`, [
-          b.id,
-          String(b.titre).split(",").filter(Boolean),
-        ]);
-        fixed++;
-      }
-    }
-    await record("catégories contraires au titre", bad.length, fixed, bad, "le titre fait foi");
+    /* Le garde-fou regarde, il ne touche pas : c'est db:recompute-categories,
+       juste avant lui dans la nuit, qui réapplique le titre. */
+    const fixed = 0;
+    await record("catégories contraires au titre", bad.length, fixed, bad, "db:recompute-categories réapplique le titre");
     tally(bad.length, fixed);
   }
 
