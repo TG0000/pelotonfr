@@ -37,6 +37,7 @@ import {
 } from "@/components/races/RacePrimitives";
 import { categoryLabel } from "@/lib/categories";
 import { displayRaceName } from "@/lib/race-name";
+import { raceTitle, raceDescription, raceJsonLd } from "@/lib/race-seo";
 import { FEDERATIONS } from "@/lib/constants";
 import { todayISO } from "@/lib/date";
 import { cn } from "@/lib/utils";
@@ -53,11 +54,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   try {
     const race = await getRaceById(id);
     if (!race) return { title: "Course introuvable" };
+    /* Personne ne cherche « Mantilly Open 2-3-access 1-2-3-4 » : on cherche
+       « course cycliste Mantilly », « course 27 septembre Orne ». Le titre
+       porte donc la commune, le département, la date en toutes lettres et la
+       discipline, et la page dit son adresse canonique — indispensable depuis
+       qu'elle vit sur deux domaines. */
+    const title = raceTitle(race);
+    const description = raceDescription(race);
     return {
-      title: displayRaceName(race.name),
-      description: `${displayRaceName(race.name)} — ${placeLabel(race).text} le ${format(
-        new Date(`${race.raceDate}T12:00:00Z`), "d MMMM yyyy", { locale: fr }
-      )}`,
+      title,
+      description,
+      alternates: { canonical: `/course/${race.id}` },
+      openGraph: { title, description, type: "article", locale: "fr_FR" },
     };
   } catch {
     return { title: "Course" };
@@ -136,6 +144,14 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8">
+      {/* La course dans le vocabulaire des moteurs : un lieu, une date, un
+          organisateur. Sans ça la page n'est qu'un texte parmi d'autres ;
+          avec, elle peut paraître comme un événement daté dans les résultats. */}
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(raceJsonLd(race)) }}
+      />
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/calendrier?vue=liste"
