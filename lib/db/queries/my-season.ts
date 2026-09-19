@@ -169,16 +169,36 @@ export async function getMySeason(
 
   const results: SeasonResult[] = riderId
     ? ((await sql(
-        `SELECT ra.id, ra.name, ra.race_date::text AS race_date, ra.city,
-                ra.department_code, f.slug AS federation_slug,
-                rr.rank, rr.points,
-                (SELECT count(*)::int FROM race_results x WHERE x.race_id = ra.id) AS field
-           FROM race_results rr
-           JOIN races ra       ON ra.id = rr.race_id
-           JOIN federations f  ON f.id = ra.federation_id
-          WHERE rr.rider_id = $1::uuid AND ra.season = $2::smallint
-          ORDER BY ra.race_date DESC`,
-        [riderId, season]
+        /* Trois corrections dans la même requête.
+
+           La saison se lit sur la date, du 1er novembre au 31 octobre, et non
+           sur l'étiquette que la fédération pose sur la course : les deux ne
+           coïncident pas — 1 175 courses les séparent — et cette étiquette est
+           vide pour toute la FSGT et l'UFOLEP, dont aucune course n'apparaissait.
+
+           Le peloton, c'est sa grille et pas la réunion entière : « 3ᵉ / 1159 »
+           s'affichait pour une grille de 175. C'est exactement ce que le
+           commentaire au-dessus dit qu'il ne faut pas faire.
+
+           Et une course ne compte qu'une fois, même quand la fédération publie
+           deux grilles. */
+        `SELECT * FROM (
+           SELECT DISTINCT ON (ra.id)
+                  ra.id, ra.name, ra.race_date::text AS race_date, ra.city,
+                  ra.department_code, f.slug AS federation_slug,
+                  rr.rank, rr.points,
+                  (SELECT count(*)::int FROM race_results x
+                    WHERE x.race_id = ra.id
+                      AND x.grid_uid IS NOT DISTINCT FROM rr.grid_uid) AS field
+             FROM race_results rr
+             JOIN races ra       ON ra.id = rr.race_id
+             JOIN federations f  ON f.id = ra.federation_id
+            WHERE rr.rider_id = $1::uuid
+              AND ra.race_date >= $2::date AND ra.race_date <= $3::date
+            ORDER BY ra.id, rr.rank ASC NULLS LAST
+         ) une_place_par_course
+          ORDER BY race_date DESC`,
+        [riderId, `${season - 1}-11-01`, `${season}-10-31`]
       )) as Array<Record<string, unknown>>).map((r) => ({
         raceId: r.id as string,
         raceName: r.name as string,

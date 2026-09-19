@@ -197,7 +197,14 @@ async function getOrCreateRider(
   // In practice this only bites in youth categories (U15 and below), where a
   // licensee may not have been issued a UCI ID yet. Adult Open/Access fields —
   // the ones this product is about — come back complete.
-  if (!uciId || !lastName) return null;
+  /* « Liste Rouge » n'est pas un numéro : c'est ce que la fédération écrit à
+     la place quand le licencié refuse la publication. Accepté comme identité,
+     il repliait tous ces coureurs sur une seule fiche — 3 090 résultats, 131
+     victoires, 2 491 courses au nom d'une personne qui n'existe pas — et deux
+     d'entre eux dans la même grille s'écrasaient l'un l'autre, 1 047 lignes
+     perdues sur 514 courses. Sans numéro, on ne garde rien, comme pour les
+     jeunes qui n'en ont pas encore. */
+  if (!uciId || !lastName || !/^\d+$/.test(uciId)) return null;
 
   const cached = cache.get(uciId);
   if (cached) return cached;
