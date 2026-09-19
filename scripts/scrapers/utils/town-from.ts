@@ -38,3 +38,64 @@ export function townFrom(name: string): string | null {
   return head;
 }
 
+
+/**
+ * La commune cherchée dans tout le titre, bornée à son département.
+ *
+ * `townFrom` suppose que la commune ouvre le nom, ce qui est vrai la plupart
+ * du temps — « AVRANCHES - Elite ». Mais la fédération écrit aussi « Cyclo-
+ * cross école de vélo Roullours », « GP La Fouillouse féminin », « MOZAC
+ * BIKE'S DAY 12 - 20 POUCES » : la commune est ailleurs, ou collée à un mot
+ * de discipline. Ces courses repartaient sans lieu du tout, donc invisibles
+ * sur la carte et dans toute recherche par distance.
+ *
+ * Le département borne la recherche, ce qui la rend sûre : on ne compare
+ * qu'aux communes de ce département, et on garde le nom le plus long qui
+ * apparaisse en toutes lettres dans le titre, pour que Saint-Denis-de-
+ * Gastines l'emporte sur Saint-Denis.
+ */
+const strip = (v: string) =>
+  ` ${v
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\bst\b/g, "saint")
+    .replace(/\bste\b/g, "sainte")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()} `;
+
+const communesByDept = new Map<string, string[]>();
+
+async function communesOf(dept: string): Promise<string[]> {
+  const cached = communesByDept.get(dept);
+  if (cached) return cached;
+  let names: string[] = [];
+  try {
+    const res = await fetch(
+      `https://geo.api.gouv.fr/departements/${encodeURIComponent(dept)}/communes?fields=nom`,
+      { signal: AbortSignal.timeout(10_000) }
+    );
+    if (res.ok) names = ((await res.json()) as Array<{ nom: string }>).map((c) => c.nom);
+  } catch {
+    names = [];
+  }
+  communesByDept.set(dept, names);
+  return names;
+}
+
+export async function townInName(
+  name: string,
+  departmentCode: string | null
+): Promise<string | null> {
+  if (!departmentCode) return null;
+  const haystack = strip(name);
+  let best: string | null = null;
+  for (const commune of await communesOf(departmentCode)) {
+    /* Trois lettres au moins, et le nom doit apparaître entouré d'espaces :
+       « Ger » ne doit pas se reconnaître dans « Gerbéviller ». */
+    if (commune.length < 3) continue;
+    if (!haystack.includes(strip(commune))) continue;
+    if (!best || commune.length > best.length) best = commune;
+  }
+  return best;
+}
