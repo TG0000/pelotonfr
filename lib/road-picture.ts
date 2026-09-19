@@ -34,15 +34,22 @@ export async function orientPicture(
     const W = meta.width ?? 0;
     const H = meta.height ?? 0;
     if (W < 200 || H < 100) return { bytes, orientation: "inconnu" };
-    // Colonne au cap voulu : le centre de l'image est au cap `azimuth`.
+    /* Colonne au cap voulu : le centre de l'image regarde vers `azimuth`, et
+       `headingDelta(a, b)` rend a − b, donc l'écart cherché est bien
+       (cap − azimut). Vérifié à l'image sur une photo prise de travers : la
+       route file droit devant, capot centré en bas. */
     const FOV = 100;
     const centre = ((headingDelta(pic.bearing, centreHeading) / 360) * W + W / 2 + W) % W;
     const cropW = Math.round((FOV / 360) * W);
-    // Regarder vers l'arrière de la voiture, c'est avoir son toit en bas de
-    // l'image : la bande est remontée d'un cran dans ce cas.
-    const rearward = Math.abs(headingDelta(pic.bearing, centreHeading)) > 90;
-    const top = Math.round(H * (rearward ? 0.22 : 0.28));
-    const cropH = Math.round(H * (rearward ? 0.38 : 0.44));
+    /* Une bande, la même quel que soit le cap. Dans une équirectangulaire, la
+       verticale est le tangage et ne dépend pas de l'azimut : le toit de la
+       voiture est au nadir dans toutes les directions. Remonter la bande
+       « quand on regarde vers l'arrière » mettait la coupole de la caméra
+       dans le quart haut du cadre et réduisait la chaussée à un sixième de
+       l'image — quinze des quarante-deux photos sphériques lues, dont les
+       confiances tombaient à 0,60 contre 0,80 pour les autres. */
+    const top = Math.round(H * 0.28);
+    const cropH = Math.round(H * 0.44);
     // L'horizon boucle : l'image est doublée côte à côte, et la fenêtre ne
     // chevauche plus jamais un bord.
     const src = Buffer.from(bytes);

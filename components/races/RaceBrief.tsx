@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/queries/race-detail";
 import type { Race } from "@/types";
 import type { RoadReport } from "@/lib/road";
-import { windShelter, blindSpots, textureVerdict, type RoadSeen } from "@/lib/road-vision";
+import { readablePictures, windShelter, blindSpots, textureVerdict, type RoadSeen } from "@/lib/road-vision";
 import { detectLaps } from "@/lib/trace";
 import type { RoadView } from "@/lib/db/queries/road";
 import { SectionHeading } from "./StartList";
@@ -83,7 +83,8 @@ export async function RaceBrief({
     blind: (() => {
       if (!trace || views.length === 0) return [];
       const lap = detectLaps(trace.points).lap ?? trace.points;
-      return blindSpots(views.filter((v) => v.reading), lap[lap.length - 1][3]).map(
+      // Le même jeu de photos que le panneau, sinon les deux se contredisent.
+      return blindSpots(readablePictures(views), lap[lap.length - 1][3]).map(
         (b) => `${(b.fromM / 1000).toFixed(1).replace(".", ",")} → ${(b.toM / 1000).toFixed(1).replace(".", ",")}`
       );
     })(),

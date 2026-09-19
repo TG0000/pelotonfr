@@ -3,7 +3,7 @@ import { fetchRoadFeatures, readRoad, type RoadReport } from "@/lib/road";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { SectionHeading } from "./StartList";
 import type { RoadView } from "@/lib/db/queries/road";
-import { hazardsAlong, blindSpots, textureVerdict, recentCutoff, seenSentence, type RoadSeen } from "@/lib/road-vision";
+import { hazardsAlong, blindSpots, textureVerdict, recentCutoff, seenSentence, readablePictures, type RoadSeen } from "@/lib/road-vision";
 import { detectLaps } from "@/lib/trace";
 import { cn } from "@/lib/utils";
 
@@ -59,8 +59,10 @@ export function RaceRoad({
 }) {
   if (!report && views.length === 0) return null;
   const shown = report?.stretches.slice(0, 6) ?? [];
-  const readable = views.filter((v) => v.reading && v.reading.surface !== "inconnu");
-  const hazards = hazardsAlong(views);
+  const readable = readablePictures(views);
+  // Les dangers viennent des mêmes photos que le reste du panneau : afficher
+  // le danger d'une photo qu'on refuse de montrer se contredit tout seul.
+  const hazards = hazardsAlong(readable);
   const grain = textureVerdict(views);
   // Composant serveur : la date est lue une fois au rendu, pas à chaque ligne.
   const cutoff = recentCutoff();
