@@ -20,6 +20,25 @@ const nextConfig: NextConfig = {
      /calendrier au lieu de l'éparpiller. */
   async redirects() {
     return [
+      /* Trois adresses servaient le même site : pelotonfr.com, son www, et
+         l'adresse Vercel. La balise canonique désignait bien la première,
+         mais un moteur explore quand même les trois et partage son crédit
+         entre elles ; et un lien reçu sur l'adresse Vercel ne profitait à
+         personne. Une seule répond, les deux autres y mènent.
+         Le motif ne vise que l'alias de production : les aperçus, dont le
+         nom porte l'empreinte du déploiement, ne sont pas concernés. */
+      {
+        source: "/:path*",
+        has: [{ type: "host" as const, value: "www.pelotonfr.com" }],
+        destination: "https://pelotonfr.com/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host" as const, value: "pelotonfr.vercel.app" }],
+        destination: "https://pelotonfr.com/:path*",
+        permanent: true,
+      },
       { source: "/courses", missing: [{ type: "query" as const, key: "vue" }], destination: "/calendrier?vue=liste", permanent: true },
       { source: "/courses", destination: "/calendrier", permanent: true },
       { source: "/carte", missing: [{ type: "query" as const, key: "vue" }], destination: "/calendrier?vue=carte", permanent: true },
