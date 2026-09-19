@@ -66,7 +66,9 @@ async function main() {
        SELECT DISTINCT ON (a.race_id) a.activity_id, a.race_id, a.name, a.local_date FROM strava_activities a
          LEFT JOIN race_traces t ON t.race_id = a.race_id
         WHERE a.user_id = $1::uuid AND a.race_id IS NOT NULL
-          AND (t.race_id IS NULL OR t.source = 'segment'
+          -- Le même ordre de préséance que l'écriture : une boucle trouvée
+          -- parmi les segments ou un itinéraire dessiné cèdent à une sortie.
+          AND (t.race_id IS NULL OR t.source IN ('segment', 'route')
                OR (t.source IN ('strava', 'parcouru') AND t.distance_m * 2 < a.distance_m))
         ORDER BY a.race_id, a.distance_m DESC
      ) best ORDER BY local_date DESC LIMIT $2::int`,

@@ -96,7 +96,19 @@ export async function recordPageView(v: {
   );
 }
 
-/** Les adresses de l'opérateur, pour le sortir des comptes d'utilisateurs. */
+/**
+ * L'opérateur, pour le sortir des comptes d'utilisateurs.
+ *
+ * L'identité opérateur est un identifiant Better Auth (ADMIN_USER_IDS) depuis
+ * la v0.2 ; ADMIN_EMAILS n'est plus renseigné nulle part, si bien que le
+ * compte du propriétaire et ses favoris repassaient dans les chiffres censés
+ * mesurer de vrais coureurs. Et une adresse nulle — c'est le cas de toute
+ * inscription par Strava, où rien n'est vérifié — rendait la comparaison
+ * nulle, donc la ligne disparaissait du compte au lieu d'y rester.
+ */
+function operatorIds(): string[] {
+  return (process.env.ADMIN_USER_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+}
 function operatorEmails(): string[] {
   return (process.env.ADMIN_EMAILS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
@@ -171,24 +183,31 @@ export interface SiteKpis {
 export async function getSiteKpis(): Promise<SiteKpis> {
   const [r] = (await sql(
     `SELECT
-       (SELECT count(*) FROM races WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND is_cancelled = false) AS upcoming,
-       (SELECT count(*) FROM races r WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND EXISTS (SELECT 1 FROM race_traces t WHERE t.race_id = r.id)) AS with_trace,
-       (SELECT count(DISTINCT race_id) FROM engagements e JOIN races r ON r.id = e.race_id WHERE COALESCE(r.race_date_end, r.race_date) >= CURRENT_DATE) AS with_entrants,
-       (SELECT count(*) FROM races WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND briefing_fetched_at IS NOT NULL) AS with_briefing,
-       (SELECT count(*) FROM races WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND (start_time IS NOT NULL OR circuit_m IS NOT NULL)) AS with_poster,
+       -- Les mêmes courses que celles que le site montre : sans is_active, une
+       -- nuit où la fédération retire quarante lignes de son calendrier fait
+       -- monter le chiffre censé dire que la collecte va bien.
+       (SELECT count(*) FROM races WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND is_cancelled = false AND is_active) AS upcoming,
+       (SELECT count(*) FROM races r WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND is_active AND EXISTS (SELECT 1 FROM race_traces t WHERE t.race_id = r.id)) AS with_trace,
+       (SELECT count(DISTINCT race_id) FROM engagements e JOIN races r ON r.id = e.race_id WHERE COALESCE(r.race_date_end, r.race_date) >= CURRENT_DATE AND r.is_active) AS with_entrants,
+       (SELECT count(*) FROM races WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND is_active AND briefing_fetched_at IS NOT NULL) AS with_briefing,
+       (SELECT count(*) FROM races WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND is_active AND (start_time IS NOT NULL OR circuit_m IS NOT NULL)) AS with_poster,
        (SELECT count(DISTINCT race_id) FROM race_stages) AS with_stages,
-       (SELECT count(*) FROM races WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND (location IS NULL OR city ILIKE '%préciser%')) AS without_place,
+       (SELECT count(*) FROM races WHERE COALESCE(race_date_end, race_date) >= CURRENT_DATE AND is_active AND (location IS NULL OR city ILIKE '%préciser%')) AS without_place,
        (SELECT count(*) FROM engagements WHERE observed_at > now() - interval '30 days') AS entrants_30d,
        (SELECT count(*) FROM races WHERE has_results AND race_date >= CURRENT_DATE - 7) AS results_7d,
        (SELECT count(*) FROM reports WHERE status = 'ouvert') AS reports_open,
        (SELECT count(*) FROM reports WHERE kind = 'circuit') AS reports_circuit,
        (SELECT count(*) FROM page_views WHERE seen_at > now() - interval '24 hours' AND NOT operator) AS views_24h,
        (SELECT count(*) FROM page_views WHERE seen_at > now() - interval '7 days' AND NOT operator) AS views_7d,
-       (SELECT count(*) FROM users u WHERE NOT (lower(u.email) = ANY($1::text[]) OR u.alias_emails && $1::text[])) AS users,
+       (SELECT count(*) FROM users u WHERE NOT (u.clerk_id = ANY($2::text[])
+                                             OR lower(COALESCE(u.email, '')) = ANY($1::text[])
+                                             OR COALESCE(u.alias_emails, '{}') && $1::text[])) AS users,
        (SELECT count(*) FROM user_favorites f JOIN users u ON u.id = f.user_id
-         WHERE NOT (lower(u.email) = ANY($1::text[]) OR u.alias_emails && $1::text[])) AS favourites,
+         WHERE NOT (u.clerk_id = ANY($2::text[])
+                 OR lower(COALESCE(u.email, '')) = ANY($1::text[])
+                 OR COALESCE(u.alias_emails, '{}') && $1::text[])) AS favourites,
        (SELECT count(DISTINCT athlete_id) FROM strava_connections) AS strava_athletes`,
-    [operatorEmails()]
+    [operatorEmails(), operatorIds()]
   )) as Array<Record<string, unknown>>;
   const n = (k: string) => Number(r?.[k] ?? 0);
   return {

@@ -42,6 +42,12 @@ async function main() {
          FROM races r
         WHERE r.city IS NOT NULL AND r.city NOT ILIKE '%préciser%'
           AND r.race_date < CURRENT_DATE
+          -- Déjà réclamée par une course d'une passe précédente. Le jeu de
+          -- jetons ci-dessous ne vit que le temps d'un passage, et le script
+          -- tourne toutes les nuits : l'Access arrivée au calendrier une
+          -- semaine plus tard reprenait l'édition de l'Open 1-2-3, et les deux
+          -- pages annonçaient « l'an dernier : 84 classés ».
+          AND NOT EXISTS (SELECT 1 FROM races x WHERE x.previous_race_id = r.id)
      ),
      scored AS (
        SELECT cur.id AS race_id, prev.id AS previous_id,
@@ -78,6 +84,29 @@ async function main() {
   console.log(`${candidates.length} courses avec une candidate ; ${links.length} liens retenus.`);
   for (const l of links.slice(0, 5)) console.log("  ", l.race_id.slice(0, 8), "→", l.previous_id.slice(0, 8), `écart ${l.day_gap} j, nom ${l.name_sim}`);
   if (dry) return { seen: candidates.length, written: 0 };
+
+  /* Les doublons déjà en base, hérités des nuits où le jeu de jetons ne
+     valait que pour un passage : jusqu'à sept courses réclamaient la même
+     édition passée, et toutes affichaient le même « l'an dernier : 84
+     classés ». On garde celle dont le nom ressemble le plus, on délie le
+     reste — la passe suivante leur cherchera leur propre édition. */
+  const untied = await sql(
+    `WITH ranked AS (
+       SELECT r.id,
+              row_number() OVER (
+                PARTITION BY r.previous_race_id
+                ORDER BY similarity(lower(r.name), lower(p.name)) DESC,
+                         abs((r.race_date - interval '1 year')::date - p.race_date) ASC,
+                         r.id
+              ) AS rk
+         FROM races r JOIN races p ON p.id = r.previous_race_id
+     )
+     UPDATE races SET previous_race_id = NULL
+      WHERE id IN (SELECT id FROM ranked WHERE rk > 1)
+      RETURNING id`,
+    []
+  );
+  if (untied.length > 0) console.log(`${untied.length} lien(s) en trop délié(s) : une édition passée n'appartient qu'à une course.`);
 
   for (let i = 0; i < links.length; i += 500) {
     const batch = links.slice(i, i + 500);

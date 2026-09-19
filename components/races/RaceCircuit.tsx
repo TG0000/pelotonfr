@@ -201,6 +201,7 @@ export function RaceCircuit({
           )}
         </div>
         <StreetViewPane
+          lapM={laps.lap ? laps.lap[laps.lap.length - 1][3] : undefined}
           points={profilePoints}
           index={shownIndex}
           onIndex={setSelected}
@@ -233,8 +234,11 @@ export function RaceCircuit({
               <button
                 type="button"
                 onClick={() => {
+                  /* Le point choisi est un indice dans le tracé montré : en
+                     changeant de tracé il ne désigne plus rien. */
                   setWhole((w) => !w);
                   setCursor(null);
+                  setSelected(null);
                 }}
                 className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >

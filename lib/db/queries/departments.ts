@@ -1,6 +1,7 @@
 import { sql } from "../index";
 import { todayISO } from "@/lib/date";
 import { buildRaceFromRow } from "./races";
+import { publicStravaEnabled } from "@/lib/strava/policy";
 import type { Race } from "@/types";
 
 /**
@@ -27,7 +28,9 @@ export interface DepartmentSummary {
 function toSummary(r: Record<string, unknown>): DepartmentSummary {
   return {
     code: String(r.code),
-    name: String(r.name),
+    /* Aucune des courses du département n'a le nom en toutes lettres : on
+       affiche le numéro plutôt que « null ». */
+    name: r.name != null ? String(r.name) : `Département ${String(r.code)}`,
     upcoming: Number(r.upcoming ?? 0),
     total: Number(r.total ?? 0),
     since: r.since != null ? Number(r.since) : null,
@@ -35,27 +38,36 @@ function toSummary(r: Record<string, unknown>): DepartmentSummary {
   };
 }
 
+/* Le compte de la page et la liste qu'elle montre doivent compter la même
+   chose. L'en-tête exigeait en plus un département en toutes lettres, que la
+   fiche FFC ne donne pas toujours : « 7 courses à venir » au-dessus d'une
+   liste de dix, et un département entier en 404 quand aucune de ses courses
+   n'avait le nom. Le code suffit ; le nom, quand on l'a, sert au titre. */
 const SUMMARY_SELECT = `
   SELECT r.department_code AS code,
          min(r.department_name) AS name,
-         count(*) FILTER (WHERE COALESCE(r.race_date_end, r.race_date) >= $1::date AND NOT r.is_cancelled) AS upcoming,
+         count(*) FILTER (WHERE COALESCE(r.race_date_end, r.race_date) >= $1::date) AS upcoming,
          count(*) AS total,
          min(extract(year FROM r.race_date))::int AS since,
-         count(*) FILTER (WHERE COALESCE(r.race_date_end, r.race_date) >= $1::date AND NOT r.is_cancelled
-                           AND EXISTS (SELECT 1 FROM race_traces t WHERE t.race_id = r.id AND t.source='guide')) AS with_trace
+         count(*) FILTER (WHERE COALESCE(r.race_date_end, r.race_date) >= $1::date
+                           AND EXISTS (SELECT 1 FROM race_traces t
+                                        WHERE t.race_id = r.id
+                                          AND ($2::boolean OR t.source = 'guide'))) AS with_trace
     FROM races r
-   WHERE r.is_active = true AND r.department_code IS NOT NULL AND r.department_name IS NOT NULL`;
+   WHERE r.is_active = true AND r.department_code IS NOT NULL`;
 
 export async function listDepartments(): Promise<DepartmentSummary[]> {
   const rows = await sql(`${SUMMARY_SELECT} GROUP BY r.department_code ORDER BY r.department_code`, [
     todayISO(),
+    publicStravaEnabled(),
   ]);
   return rows.map((r) => toSummary(r as Record<string, unknown>));
 }
 
 export async function getDepartment(code: string): Promise<DepartmentSummary | null> {
-  const rows = await sql(`${SUMMARY_SELECT} AND r.department_code = $2::varchar GROUP BY r.department_code`, [
+  const rows = await sql(`${SUMMARY_SELECT} AND r.department_code = $3::varchar GROUP BY r.department_code`, [
     todayISO(),
+    publicStravaEnabled(),
     code,
   ]);
   return rows[0] ? toSummary(rows[0] as Record<string, unknown>) : null;

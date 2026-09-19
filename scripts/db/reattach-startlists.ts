@@ -65,11 +65,15 @@ async function main() {
         console.log(`  ✓ ${label.padEnd(60)} → ${result.race.slice(0, 40)}`);
       } else {
         missed++;
-        // Sans course sûre, la copie fautive doit quand même partir.
-        await sql(`DELETE FROM engagements WHERE source_url = $1`, [
-          `https://velopressecollection.ouest-france.fr${path}`,
-        ]);
-        console.log(`  – ${label.padEnd(60)} ${result.miss ?? "?"} (copie retirée)`);
+        /* Sans course sûre, la copie fautive doit quand même partir. L'adresse
+           est celle que le collecteur écrit — velopressecollection.fr — et non
+           celle des affiches : la suppression ne touchait aucune ligne et la
+           console annonçait pourtant « copie retirée ». */
+        const removed = await sql(
+          `DELETE FROM engagements WHERE source_url LIKE $1 RETURNING id`,
+          [`%${path}`]
+        );
+        console.log(`  – ${label.padEnd(60)} ${result.miss ?? "?"} (${removed.length} copie(s) retirée(s))`);
       }
     } catch (err) {
       console.error(`  ${path}: ${err instanceof Error ? err.message : String(err)}`);
