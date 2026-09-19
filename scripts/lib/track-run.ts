@@ -8,6 +8,7 @@
  */
 
 import type { SqlFn } from "../scrapers/utils/db";
+import { collectorSpec, shortfallFor, type CollectorKey } from "../../lib/collectors";
 
 export interface RunTotals {
   /** What the source offered this run. */
@@ -16,16 +17,35 @@ export interface RunTotals {
       case: a run that sees 263 start lists and stores 30 exits zero. */
   written?: number;
   metadata?: Record<string, unknown>;
+  /**
+   * Le collecteur s'est retiré volontairement, et dit pourquoi.
+   *
+   * Rendu par `main()` plutôt que levé : un retrait n'est pas une erreur, et
+   * la ligne doit porter la raison pour que la page d'état dise « désactivé :
+   * la porte premium est fermée » au lieu d'un rouge que personne ne peut
+   * réparer.
+   */
+  skipped?: string;
 }
 
 export interface RunHandle {
   finish(totals?: RunTotals): Promise<void>;
   fail(error: unknown, totals?: RunTotals): Promise<void>;
+  /**
+   * Le collecteur a choisi de ne rien faire, et dit pourquoi.
+   *
+   * « Bosses Strava » est resté rouge cinq jours et le contrôle de nuit
+   * s'apprêtait à le signaler : il ne tombait pas, il sortait volontairement
+   * parce que la porte premium était fermée dans l'environnement du job — et
+   * il sortait avant d'ouvrir sa ligne. Un silence délibéré ne se distinguait
+   * pas d'une panne.
+   */
+  skip(reason: string): Promise<void>;
 }
 
 export async function startRun(
   sql: SqlFn,
-  collector: string
+  collector: CollectorKey
 ): Promise<RunHandle> {
   let id: string | null = null;
   try {
@@ -40,7 +60,7 @@ export async function startRun(
   }
 
   async function close(
-    status: "success" | "partial" | "failed" | "aborted",
+    status: "success" | "partial" | "failed" | "aborted" | "skipped",
     totals: RunTotals | undefined,
     errorMessage: string | null
   ) {
@@ -85,12 +105,19 @@ export async function startRun(
   return {
     async finish(totals) {
       forget();
-      // Seeing plenty and keeping little is worth flagging as partial rather
-      // than reporting a clean success.
-      const seen = totals?.seen ?? 0;
-      const written = totals?.written ?? 0;
-      const shortfall = seen > 20 && written < seen * 0.25;
+      /* Voir beaucoup et ne garder presque rien mérite d'être dit — mais
+         seulement là où c'est anormal. Une fiche d'organisateur qu'on ouvre
+         pour voir si elle a du neuf n'en a pas neuf fois sur dix : marquer
+         « partiel » chaque nuit pour ça, c'est apprendre à ignorer le mot.
+         La nature du collecteur, déclarée une fois, tranche. */
+      const kind = collectorSpec(collector)?.kind ?? "harvest";
+      const last = { seen: totals?.seen ?? 0, written: totals?.written ?? 0 };
+      const shortfall = shortfallFor(kind, last, { seen: 0, written: 0 });
       await close(shortfall ? "partial" : "success", totals, null);
+    },
+    async skip(reason) {
+      forget();
+      await close("skipped", undefined, reason.slice(0, 2000));
     },
     async fail(error, totals) {
       forget();
@@ -104,13 +131,15 @@ export async function startRun(
 /** Wraps a collector so it always reports, whichever way it ends. */
 export async function trackRun<T extends RunTotals | void>(
   sql: SqlFn,
-  collector: string,
+  collector: CollectorKey,
   fn: () => Promise<T>
 ): Promise<T> {
   const run = await startRun(sql, collector);
   try {
     const result = await fn();
-    await run.finish((result ?? undefined) as RunTotals | undefined);
+    const totals = (result ?? undefined) as RunTotals | undefined;
+    if (totals?.skipped) await run.skip(totals.skipped);
+    else await run.finish(totals);
     return result;
   } catch (err) {
     await run.fail(err);
