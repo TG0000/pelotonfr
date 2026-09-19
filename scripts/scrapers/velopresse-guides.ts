@@ -170,6 +170,9 @@ async function main() {
   const limitArg = process.argv.find((a) => a.startsWith("--limit="));
   const limit = limitArg ? Number(limitArg.split("=")[1]) : 40;
   const dry = process.argv.includes("--dry");
+  /* --force relit celles qu'on vient de voir : utile le jour où la presse
+     publie un lot de guides d'un coup. */
+  const force = process.argv.includes("--force");
 
   /* Seules les courses par étapes ont un guide : une course d'un après-midi
      tient sur son affiche. */
@@ -181,18 +184,30 @@ async function main() {
         AND (race_date_end > race_date
              OR EXISTS (SELECT 1 FROM race_stages s WHERE s.race_id = r.id))
         AND NOT EXISTS (SELECT 1 FROM race_guides g WHERE g.race_id = r.id)
-      ORDER BY race_date
+        -- Une course déjà interrogée en vain se revoit dans une semaine, pas
+        -- ce soir : sans cette ligne, le budget partait chaque nuit dans les
+        -- mêmes trente courses dont ce titre de presse ne parlera jamais.
+        AND ($2::boolean
+             OR guide_checked_at IS NULL
+             OR guide_checked_at < now() - INTERVAL '7 days')
+      ORDER BY guide_checked_at NULLS FIRST, race_date
       LIMIT $1::int`,
-    [limit]
+    [limit, force]
   )) as Array<Record<string, unknown>>;
 
-  console.log(`${races.length} courses par étapes sans guide.\n`);
+  console.log(`${races.length} courses par étapes sans guide connu, à interroger.\n`);
 
   let found = 0;
   let pagesTotal = 0;
 
   for (const race of races) {
     const year = new Date(race.race_date as string).getUTCFullYear();
+    /* Marquée avant même de chercher : une page qui ne répond pas ce soir ne
+       répondra pas plus demain, et la relire chaque nuit affame celles qui
+       n'ont jamais été vues. */
+    if (!dry) {
+      await sql(`UPDATE races SET guide_checked_at = now() WHERE id = $1::uuid`, [race.id]);
+    }
     try {
       const guide = await findGuide(race.name as string, year);
       if (!guide) {

@@ -1,0 +1,12 @@
+-- Se souvenir d'avoir cherché un guide, même quand on n'en a pas trouvé.
+--
+-- Le collecteur de guides techniques choisissait les courses qui n'ont pas
+-- encore de guide, ce qui veut dire : celles qu'il a déjà interrogées en vain,
+-- toutes les nuits, pour toujours. Cent cinquante-trois interrogations dans la
+-- semaine pour un guide trouvé — et à chaque passage les mêmes trente, la
+-- Coupe du Monde BMX de Mentone et le Roc d'Azur en tête, dont la presse
+-- régionale de l'Ouest ne publiera jamais le guide.
+--
+-- Une course cherchée est marquée ; on la reverra dans une semaine, parce
+-- qu'un guide paraît parfois tard, mais pas ce soir.
+ALTER TABLE races ADD COLUMN IF NOT EXISTS guide_checked_at timestamptz;
