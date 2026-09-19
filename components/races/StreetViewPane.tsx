@@ -67,7 +67,17 @@ export function StreetViewPane({
   const open = useCallback(async () => {
     setState("loading");
     try {
-      const res = reservation.current ? null : await fetch("/api/streetview/session", { method: "POST" });
+      /* Ce qu'une ouverture peut coûter, et non « une ouverture » : la visite
+         charge un panorama tous les cent cinquante mètres, soit des dizaines
+         sur un tour. Le serveur retient ce nombre-là sur le budget. */
+      const panoramas = Math.ceil((points[points.length - 1][3] || 0) / 150) + 4;
+      const res = reservation.current
+        ? null
+        : await fetch("/api/streetview/session", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ panoramas }),
+          });
       const data = (res ? await res.json() : { ok: true, key: reservation.current }) as { ok: boolean; key?: string; reason?: string };
       if (!data.ok || !data.key) {
         setReason(data.reason ?? "Street View indisponible.");

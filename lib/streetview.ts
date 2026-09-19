@@ -43,6 +43,12 @@ function cap(value: string | undefined): number {
   const n = Number(value);
   return Number.isSafeInteger(n) && n > 0 ? n : 0;
 }
-// Opt in with explicit budgets; no assumed free allowance.
+/* Les budgets, en panoramas et non en ouvertures : Google facture chaque
+   panorama chargé, et la visite en charge un tous les cent cinquante mètres,
+   soit une quarantaine sur une boucle de cinq kilomètres. Compter les
+   ouvertures sous-estimait la facture d'un facteur quarante.
+
+   Rien ici n'est un plafond de facture : les restrictions de clé, le quota
+   posé dans la console Google et le suivi de facturation restent nécessaires. */
 export const DAILY_CAP = cap(process.env.STREETVIEW_DAILY_CAP);
 export const MONTHLY_CAP = cap(process.env.STREETVIEW_MONTHLY_CAP);
