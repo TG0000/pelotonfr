@@ -61,8 +61,13 @@ async function main() {
   for (const race of races) {
     if (await isPointToPoint(sql, String(race.name))) continue;
     const candidates = (await sql(
+      /* Un segment déjà interrogé et rendu sans tracé — privé, supprimé — a
+         un polyline vide et pas nul : le relire chaque nuit brûlait une
+         lecture Strava par segment mort, jusqu'à épuiser le budget avant les
+         courses suivantes. `detail_at` dit qu'on a déjà demandé. */
       `SELECT id, name, polyline, distance_m FROM strava_segments
         WHERE distance_m BETWEEN 1500 AND 30000 AND ST_DWithin(start, ST_MakePoint($1::float8, $2::float8)::geography, 6000)
+          AND (polyline <> '' OR detail_at IS NULL)
         ORDER BY crossings DESC, distance_m DESC LIMIT 40`,
       [race.lng, race.lat]
     )) as Array<Record<string, unknown>>;

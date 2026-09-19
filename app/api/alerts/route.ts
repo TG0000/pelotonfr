@@ -7,7 +7,7 @@ import {
   resolveUser,
   getUserAlertRules,
   createAlertRule,
-  getRuleMatches,
+  getRuleMatches, countRuleMatches,
 } from "@/lib/db/queries/alerts";
 
 export async function GET() {
@@ -30,6 +30,7 @@ export async function GET() {
       rules.map(async (rule) => ({
         ...rule,
         matches: await getRuleMatches(rule.id, { limit: 5 }),
+        matchCount: await countRuleMatches(rule.id),
       }))
     );
 

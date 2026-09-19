@@ -34,7 +34,12 @@ async function main() {
     const doubt: string[] = [];
     const name = String(r.name);
     if (await isPointToPoint(sql, name)) sure.push("le nom relie deux communes : course en ligne, pas de circuit");
-    if (r.circuit_m != null) {
+    /* La longueur annoncée est celle d'UN tour. Un tracé reconstruit depuis
+       le guide technique porte la course entière — cent dix kilomètres pour un
+       circuit de onze — et le rapport valait dix : le seul tracé juste que la
+       course avait était retiré comme aberrant. Ce contrôle ne vaut que pour
+       les boucles trouvées parmi les segments. */
+    if (r.circuit_m != null && r.source === "segment") {
       const ratio = Number(r.distance_m) / Number(r.circuit_m);
       if (ratio < 0.85 || ratio > 1.15) sure.push(`tour de ${Math.round(Number(r.distance_m))} m contre ${r.circuit_m} m annoncés`);
     }

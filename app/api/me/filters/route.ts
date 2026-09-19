@@ -33,7 +33,11 @@ export async function POST(req: Request) {
   const body = await jsonObject(req);
   if (!body) return NextResponse.json({error:"Demande invalide."},{status:400});
 
-  const filters = typeof body.filters === "string" ? body.filters.slice(0, 2000) : "";
-  await setUserFilters(id, filters);
+  /* « Efface » et « tu n'as rien envoyé » ne sont pas la même demande : une
+     clé mal orthographiée effaçait la recherche retenue et répondait 200. */
+  if (typeof body.filters !== "string") {
+    return NextResponse.json({ error: "Demande invalide." }, { status: 400 });
+  }
+  await setUserFilters(id, body.filters.slice(0, 2000));
   return NextResponse.json({ ok: true });
 }

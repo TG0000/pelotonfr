@@ -56,7 +56,8 @@ export function PointsCounter({ season }: { season: RiderSeason | null }) {
 
       {a.next && (
         <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Stat label={`victoires vers ${ladderLabel(a.next)}`} value={`${a.wins} / ${a.winsNeeded}`} good={a.wins >= a.winsNeeded} />
+          <Stat label={`victoires vers ${ladderLabel(a.next)}`} value={`${a.wins} / ${a.winsNeeded}`} good={a.wins >= a.winsNeeded || a.winsAbove >= 1} />
+          {a.winsAbove > 0 && <Stat label="victoires au-dessus · une suffit" value={`${a.winsAbove} / 1`} good />}
           {a.pointsNeeded != null && <Stat label="points au barème 6-4-3-2-1" value={`${a.points} / ${a.pointsNeeded}`} good={a.points >= a.pointsNeeded} />}
           <Stat label={`départs saison ${season.season}`} value={String(a.raced)} />
           {a.cpp != null && <Stat label={`classement national${a.cppRank ? ` · ${a.cppRank}e` : ""}`} value={`${a.cpp.toFixed(1).replace(".", ",")} pt`} warn={a.cppFloor != null && a.cpp < a.cppFloor} />}
@@ -68,7 +69,7 @@ export function PointsCounter({ season }: { season: RiderSeason | null }) {
           {a.scoring.map((r) => (
             <li key={`${r.raceDate}-${r.raceName}`} className="flex items-baseline justify-between gap-3">
               <span className="truncate"><span className="font-mono text-xs text-muted-foreground">{r.raceDate}</span> {displayRaceName(r.raceName)}</span>
-              <span className="shrink-0 font-mono tabular-nums">{r.rank}e · +{r.points}</span>
+              <span className="shrink-0 font-mono tabular-nums">{r.rank}e{r.points > 0 ? ` · +${r.points}` : " · au-dessus"}</span>
             </li>
           ))}
         </ul>

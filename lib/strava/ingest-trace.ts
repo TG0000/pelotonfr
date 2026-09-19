@@ -70,8 +70,10 @@ export async function saveRideTrace(
             centre          = EXCLUDED.centre,
             updated_at      = now()
       -- Un tracé déposé ou couru le jour J prime : on ne remplace qu'une
-      -- reconnaissance automatique parmi les segments.
-      WHERE race_traces.source = 'segment'
+      -- reconnaissance automatique parmi les segments, ou un itinéraire
+      -- dessiné à la main, qui ne comble qu'un vide en attendant qu'un
+      -- coureur passe vraiment par là.
+      WHERE race_traces.source IN ('segment', 'route')
          OR (race_traces.source IN ('strava', 'parcouru')
              AND race_traces.distance_m * 2 < EXCLUDED.distance_m)
       RETURNING race_id`,
@@ -96,7 +98,7 @@ export async function saveRideTrace(
     const overlap = overlapOf(oldPts, trace.points);
     const oldM = Number(existing.distance_m ?? 0);
     const verdict =
-      oldSource === "segment" || oldSource === "guide"
+      oldSource === "segment" || oldSource === "route"
         ? overlap >= 0.7 ? "confirme" : "faux"
         : "echauffement";
     const reason =

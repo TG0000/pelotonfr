@@ -3,7 +3,7 @@ import { fetchRoadFeatures, readRoad, type RoadReport } from "@/lib/road";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { SectionHeading } from "./StartList";
 import type { RoadView } from "@/lib/db/queries/road";
-import { hazardsAlong, blindSpots, textureVerdict, recentCutoff, type RoadSeen } from "@/lib/road-vision";
+import { hazardsAlong, blindSpots, textureVerdict, recentCutoff, seenSentence, type RoadSeen } from "@/lib/road-vision";
 import { detectLaps } from "@/lib/trace";
 import { cn } from "@/lib/utils";
 
@@ -81,7 +81,10 @@ export function RaceRoad({
       {readable.length > 0 && (
         <div className="mb-4 rounded-xl border border-border bg-surface-1 p-4">
           <p className="mb-3 text-sm">
-            {seen?.verdict ?? "Revêtement vu en photo : enrobé ordinaire en bon état."}
+            {/* Trois cas, et pas deux : lu et remarquable, lu et ordinaire,
+                pas lu du tout. La phrase de repli affirmait « enrobé ordinaire
+                en bon état » y compris quand aucune photo n'avait été lue. */}
+            {seenSentence(seen ?? null)}
             {grain && <> {grain}</>}
             <span className="text-muted-foreground"> D&rsquo;après {readable.length} photo{readable.length > 1 ? "s" : ""} prise{readable.length > 1 ? "s" : ""} sur la boucle.</span>
           </p>
@@ -131,7 +134,14 @@ export function RaceRoad({
               <span className="font-medium">Sans photo</span>
               <span className="text-muted-foreground"> : </span>
               {blind.map((b, i) => {
-                const mid = at((b.fromM + b.toM) / 2);
+                /* Le trou qui enjambe la ligne d'arrivée va de 5,0 à 0,9 :
+                   la moyenne des deux bornes tombe au milieu de la partie
+                   photographiée, à l'opposé du trou. */
+                const midM =
+                  b.fromM <= b.toM
+                    ? (b.fromM + b.toM) / 2
+                    : ((b.fromM + (b.toM + lapM)) / 2) % lapM;
+                const mid = at(midM);
                 const label = `km ${(b.fromM / 1000).toFixed(1).replace(".", ",")} → ${(b.toM / 1000).toFixed(1).replace(".", ",")}`;
                 return (
                   <span key={`${b.fromM}-${b.toM}`}>

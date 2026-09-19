@@ -216,6 +216,38 @@ export async function getRuleMatches(
   });
 }
 
+/**
+ * Combien de courses une règle retient, pour de bon.
+ *
+ * L'aperçu en montrait cinq au plus et annonçait ce nombre comme le total :
+ * « 5 courses correspondent actuellement » pour une règle qui en retient trois
+ * cents. C'est pourtant la seule chose sur laquelle un coureur peut juger sa
+ * règle avant de s'y abonner.
+ */
+export async function countRuleMatches(ruleId: string): Promise<number> {
+  const [row] = await sql(
+    `WITH rule AS (SELECT * FROM alert_rules WHERE id = $1::uuid)
+     SELECT count(*)::int AS n
+       FROM races ra
+       JOIN federations f ON f.id = ra.federation_id
+       JOIN rule ON true
+      WHERE ra.is_active
+        AND NOT ra.is_cancelled
+        AND ra.race_date >= CURRENT_DATE
+        AND ra.race_date <= CURRENT_DATE + (rule.lead_time_days * INTERVAL '1 day')
+        AND (rule.federations = '{}' OR f.slug = ANY(rule.federations))
+        AND (rule.disciplines = '{}' OR ra.discipline = ANY(rule.disciplines))
+        AND (rule.categories = '{}' OR ra.categories && rule.categories)
+        AND (
+          rule.center IS NULL
+          OR (ra.location IS NOT NULL
+              AND ST_DWithin(ra.location, rule.center, rule.radius_km * 1000))
+        )`,
+    [ruleId]
+  );
+  return Number((row as Record<string, unknown> | undefined)?.n ?? 0);
+}
+
 /** Active rules with a channel that can actually deliver. */
 export async function getDeliverableRules(): Promise<
   Array<AlertRule & { email: string | null; displayName: string | null }>

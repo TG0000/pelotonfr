@@ -77,6 +77,8 @@ export interface Assessment {
   /** Vers la montée : ce qui compte, ce qui manque. */
   wins: number;
   winsNeeded: number;
+  /** Les victoires prises dans une catégorie au-dessus : une suffit en Access. */
+  winsAbove: number;
   points: number;
   pointsNeeded: number | null;
   /** Les résultats qui ont marqué au barème. */
@@ -115,19 +117,32 @@ export function assess(input: {
   const next = idx < LADDER.length - 1 ? LADDER[idx + 1] : null;
   const rule = RISE[category];
 
+  /* Deux comptes séparés, parce que la règle les sépare : « 2 victoires dans
+     le niveau, 1 victoire au-dessus, ou 25 points ». Tout verser dans le même
+     tas faisait qu'une victoire au-dessus, qui suffit à elle seule, comptait
+     pour une demie — et le compteur annonçait « 1 victoire sur 2 » à un
+     coureur déjà monté. Le barème, lui, ne récompense que les courses de sa
+     catégorie. */
   const above = new Set(LADDER.slice(idx + 1));
   let wins = 0;
+  let winsAbove = 0;
   let points = 0;
   const scoring: Assessment["scoring"] = [];
   for (const r of results) {
     if (r.rank == null || r.rank > 5) continue;
     const ownLevel = r.categories.includes(category);
-    const upper = r.categories.some((c) => above.has(c as Category)) && !ownLevel;
-    if (!ownLevel && !(upper && rule?.winAboveCounts)) continue;
-    const p = RISE_POINTS[r.rank] ?? 0;
-    if (r.rank === 1) wins++;
-    points += p;
-    scoring.push({ ...r, points: p });
+    const upper = !ownLevel && r.categories.some((c) => above.has(c as Category));
+    if (ownLevel) {
+      const p = RISE_POINTS[r.rank] ?? 0;
+      if (r.rank === 1) wins++;
+      points += p;
+      scoring.push({ ...r, points: p });
+      continue;
+    }
+    if (upper && r.rank === 1 && rule?.winAboveCounts) {
+      winsAbove++;
+      scoring.push({ ...r, points: 0 });
+    }
   }
 
   const floors = input.gender ? CPP_FLOOR[input.gender] : CPP_FLOOR.men;
@@ -143,13 +158,20 @@ export function assess(input: {
 
   let verdict: string;
   if (rule && next) {
+    const byAbove = rule.winAboveCounts && winsAbove >= 1;
     const parts: string[] = [];
     parts.push(`${wins} victoire${wins > 1 ? "s" : ""} sur ${rule.wins}`);
     if (rule.points != null) parts.push(`${points} point${points > 1 ? "s" : ""} sur ${rule.points}`);
-    const done = wins >= rule.wins || (rule.points != null && points >= rule.points);
-    verdict = done
-      ? `Tu as de quoi monter en ${catLabel(next)} : ${parts.join(", ")}. La montée est automatique, tu as trois jours francs pour changer de licence.`
-      : `Vers ${catLabel(next)} : ${parts.join(", ")}.`;
+    const done = wins >= rule.wins || byAbove || (rule.points != null && points >= rule.points);
+    const monte = `La montée est automatique, tu as trois jours francs pour changer de licence.`;
+    if (byAbove && wins < rule.wins) {
+      verdict = `Tu as de quoi monter en ${catLabel(next)} : une victoire au-dessus de ta catégorie suffit, et tu en as ${winsAbove === 1 ? "une" : winsAbove}. ${monte}`;
+    } else if (done) {
+      verdict = `Tu as de quoi monter en ${catLabel(next)} : ${parts.join(", ")}. ${monte}`;
+    } else {
+      verdict = `Vers ${catLabel(next)} : ${parts.join(", ")}.`;
+      if (rule.winAboveCounts) verdict += ` Une victoire dans une catégorie au-dessus suffirait à elle seule.`;
+    }
   } else {
     verdict = "Au sommet de l'échelle : rien à monter.";
   }
@@ -162,6 +184,7 @@ export function assess(input: {
     next,
     wins,
     winsNeeded: rule?.wins ?? 0,
+    winsAbove,
     points,
     pointsNeeded: rule?.points ?? null,
     scoring,

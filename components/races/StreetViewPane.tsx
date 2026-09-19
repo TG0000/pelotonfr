@@ -24,6 +24,7 @@ export function StreetViewPane({
   index,
   onIndex,
   coverage = [],
+  lapM,
   className,
 }: {
   /** Un tour de la boucle : [lng, lat, alt, distance]. */
@@ -33,6 +34,10 @@ export function StreetViewPane({
   /** La visite avance : le parent déplace le curseur de la carte et du profil. */
   onIndex?: (i: number) => void;
   coverage?: CoverageSpan[];
+  /** La longueur d'un tour : la couverture est mesurée sur un tour, pas sur
+      la course entière, et diviser par les douze tours annonçait 8 % au lieu
+      de 92 %. */
+  lapM?: number;
   className?: string;
 }) {
   const host = useRef<HTMLDivElement>(null);
@@ -47,8 +52,11 @@ export function StreetViewPane({
   const [reason, setReason] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [noPano, setNoPano] = useState(false);
-  const shown = index ?? 0;
-  const at = points[Math.min(points.length - 1, Math.max(0, shown))] ?? points[0];
+  /* Le tracé montré change de longueur quand le lecteur passe d'un tour à la
+     course entière ; un point choisi au km 60 devient alors un indice hors du
+     tour, et le cap calculé dessus levait une erreur qui vidait la page. */
+  const shown = Math.min(points.length - 1, Math.max(0, index ?? 0));
+  const at = points[shown] ?? points[0];
   const indexRef = useRef<number | null>(index);
   const onIndexRef = useRef(onIndex);
   useEffect(() => {
@@ -150,7 +158,7 @@ export function StreetViewPane({
   const heading = Math.round(bearingAtIndex(points, shown));
   const km = (at[3] / 1000).toFixed(1).replace(".", ",");
   const coveredM = coverage.reduce((s, c) => s + (c.toM - c.fromM), 0);
-  const lapM = points[points.length - 1][3] || 1;
+  const lapLength = lapM || points[points.length - 1][3] || 1;
 
   return (
     <div className={cn("relative overflow-hidden bg-surface-2", className)}>
@@ -162,7 +170,7 @@ export function StreetViewPane({
           <p className="max-w-xs text-sm">
             Street View à la place du coureur, dans le sens de la course.
             {coverage.length > 0 && (
-              <span className="text-muted-foreground"> Couvert sur {Math.round((coveredM / lapM) * 100)} % du tour.</span>
+              <span className="text-muted-foreground"> Couvert sur {Math.round((coveredM / lapLength) * 100)} % du tour.</span>
             )}
           </p>
           {state === "refused" && reason && <p className="text-xs text-destructive">{reason}</p>}

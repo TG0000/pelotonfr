@@ -23,8 +23,12 @@ export function streetViewLink(lat: number, lng: number, heading: number): strin
 
 /** Cap de la course au point i du tracé, en degrés depuis le nord. */
 export function bearingAtIndex(points: Array<[number, number, number, number]>, i: number): number {
-  const a = points[Math.max(0, i - 2)];
-  const b = points[Math.min(points.length - 1, i + 2)];
+  /* Les deux bornes, pas seulement la basse : appelée avec un indice pris sur
+     la course entière alors que le tracé montré est un tour, la borne haute
+     laissait passer un point inexistant. */
+  const j = Math.min(points.length - 1, Math.max(0, i));
+  const a = points[Math.max(0, j - 2)];
+  const b = points[Math.min(points.length - 1, j + 2)];
   const dLng = (b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180);
   return ((Math.atan2(dLng, b[1] - a[1]) * 180) / Math.PI + 360) % 360;
 }

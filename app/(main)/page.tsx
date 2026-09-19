@@ -1,4 +1,5 @@
 import { requestTime } from "@/lib/request-time";
+import { todayISO } from "@/lib/date";
 import Link from "next/link";
 import { ArrowUpRight, CalendarDays, MapPin, Users } from "lucide-react";
 import { RouteIllustration } from "@/components/brand/RouteIllustration";
@@ -47,7 +48,7 @@ export default async function HomePage() {
     </div>
     <section id="rendez-vous" className="scroll-mt-24 py-7">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="home-kicker mb-2 text-muted-foreground">LE CALENDRIER / LES PROCHAINS DÉPARTS</p><h2 className="font-heading text-4xl font-bold">Ton prochain dimanche.</h2></div><Link href="/calendrier" className="inline-flex items-center gap-2 text-sm underline underline-offset-4">Tout le calendrier <ArrowUpRight className="size-4" /></Link></div>
-      {unavailable ? <div role="status" className="rounded-xl border p-6">Les prochaines courses ne peuvent pas être chargées pour le moment. Réessaie dans quelques instants.</div> : upcomingRaces.length ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{upcomingRaces.map(race=><RaceCard key={race.id} race={race} nowMs={requestTime()} />)}</div> : <p className="rounded-xl border p-6 text-muted-foreground">Aucune prochaine course n’est encore référencée. Reviens après la prochaine mise à jour du calendrier.</p>}
+      {unavailable ? <div role="status" className="rounded-xl border p-6">Les prochaines courses ne peuvent pas être chargées pour le moment. Réessaie dans quelques instants.</div> : upcomingRaces.length ? <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{upcomingRaces.map(race=><RaceCard key={race.id} race={race} nowMs={requestTime()} today={todayISO()} />)}</div> : <p className="rounded-xl border p-6 text-muted-foreground">Aucune prochaine course n’est encore référencée. Reviens après la prochaine mise à jour du calendrier.</p>}
     </section>
     <section className="grid gap-10 border-t my-12 pt-12 pb-5 md:grid-cols-2">
       <div><p className="home-kicker mb-3 text-muted-foreground">PLUS QU’UNE DATE DANS LE CALENDRIER</p><h2 className="font-heading text-5xl font-bold leading-none">LE DIMANCHE<br />SE PRÉPARE ICI.</h2><p className="mt-5 max-w-md leading-relaxed text-muted-foreground">Une course, c’est un lieu à rejoindre, une inscription à ne pas manquer et un parcours à comprendre. Retrouve l’essentiel, puis construis ta saison à ton rythme.</p><Link href="/ma-saison" className="mt-6 inline-flex items-center gap-3 rounded-full border px-5 py-3 text-sm font-bold">Préparer ma saison <ArrowUpRight className="size-4" /></Link></div>

@@ -61,6 +61,10 @@ jobs:
           npm run db:place
           npm run db:place-check
           npm run scrape:briefing -- --categories --limit=150
+          # La fédération écrit la catégorie dans le nom de la course : c'est
+          # le seul énoncé qui ne parle que d'elle, et il reprend la main sur
+          # ce qu'une fiche — qui décrit tous les pelotons du jour — a pu poser.
+          npm run db:recompute-categories
           npm run db:retype-cyclos
           # Each race meets its previous edition: same village, same week, same discipline.
           npm run db:link-editions

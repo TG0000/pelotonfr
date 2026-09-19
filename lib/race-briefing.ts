@@ -36,9 +36,10 @@ export interface Briefing {
   placesLeft: number | null;
   placesTotal: number | null;
   /**
-   * Les catégories admises, lues dans les « critères d'admissibilité » de
-   * chaque épreuve (« De Open 1 à Access 4 », « De U17 à U17 »), dans le
-   * vocabulaire de la base. C'est la seule source quand le nom n'en dit rien.
+   * Les catégories admises, lues liste de départ par liste de départ dans les
+   * « critères d'admissibilité » (« De Open 1 à Access 4 », « De U17 à U17 »),
+   * dans le vocabulaire de la base. C'est la source quand le nom n'en dit rien ;
+   * quand le nom les écrit, c'est le nom qui fait foi.
    */
   categories: string[];
   /**
@@ -50,16 +51,28 @@ export interface Briefing {
   organizer: string | null;
 }
 
-/** L'échelle des catégories route FFC, dans l'ordre de la fiche : « De Elite
- *  à U17 » descend des Élites aux cadets en passant par tous les Open et Access. */
-const LADDER = ["elite", "open1", "open2", "open3", "access1", "access2", "access3", "access4", "u19", "u17", "u15", "u13", "u11", "u9", "u7"];
+/**
+ * L'échelle des catégories FFC, dans l'ordre où la fédération l'écrit.
+ *
+ * « De Elite à U7 » descend la liste entière ; « De Elite Professionnel à
+ * Elite » n'en prend que les deux premiers barreaux. L'ordre est celui du menu
+ * de la fiche, vérifié sur une liste d'engagés BMX où Open 1 et U7 courent la
+ * même épreuve.
+ */
+const LADDER = ["pro", "elite", "open1", "open2", "open3", "access1", "access2", "access3", "access4", "u19", "u17", "u15", "u13", "u11", "u9", "u7"];
 
 function categoryToken(raw: string): string | null {
   const v = raw.toLowerCase().replace(/\s+/g, "");
+  // « Elite Professionnel » est le barreau au-dessus d'Élite, pas un Élite.
+  if (/^[ée]lite(professionnel|pro)/.test(v)) return "pro";
   if (/^[ée]lite/.test(v)) return "elite";
   const o = v.match(/^open(\d)/); if (o) return `open${o[1]}`;
   const a = v.match(/^acc?ess?(\d)/); if (a) return `access${a[1]}`;
-  const u = v.match(/^u(\d{1,2})/); if (u) return `u${u[1]}`;
+  /* Seules les tranches d'âge existantes. « De U17 à U7 » suivi d'un chiffre
+     collé — la fiche colle ses sections — donnait « U70 », une catégorie qui
+     n'existe pas et qui ne correspondait donc à aucun filtre. */
+  const u = v.match(/^u(\d{1,2})/);
+  if (u) return ["7", "9", "11", "13", "15", "17", "19"].includes(u[1]) ? `u${u[1]}` : null;
   if (/^espoir/.test(v)) return "espoirs";
   if (/^senior/.test(v)) return "seniors";
   if (/^master/.test(v)) return "masters";
@@ -72,21 +85,94 @@ function categoryToken(raw: string): string | null {
   return null;
 }
 
-/** « De Open 1 à Access 4 » → open1, open2, open3, access1 … access4. */
-export function categoriesFromAdmissibility(text: string): string[] {
-  const out = new Set<string>();
-  for (const m of text.matchAll(/\bDe\s+([A-Za-zÉé]+\s?\d{0,2})\s+à\s+([A-Za-zÉé]+\s?\d{0,2})/g)) {
-    const from = categoryToken(m[1]);
-    const to = categoryToken(m[2]);
-    if (!from || !to) continue;
-    const i = LADDER.indexOf(from), j = LADDER.indexOf(to);
-    if (i >= 0 && j >= 0) { for (let k = Math.min(i, j); k <= Math.max(i, j); k++) out.add(LADDER[k]); }
-    if (i < 0) out.add(from);
-    if (j < 0) out.add(to);
+/**
+ * Une liste de départ : un peloton, ses catégories, son genre.
+ *
+ * Une fiche en porte souvent plusieurs, et c'est là que tout se joue. À
+ * Beautheil, la liste 1 dit « De Access 1 à Access 1 — Hommes » et la liste 2
+ * « De Elite à Access 4 — Femmes », parce qu'un peloton féminin accueille tous
+ * les niveaux faute d'effectif. Lire la fiche d'un bloc et réunir les deux
+ * rendait une course d'Access 1 ouverte aux Élites : sur treize pour cent des
+ * fiches, la liste féminine n'a pas les mêmes critères que la masculine.
+ */
+export interface StartList {
+  categories: string[];
+  hommes: boolean;
+  femmes: boolean;
+}
+
+/**
+ * Une catégorie telle que la fiche l'écrit, et rien de plus.
+ *
+ * La fiche colle ses sections : « De U17 à U7 » suivi de « 0 engagé » se lit
+ * « De U17 à U70 » si on prend tout ce qui suit le « à ». Les tranches d'âge
+ * sont donc énumérées, de la plus longue à la plus courte, pour que « U7 »
+ * s'arrête avant le zéro qui ne lui appartient pas.
+ */
+const CATEGORY = String.raw`(?:[EÉ]lite\s+Professionnel|[EÉ]lite|Open\s*[123]|Acc?[eé]?ss?\s*[1234]|U\s*(?:19|17|15|13|11|9|7)|Espoirs?|S[ée]niors?|Masters?|Juniors?|Cadets?|Minimes?|Benjamins?|Pupilles?|Poussins?)`;
+
+export function readStartLists(pageText: string): StartList[] {
+  const text = pageText.replace(/\s+/g, " ");
+  const out: StartList[] = [];
+
+  for (const part of text.split(/Crit[èe]res? d'admissibilit[ée]/).slice(1)) {
+    /* Le bloc court jusqu'à la liste suivante. La fiche colle ses sections
+       — « Access 4Femmes tout âge » — donc on coupe sur le mot, sans frontière
+       de mot : `\bFemmes\b` ne se déclenchait jamais après un chiffre, et
+       aucune épreuve féminine n'était reconnue. */
+    const block = part.split(/Liste \d|Crit[èe]res? d'admissibilit|Contacter l'organisateur/)[0];
+
+    const span = block.match(
+      new RegExp(`^\\s*De\\s+(${CATEGORY})\\s+[àa]\\s+(${CATEGORY})`)
+    );
+    if (!span) continue;
+
+    const from = categoryToken(span[1]);
+    const to = categoryToken(span[2]);
+    const categories: string[] = [];
+    const i = from ? LADDER.indexOf(from) : -1;
+    const j = to ? LADDER.indexOf(to) : -1;
+    if (i >= 0 && j >= 0) {
+      for (let k = Math.min(i, j); k <= Math.max(i, j); k++) categories.push(LADDER[k]);
+    } else {
+      if (from) categories.push(from);
+      if (to && to !== from) categories.push(to);
+    }
+    if (categories.length === 0) continue;
+
+    out.push({
+      categories,
+      hommes: /Hommes[ \u00a0]/.test(block),
+      femmes: /Femmes[ \u00a0]/.test(block),
+    });
   }
-  // « Femmes dès 17 ans » : une épreuve féminine, quelle que soit l'échelle.
-  if (out.size > 0 && /\bFemmes\b/i.test(text)) out.add("feminines");
-  return [...out];
+
+  return out;
+}
+
+/**
+ * Les catégories de la course, listes de départ comprises.
+ *
+ * Le peloton masculin fait la course ; une liste réservée aux femmes dit
+ * qu'il y a une épreuve féminine, sans pour autant ouvrir la course aux
+ * catégories qu'elle seule admet. Quand toutes les listes sont féminines,
+ * c'est une course de femmes et ce sont bien ses catégories.
+ */
+export function categoriesFromLists(pageText: string): string[] {
+  const lists = readStartLists(pageText);
+  if (lists.length === 0) return [];
+
+  const mixed = lists.filter((l) => l.hommes || !l.femmes);
+  const source = mixed.length > 0 ? mixed : lists;
+
+  const out = new Set<string>();
+  for (const list of source) for (const c of list.categories) out.add(c);
+  if (lists.some((l) => l.femmes && !l.hommes)) out.add("feminines");
+
+  return [...out].sort((a, b) => {
+    const ia = LADDER.indexOf(a), ib = LADDER.indexOf(b);
+    return (ia < 0 ? LADDER.length : ia) - (ib < 0 ? LADDER.length : ib);
+  });
 }
 
 /** Words that end a pickup place — the page runs sections together. */
@@ -193,7 +279,7 @@ export function parseBriefing(pageText: string): Briefing {
     placesTotal = (placesTotal ?? 0) + total;
   }
 
-  const categories = categoriesFromAdmissibility(text);
+  const categories = categoriesFromLists(text);
   /* Sous le titre, la fiche écrit le département en toutes lettres, puis
      « CONTACTER L'ORGANISATEUR » ; plus bas, « ORGANISATEUR » puis le club. */
   const dep = text.match(/(\S+(?:\s+\S+){0,3})\s+CONTACTER L'ORGANISATEUR/);

@@ -27,9 +27,45 @@ async function main() {
      candidate un an plus tôt (± 10 jours), même commune, même fédération,
      même discipline. La similarité du nom (bigrammes) départage, puis
      l'écart de date. */
+  /* Les doublons déjà en base, hérités des nuits où le jeu de jetons ne
+     valait que pour un passage : jusqu'à sept courses réclamaient la même
+     édition passée, et toutes affichaient le même « l'an dernier : 84
+     classés ». On garde celle dont le nom ressemble le plus, on délie le
+     reste — la passe suivante leur cherchera leur propre édition. */
+  /* Les rattachements que les catégories désavouent, hérités d'avant ce
+     garde-fou : une course de jeunes reliée à l'Open de l'an dernier. */
+  const wrong = dry ? [] : await sql(
+    `UPDATE races r SET previous_race_id = NULL
+       FROM races p
+      WHERE p.id = r.previous_race_id
+        AND cardinality(r.categories) > 0 AND cardinality(p.categories) > 0
+        AND NOT (r.categories && p.categories)
+      RETURNING r.id`,
+    []
+  );
+  if (wrong.length > 0) console.log(`${wrong.length} édition(s) d'une autre épreuve déliée(s).`);
+
+  const untied = dry ? [] : await sql(
+    `WITH ranked AS (
+       SELECT r.id,
+              row_number() OVER (
+                PARTITION BY r.previous_race_id
+                ORDER BY similarity(lower(r.name), lower(p.name)) DESC,
+                         abs((r.race_date - interval '1 year')::date - p.race_date) ASC,
+                         r.id
+              ) AS rk
+         FROM races r JOIN races p ON p.id = r.previous_race_id
+     )
+     UPDATE races SET previous_race_id = NULL
+      WHERE id IN (SELECT id FROM ranked WHERE rk > 1)
+      RETURNING id`,
+    []
+  );
+  if (untied.length > 0) console.log(`${untied.length} lien(s) en trop délié(s) : une édition passée n'appartient qu'à une course.`);
+
   const candidates = (await sql(
     `WITH cur AS (
-       SELECT r.id, r.name, r.race_date, r.discipline, r.federation_id, r.department_code,
+       SELECT r.id, r.name, r.race_date, r.discipline, r.federation_id, r.department_code, r.categories,
               lower(regexp_replace(coalesce(r.city, ''), '[^a-zA-Z]+', '', 'g')) AS c
          FROM races r
         WHERE r.previous_race_id IS NULL
@@ -37,11 +73,17 @@ async function main() {
           AND r.race_date >= CURRENT_DATE - 400
      ),
      prev AS (
-       SELECT r.id, r.name, r.race_date, r.discipline, r.federation_id, r.finisher_count, r.department_code,
+       SELECT r.id, r.name, r.race_date, r.discipline, r.federation_id, r.finisher_count, r.department_code, r.categories,
               lower(regexp_replace(coalesce(r.city, ''), '[^a-zA-Z]+', '', 'g')) AS c
          FROM races r
         WHERE r.city IS NOT NULL AND r.city NOT ILIKE '%préciser%'
           AND r.race_date < CURRENT_DATE
+          -- Déjà réclamée par une course d'une passe précédente. Le jeu de
+          -- jetons ci-dessous ne vit que le temps d'un passage, et le script
+          -- tourne toutes les nuits : l'Access arrivée au calendrier une
+          -- semaine plus tard reprenait l'édition de l'Open 1-2-3, et les deux
+          -- pages annonçaient « l'an dernier : 84 classés ».
+          AND NOT EXISTS (SELECT 1 FROM races x WHERE x.previous_race_id = r.id)
      ),
      scored AS (
        SELECT cur.id AS race_id, prev.id AS previous_id,
@@ -59,6 +101,13 @@ async function main() {
           AND (prev.department_code IS NULL OR cur.department_code IS NULL OR prev.department_code = cur.department_code)
           AND prev.federation_id = cur.federation_id
           AND prev.discipline = cur.discipline
+          -- Une réunion aligne plusieurs épreuves le même jour dans le même
+          -- village : sans ce garde-fou, « Prix du Souvenir René Léger (U7 à
+          -- U13) » héritait des 84 classés de l'Open 2-3 de l'an dernier, et
+          -- la page annonçait le peloton d'une autre course. Deux éditions
+          -- d'une même épreuve partagent au moins une catégorie.
+          AND (cardinality(cur.categories) = 0 OR cardinality(prev.categories) = 0
+               OR cur.categories && prev.categories)
           AND prev.id <> cur.id
           AND abs((cur.race_date - interval '1 year')::date - prev.race_date) <= 10
      )

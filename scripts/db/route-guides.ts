@@ -103,14 +103,22 @@ async function main() {
         );
       } else {
         const centre = [(trace.bounds.west + trace.bounds.east) / 2, (trace.bounds.south + trace.bounds.north) / 2];
-        await sql(
+        const written = await sql(
           `INSERT INTO race_traces (race_id, source, points, distance_m, elevation_gain_m, min_elevation_m, max_elevation_m, bounds, centre)
            VALUES ($1::uuid, 'guide', $2::jsonb, $3, $4, $5, $6, $7::jsonb, ST_MakePoint($8::float8, $9::float8)::geography)
            ON CONFLICT (race_id) DO UPDATE SET source = 'guide', points = EXCLUDED.points, distance_m = EXCLUDED.distance_m, elevation_gain_m = EXCLUDED.elevation_gain_m,
              min_elevation_m = EXCLUDED.min_elevation_m, max_elevation_m = EXCLUDED.max_elevation_m, bounds = EXCLUDED.bounds, centre = EXCLUDED.centre, updated_at = now()
-           WHERE race_traces.source = 'segment'`,
-          [raceId, JSON.stringify(trace.points), trace.distanceM, trace.elevationGainM, trace.minElevationM, trace.maxElevationM, JSON.stringify(trace.bounds), centre[0], centre[1]]
+           WHERE race_traces.source = 'segment' OR ($10::boolean AND race_traces.source = 'guide')
+           RETURNING race_id`,
+          [raceId, JSON.stringify(trace.points), trace.distanceM, trace.elevationGainM, trace.minElevationM, trace.maxElevationM, JSON.stringify(trace.bounds), centre[0], centre[1], force]
         );
+        /* Sans --force, un tracé déjà écrit depuis le guide reste en place :
+           la console annonçait pourtant « tracé écrit » et comptait un parcours
+           reconstruit, alors que la base gardait l'ancien. */
+        if (written.length === 0) {
+          console.log(`    tracé déjà posé depuis le guide, gardé — relancer avec --force pour le refaire`);
+          continue;
+        }
       }
       built++;
       console.log(`    tracé écrit : ${(trace.distanceM / 1000).toFixed(1)} km, ${trace.elevationGainM} m de dénivelé`);

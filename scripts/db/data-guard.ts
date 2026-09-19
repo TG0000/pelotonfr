@@ -15,6 +15,7 @@
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "../scrapers/utils/db";
 import { trackRun } from "../lib/track-run";
+import { normalizeCategories } from "../../lib/categories";
 
 loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
@@ -136,12 +137,45 @@ async function main() {
   // 10. Collecteurs muets : ont vu, n'ont rien écrit, deux nuits de suite.
   {
     const bad = (await sql(
+      /* Le garde-fou ne corrige plus rien depuis la v0.2 : il regarde. Il
+         écrit donc zéro chaque nuit, et se signalait lui-même comme muet. */
       `SELECT collector, count(*) AS nights FROM collector_runs
         WHERE started_at > now() - interval '2 days' AND items_seen > 0 AND items_written = 0
+          AND collector <> 'data-guard'
         GROUP BY collector HAVING count(*) >= 2`
     )) as Row[];
     await record("collecteur muet deux nuits", bad.length, 0, bad, "à regarder");
     tally(bad.length, 0);
+  }
+
+  /* 11. Catégories en désaccord avec le titre.
+
+     La fédération écrit la catégorie dans le titre — « BEAUTHEIL - ACCESS 1 »,
+     « CASTELJALOUX Cyclo-Cross U15 » — et c'est le seul énoncé qui ne parle que
+     de cette course-là. La fiche, elle, décrit toutes les listes de départ du
+     jour : la liste féminine est ouverte à tous les niveaux, faute d'effectif,
+     et la réunir avec la masculine rendait une course d'Access 1 ouverte aux
+     Élites. Le titre fait foi. */
+  {
+    const rows = (await sql(
+      `SELECT id, name, categories FROM races
+        WHERE federation_id = 1 AND is_active
+          AND COALESCE(race_date_end, race_date) >= CURRENT_DATE`
+    )) as Row[];
+    const bad: Row[] = [];
+    for (const row of rows) {
+      const titre = normalizeCategories(row.name as string, "ffc");
+      if (titre.length === 0) continue;
+      const stored = (row.categories as string[]) ?? [];
+      const same =
+        stored.length === titre.length && titre.every((c) => stored.includes(c));
+      if (!same) bad.push({ id: row.id, name: row.name, base: stored.join(","), titre: titre.join(",") });
+    }
+    /* Le garde-fou regarde, il ne touche pas : c'est db:recompute-categories,
+       juste avant lui dans la nuit, qui réapplique le titre. */
+    const fixed = 0;
+    await record("catégories contraires au titre", bad.length, fixed, bad, "db:recompute-categories réapplique le titre");
+    tally(bad.length, fixed);
   }
 
   console.log(`\n${totalFound} anomalie(s) trouvée(s), ${totalFixed} corrigée(s) ; aucune suppression automatique.`);

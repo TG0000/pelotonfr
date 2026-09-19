@@ -91,10 +91,13 @@ async function main() {
     `SELECT u.id AS user_id, u.email, u.display_name, f.intent,
             r.id AS race_id, r.name, r.race_date, r.city, r.entries_close_at,
             r.entries_engaged, r.entries_capacity,
+            -- « y vont déjà » veut dire programmée, pas mise de côté : la
+            -- distinction existe justement pour qu'un signet ne se lise pas
+            -- comme un engagement, et c'est la phrase qui décide un coureur.
             (SELECT count(*) FROM user_favorites f2
               JOIN club_members m2 ON m2.verified_at IS NOT NULL AND m2.user_id = f2.user_id
               JOIN club_members m1 ON m1.verified_at IS NOT NULL AND m1.user_id = u.id AND m1.club_id = m2.club_id
-             WHERE f2.race_id = r.id AND f2.user_id <> u.id) AS club_going,
+             WHERE f2.race_id = r.id AND f2.user_id <> u.id AND f2.intent = 'programmee') AS club_going,
             EXISTS (SELECT 1 FROM club_entries ce
                       JOIN club_members m1 ON m1.verified_at IS NOT NULL AND m1.user_id = u.id AND m1.club_id = ce.club_id
                      WHERE ce.race_id = r.id) AS club_handled
