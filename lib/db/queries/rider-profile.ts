@@ -15,7 +15,7 @@ import { sql } from "../index";
  */
 
 /** Maps a race date onto the FFC ranking season it counts towards. */
-const SEASON_EXPR = `EXTRACT(YEAR FROM (ra.race_date + INTERVAL '2 months'))::int`;
+const SEASON_EXPR = `EXTRACT(YEAR FROM (race_date + INTERVAL '2 months'))::int`;
 
 
 function num(value: unknown): number | null {
@@ -115,16 +115,25 @@ export async function getRiderProfile(
   if (!identity) return null;
 
   const rows = await sql(
-    `WITH racing AS (
-       SELECT ${SEASON_EXPR} AS season,
-              COUNT(*)                                        AS races,
-              COUNT(*) FILTER (WHERE rr.rank = 1)             AS wins,
-              COUNT(*) FILTER (WHERE rr.rank BETWEEN 1 AND 3) AS podiums,
-              COUNT(*) FILTER (WHERE rr.rank BETWEEN 1 AND 10) AS top_ten,
-              MIN(rr.rank) FILTER (WHERE rr.rank IS NOT NULL) AS best_rank
+    /* Une course, une ligne. La fédération publie souvent deux grilles pour la
+       même épreuve, et compter les lignes donnait « 2026 : 63 courses » sous
+       une carte qui en annonçait 36 : deux réponses à la même question, à un
+       écran d'écart. La carte a raison, elle compte les courses. */
+    `WITH par_course AS (
+       SELECT DISTINCT ON (rr.race_id) rr.race_id, rr.rank, ra.race_date
          FROM race_results rr
          JOIN races ra ON ra.id = rr.race_id
         WHERE rr.rider_id = $1
+        ORDER BY rr.race_id, rr.rank ASC NULLS LAST
+     ),
+     racing AS (
+       SELECT ${SEASON_EXPR} AS season,
+              COUNT(*)                                     AS races,
+              COUNT(*) FILTER (WHERE rank = 1)             AS wins,
+              COUNT(*) FILTER (WHERE rank BETWEEN 1 AND 3) AS podiums,
+              COUNT(*) FILTER (WHERE rank BETWEEN 1 AND 10) AS top_ten,
+              MIN(rank) FILTER (WHERE rank IS NOT NULL)    AS best_rank
+         FROM par_course
         GROUP BY 1
      ),
      ranked AS (

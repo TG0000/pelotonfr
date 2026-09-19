@@ -16,7 +16,7 @@ import {
 } from "@/components/races/RacePrimitives";
 import { SectionHeading } from "@/components/races/StartList";
 import { displayRaceName } from "@/lib/race-name";
-import { todayISO } from "@/lib/date";
+import { seasonBounds } from "@/lib/category-rules";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -123,8 +123,9 @@ export default async function MaSaisonPage() {
     );
   }
 
-  const today = todayISO();
-  const season = Number(today.slice(0, 4));
+  /* La saison route court du 1er novembre au 31 octobre : l'année civile la
+     coupe en deux et, dès novembre, la page affichait la saison précédente. */
+  const season = seasonBounds().season;
 
   const user = await currentUser();
   const id = await resolveUser(userId, user?.primaryEmailAddress?.emailAddress ?? null);

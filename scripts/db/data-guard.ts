@@ -178,6 +178,23 @@ async function main() {
     tally(bad.length, fixed);
   }
 
+  /* 12. Couverture Street View orpheline de son tracé.
+
+     Le résultat appartient à un tracé précis, et la page ne l'affiche que si
+     l'empreinte correspond. La colonne d'empreinte est arrivée sans remplir
+     les lignes existantes : les quatre couvertures déjà calculées sont
+     devenues invisibles du jour au lendemain, sans rien casser ni rien dire. */
+  {
+    const bad = (await sql(
+      `SELECT s.race_id, r.name, s.checked_at::date AS calcule_le
+         FROM race_streetview s JOIN race_traces t ON t.race_id = s.race_id
+         JOIN races r ON r.id = s.race_id
+        WHERE s.trace_hash IS DISTINCT FROM md5(t.points::text)`
+    )) as Row[];
+    await record("couverture Street View périmée", bad.length, 0, bad, "scrape:streetview la recalcule");
+    tally(bad.length, 0);
+  }
+
   console.log(`\n${totalFound} anomalie(s) trouvée(s), ${totalFixed} corrigée(s) ; aucune suppression automatique.`);
   return { seen: totalFound, written: totalFixed };
 }
