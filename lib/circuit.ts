@@ -119,6 +119,16 @@ export function findCircuits(
     const closureM = metresBetween(points[0], points[points.length - 1]);
     if (closureM > closureToleranceFor(lengthM)) continue;
 
+    /* Un aller-retour se referme aussi bien qu'une boucle : parti et revenu
+       par la même route, l'écart entre le départ et l'arrivée vaut zéro, et
+       rien d'autre ne le distinguait. Ce que dit une vraie boucle, c'est que
+       son quart et ses trois quarts sont loin l'un de l'autre. Sur les
+       circuits gardés, le plus plat est à 5 % de sa longueur ; l'aller-retour
+       servi aux deux courses de Saint-Pierre-des-Corps était à 0,7 %. */
+    const quarter = points[Math.floor(points.length * 0.25)];
+    const threeQuarters = points[Math.floor(points.length * 0.75)];
+    if (metresBetween(quarter, threeQuarters) < lengthM * 0.03) continue;
+
     // A loop that closes but sits ten kilometres away belongs to another race.
     let proximityM = Infinity;
     for (const p of points) {
