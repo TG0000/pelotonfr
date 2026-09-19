@@ -175,7 +175,7 @@ export async function sendClubReminders(
   const from =
     options.from ?? process.env.ALERT_FROM_EMAIL ?? "PelotonFR <onboarding@resend.dev>";
   const site =
-    options.site ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://pelotonfr.vercel.app";
+    options.site ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://pelotonfr.com";
 
   const pending = await pendingEntries(sql, withinHours);
   const lines: string[] = [];

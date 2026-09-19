@@ -1,4 +1,7 @@
-export const CANONICAL_SITE_URL = "https://pelotonfr.vercel.app";
+/* Le domaine du produit. L'adresse Vercel reste servie et redirige, mais tout
+   ce qui est canonique — sitemap, robots, balises de partage, liens des
+   e-mails — doit nommer celui-ci. */
+export const CANONICAL_SITE_URL = "https://pelotonfr.com";
 
 /** Server-configured origins only: forwarded hosts must not choose OAuth redirects. */
 export async function getSiteUrl(): Promise<string> {

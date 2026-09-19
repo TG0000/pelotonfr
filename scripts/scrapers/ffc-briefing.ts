@@ -54,7 +54,7 @@ async function locate(
 
   try {
     const res = await fetch(`${BAN}?${params}`, {
-      headers: { "User-Agent": "PelotonFR/1.0 (+https://pelotonfr.vercel.app/contact)" },
+      headers: { "User-Agent": "PelotonFR/1.0 (+https://pelotonfr.com/contact)" },
       signal: AbortSignal.timeout(6_000),
     });
     if (!res.ok) return null;

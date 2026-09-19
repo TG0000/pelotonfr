@@ -88,6 +88,6 @@
     "js-yaml": "^4.3.2"
   },
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   }
 }

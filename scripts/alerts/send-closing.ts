@@ -20,7 +20,7 @@ loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
 const MAILER = Boolean(process.env.BREVO_API_KEY || process.env.RESEND_API_KEY);
 const FROM = process.env.ALERT_FROM_EMAIL ?? "PelotonFR <onboarding@resend.dev>";
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://pelotonfr.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://pelotonfr.com";
 
 interface Due {
   user_id: string;
