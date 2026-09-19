@@ -3,7 +3,7 @@ import { fetchRoadFeatures, readRoad, type RoadReport } from "@/lib/road";
 import type { RaceTrace } from "@/lib/db/queries/race-detail";
 import { SectionHeading } from "./StartList";
 import type { RoadView } from "@/lib/db/queries/road";
-import { hazardsAlong, blindSpots, textureVerdict, recentCutoff, type RoadSeen } from "@/lib/road-vision";
+import { hazardsAlong, blindSpots, textureVerdict, recentCutoff, seenSentence, type RoadSeen } from "@/lib/road-vision";
 import { detectLaps } from "@/lib/trace";
 import { cn } from "@/lib/utils";
 
@@ -81,10 +81,10 @@ export function RaceRoad({
       {readable.length > 0 && (
         <div className="mb-4 rounded-xl border border-border bg-surface-1 p-4">
           <p className="mb-3 text-sm">
-            {/* Sans lecture assez sûre, on ne dit rien du revêtement : la
-                phrase de repli affirmait « enrobé ordinaire en bon état »
-                au-dessus d'une vignette légendée « gravier, dégradé ». */}
-            {seen?.verdict ?? "Revêtement trop incertain sur ces photos pour se prononcer."}
+            {/* Trois cas, et pas deux : lu et remarquable, lu et ordinaire,
+                pas lu du tout. La phrase de repli affirmait « enrobé ordinaire
+                en bon état » y compris quand aucune photo n'avait été lue. */}
+            {seenSentence(seen ?? null)}
             {grain && <> {grain}</>}
             <span className="text-muted-foreground"> D&rsquo;après {readable.length} photo{readable.length > 1 ? "s" : ""} prise{readable.length > 1 ? "s" : ""} sur la boucle.</span>
           </p>

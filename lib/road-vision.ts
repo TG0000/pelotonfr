@@ -172,6 +172,29 @@ export interface RoadSeen {
   verdict: string | null;
 }
 
+/** Le revêtement dit comme un coureur le dirait. */
+function surfaceLabel(surface: Surface): string {
+  if (surface === "enduit gravillonné") return "enduit gravillonné";
+  if (surface === "rapiécé") return "enrobé rapiécé";
+  if (surface === "enrobé lisse") return "enrobé lisse";
+  if (surface === "enrobé grenu") return "enrobé ordinaire";
+  return surface;
+}
+
+/**
+ * La phrase du panneau, dans les trois cas.
+ *
+ * `summarise` rend `verdict: null` quand la route est ordinaire et qu'il n'y a
+ * rien à signaler : c'est ce qui empêche le brief de dire « la route va bien »,
+ * ce dont personne n'a besoin. Le panneau, lui, doit dire quelque chose — et
+ * surtout ne pas confondre « rien à signaler » avec « on n'a pas su lire ».
+ */
+export function seenSentence(seen: RoadSeen | null): string {
+  if (!seen) return "Revêtement trop incertain sur ces photos pour se prononcer.";
+  if (seen.verdict) return seen.verdict;
+  return `Revêtement vu en photo : ${surfaceLabel(seen.surface)} en bon état.`;
+}
+
 export function summarise(readings: RoadReading[]): RoadSeen | null {
   const usable = readings.filter((r) => r.surface !== "inconnu" && r.confidence >= 0.4);
   if (usable.length === 0) return null;

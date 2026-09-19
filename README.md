@@ -54,7 +54,7 @@ L'identité retient les directions éditorial sportif + esprit club pour le site
 ## Services externes et recette
 
 - Fonctions configurées à Londres (`lhr1`), près de la base Neon `eu-west-2`. [Documentation Vercel](https://vercel.com/docs/functions/configuring-functions/region). Node 22 est fixé dans `engines` et dans la CI.
-- `ENABLE_PUBLIC_STRAVA=false` par défaut : les activités restent privées, les usages collectifs et la publication de propositions restent fermés jusqu’à validation contractuelle. Une couleur premium ne donne aucun droit.
+- `ENABLE_PUBLIC_STRAVA` : la porte de la version premium. Vide ou absente, tout ce qui vient de Strava est visible — le circuit, le vent, la route lue en photo, Street View. Posée à `false`, ces pages se referment et les activités ne sont plus ingérées. Une couleur premium ne donne aucun droit.
 - `/admin/circuits` permet la revue des propositions ; `/admin/confidentialite` traite les oppositions validées. Un nom seul demande une vérification des homonymes.
 - Street View intégré exige `GOOGLE_MAPS_BROWSER_KEY`, `STREETVIEW_DAILY_CAP` et `STREETVIEW_MONTHLY_CAP`. Les plafonds d’ouvertures ne sont pas des plafonds de facture : restrictions API/domaine, quotas fournisseur et suivi de facturation sont nécessaires.
 - `place-check --dry-run` consulte uniquement les lieux déjà connus et ne géocode pas les inconnus ; aucun lieu ni journal de collecte n’est écrit. `data-guard` signale les anomalies pour revue et ne supprime plus les tracés ou liens de course sur une distance supposée aberrante.
