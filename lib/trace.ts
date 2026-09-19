@@ -285,7 +285,12 @@ export function detectLaps(
 
   return {
     boundaries,
-    lapCount: Math.round(totalM / median),
+    /* Les tours délimités, pas la sortie divisée. L'enregistrement porte la
+       mise en route et le retour au parking, que cette même fonction exclut
+       du tour représentatif : à Chemazé, onze tours de 7,4 km plus sept
+       kilomètres d'approche s'annonçaient comme douze, et le dénivelé par
+       tour s'en trouvait sous-estimé d'autant. */
+    lapCount: boundaries.length - 1,
     lapDistanceM: median,
     lap,
   };
