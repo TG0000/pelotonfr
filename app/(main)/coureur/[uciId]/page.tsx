@@ -1,17 +1,39 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Trophy, Medal, Flag, TrendingUp, Users } from "lucide-react";
-import { buttonVariants } from "@/lib/button-variants";
+import { categoryLabel } from "@/lib/categories";
+import { Trophy, Medal, Flag, TrendingUp, Users } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { getRiderProfile } from "@/lib/db/queries/rider-profile";
-import { getRiderResults } from "@/lib/db/queries/riders";
+import { getRiderResults, type RiderResult } from "@/lib/db/queries/riders";
+import { getDepartment } from "@/lib/db/queries/departments";
+import { Breadcrumb } from "@/components/seo/Breadcrumb";
+import { CANONICAL_SITE_URL } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
 interface PageProps {
   params: Promise<{ uciId: string }>;
+}
+
+/* Une fiche de coureur ne change qu'une fois la nuit passée, quand les
+   classements sont relus. Six mille pages recalculées à chaque visite, ce
+   sont six mille requêtes et autant de secondes perdues par un robot qui n'a
+   qu'un crédit d'exploration à dépenser. */
+export const revalidate = 3600;
+
+/** Le département où ce coureur court le plus : sa sortie vers les siens. */
+function homeDepartment(results: RiderResult[]): string | null {
+  const counts = new Map<string, number>();
+  for (const r of results) {
+    if (!r.departmentCode) continue;
+    counts.set(r.departmentCode, (counts.get(r.departmentCode) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let most = 0;
+  for (const [code, n] of counts) if (n > most) { best = code; most = n; }
+  return best;
 }
 
 function fullName(last: string, first: string | null): string {
@@ -24,11 +46,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const profile = await getRiderProfile(uciId);
     if (!profile) return { title: "Coureur introuvable" };
     const name = fullName(profile.identity.lastName, profile.identity.firstName);
+    const club = profile.identity.clubName ? ` (${profile.identity.clubName})` : "";
+    const cat = profile.identity.category ? `, catégorie ${categoryLabel(profile.identity.category)}` : "";
     return {
       title: `${name} — palmarès et classement`,
-      description: `Palmarès, classement national et résultats de ${name}${
-        profile.identity.clubName ? ` (${profile.identity.clubName})` : ""
-      }.`,
+      description: `Palmarès de ${name}${club}${cat} : victoires, podiums, classement national par points et résultats saison par saison en cyclisme amateur.`,
+      alternates: { canonical: `/coureur/${uciId}` },
     };
   } catch {
     return { title: "Coureur" };
@@ -69,6 +92,30 @@ export default async function RiderPage({ params }: PageProps) {
   const { identity, seasons } = profile;
   const name = fullName(identity.lastName, identity.firstName);
   const results = await getRiderResults(identity.id, 20).catch(() => []);
+  const chezLui = homeDepartment(results);
+  const departement = chezLui ? await getDepartment(chezLui).catch(() => null) : null;
+
+  /* Ce que Google peut afficher d'un coureur : un nom, un club, une
+     discipline. Le reste de la fiche — points, rang, saison par saison — ne
+     rentre dans aucun type, et on ne l'invente pas : une donnée balisée qui
+     ne correspond à rien de visible est une raison de se faire déclasser. */
+  const personneJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    mainEntity: {
+      "@type": "Person",
+      name,
+      ...(identity.firstName ? { givenName: identity.firstName } : {}),
+      familyName: identity.lastName,
+      url: `${CANONICAL_SITE_URL}/coureur/${identity.uciId ?? uciId}`,
+      ...(identity.clubName
+        ? { memberOf: { "@type": "SportsTeam", name: identity.clubName, sport: "Cyclisme" } }
+        : {}),
+      ...(departement
+        ? { homeLocation: { "@type": "Place", address: { "@type": "PostalAddress", addressRegion: departement.name, addressCountry: "FR" } } }
+        : {}),
+    },
+  };
 
   // A rider whose best season is well ahead of the current one is on the way
   // back rather than simply modest — worth stating plainly.
@@ -80,13 +127,21 @@ export default async function RiderPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 w-full">
-      <Link
-        href="/calendrier?vue=liste"
-        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "-ml-2 gap-1.5 mb-6")}
-      >
-        <ArrowLeft className="size-4" />
-        Retour
-      </Link>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(personneJsonLd) }}
+      />
+
+      <Breadcrumb
+        trail={[
+          { href: "/", label: "Accueil" },
+          ...(departement
+            ? [{ href: `/departement/${departement.code}`, label: `${departement.name} (${departement.code})` }]
+            : [{ href: "/calendrier?vue=liste", label: "Courses" }]),
+        ]}
+        current={name}
+      />
 
       <header className="mb-6">
         <h1 className="text-2xl font-bold">{name}</h1>

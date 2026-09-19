@@ -230,7 +230,6 @@ export function detectLaps(
   if (points.length < 40) return empty;
 
   const start: [number, number] = [points[0][1], points[0][0]];
-  const totalM = points[points.length - 1][3];
 
   const RETURN_TOLERANCE_M = 120;
   /** Below this a "lap" is the rider circling the start village, not a circuit. */

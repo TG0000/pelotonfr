@@ -18,9 +18,9 @@ const SITE = CANONICAL_SITE_URL;
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const fixed: MetadataRoute.Sitemap = [
     { url: SITE, changeFrequency: "daily", priority: 1 },
-    { url: `${SITE}/courses`, changeFrequency: "daily", priority: 0.9 },
-    { url: `${SITE}/calendrier`, changeFrequency: "daily", priority: 0.8 },
-    { url: `${SITE}/carte`, changeFrequency: "daily", priority: 0.7 },
+    /* /courses et /carte partent en 308 vers /calendrier : une redirection
+       n'a rien à faire dans un plan, Google la compte comme une erreur. */
+    { url: `${SITE}/calendrier`, changeFrequency: "daily", priority: 0.9 },
     { url: `${SITE}/departement`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${SITE}/blog`, changeFrequency: "weekly", priority: 0.6 },
     ...ARTICLES.map((a) => ({
@@ -36,14 +36,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   let races: Array<{ id: string; updated_at: string; past: boolean }> = [];
-  let departments: string[] = [];
+  let departments: Array<{ code: string; updated_at: string }> = [];
+  let riders: Array<{ uci_id: string; updated_at: string | null }> = [];
   try {
-    departments = (
-      (await sql(
-        `SELECT DISTINCT department_code FROM races WHERE department_code IS NOT NULL AND department_name IS NOT NULL`,
-        []
-      )) as Array<{ department_code: string }>
-    ).map((r) => r.department_code);
+    /* La date de dernière modification décide de la fréquence des passages :
+       sans elle, cent départements et six mille coureurs sont relus au même
+       rythme, qu'ils aient bougé cette nuit ou pas depuis six mois. */
+    departments = (await sql(
+      `SELECT department_code AS code, max(updated_at)::text AS updated_at
+         FROM races
+        WHERE department_code IS NOT NULL AND department_name IS NOT NULL
+        GROUP BY department_code`,
+      []
+    )) as Array<{ code: string; updated_at: string }>;
     races = (await sql(
       `SELECT id::text, updated_at::text,
               COALESCE(race_date_end, race_date) < (now() AT TIME ZONE 'Europe/Paris')::date AS past
@@ -54,16 +59,42 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         LIMIT 20000`,
       []
     )) as Array<{ id: string; updated_at: string; past: boolean }>;
+    /* Les coureurs classés au national, et eux seuls. « Palmarès Untel
+       cyclisme » est une vraie recherche, mais un site neuf a peu de crédit
+       d'exploration : inonder le plan de cinquante mille fiches dont la
+       plupart tiennent en une ligne retarderait la découverte des courses,
+       qui sont ce qu'on vient chercher. Les six mille qui ont un rang ont une
+       page qui vaut le détour : points, rang, saison par saison, palmarès. */
+    riders = (await sql(
+      `SELECT r.uci_id,
+              (SELECT max(a.race_date)::text
+                 FROM race_results s JOIN races a ON a.id = s.race_id
+                WHERE s.rider_id = r.id) AS updated_at
+         FROM riders r
+        WHERE r.uci_id ~ '^[0-9]+$' AND r.current_rank IS NOT NULL AND r.result_count >= 5
+        ORDER BY r.current_rank
+        LIMIT 10000`,
+      []
+    )) as Array<{ uci_id: string; updated_at: string | null }>;
   } catch {
     // Sans base, le plan ne perd que les courses : les pages fixes restent.
   }
 
   return [
     ...fixed,
-    ...departments.map((code) => ({
-      url: `${SITE}/departement/${code}`,
+    ...departments.map((d) => ({
+      url: `${SITE}/departement/${d.code}`,
+      lastModified: new Date(d.updated_at),
       changeFrequency: "daily" as const,
       priority: 0.8,
+    })),
+    ...riders.map((r) => ({
+      url: `${SITE}/coureur/${r.uci_id}`,
+      /* La dernière course courue : c'est le seul jour où sa fiche a changé
+         pour de bon. Le classement bouge chaque nuit pour tout le monde. */
+      ...(r.updated_at ? { lastModified: new Date(r.updated_at) } : {}),
+      changeFrequency: "monthly" as const,
+      priority: 0.3,
     })),
     ...races.map((r) => ({
       url: `${SITE}/course/${r.id}`,

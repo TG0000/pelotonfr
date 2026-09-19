@@ -38,6 +38,7 @@ import {
 import { categoryLabel } from "@/lib/categories";
 import { displayRaceName } from "@/lib/race-name";
 import { raceTitle, raceDescription, raceJsonLd } from "@/lib/race-seo";
+import { Breadcrumb } from "@/components/seo/Breadcrumb";
 import { FEDERATIONS } from "@/lib/constants";
 import { todayISO } from "@/lib/date";
 import { cn } from "@/lib/utils";
@@ -151,6 +152,19 @@ export default async function RaceDetailPage({ params, searchParams }: PageProps
         type="application/ld+json"
         suppressHydrationWarning
         dangerouslySetInnerHTML={{ __html: JSON.stringify(raceJsonLd(race)) }}
+      />
+      {/* La sortie vers le calendrier du département : pour un coureur arrivé
+          ici par une recherche, c'est tout ce qui se court à côté. Et c'est un
+          lien depuis chacune des deux mille fiches vers la centaine de pages
+          qui peuvent se classer sur « courses cyclistes en Mayenne ». */}
+      <Breadcrumb
+        trail={[
+          { href: "/", label: "Accueil" },
+          ...(race.departmentCode && race.departmentName
+            ? [{ href: `/departement/${race.departmentCode}`, label: race.departmentName }]
+            : [{ href: "/calendrier?vue=liste", label: "Toutes les courses" }]),
+        ]}
+        current={displayRaceName(race.name)}
       />
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Link

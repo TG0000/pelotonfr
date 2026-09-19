@@ -1,5 +1,6 @@
 import { requestTime } from "@/lib/request-time";
 import { todayISO } from "@/lib/date";
+import { CANONICAL_SITE_URL } from "@/lib/site-url";
 import Link from "next/link";
 import { ArrowUpRight, CalendarDays, MapPin, Users } from "lucide-react";
 import { RouteIllustration } from "@/components/brand/RouteIllustration";
@@ -10,7 +11,54 @@ import type { Race } from "@/types";
 import type { RaceStats } from "@/lib/db/queries/races";
 
 export const revalidate = 300;
-export const metadata = { alternates: { canonical: "/" } };
+/* Le titre que Google affiche n'est pas la devise du site. « Ta prochaine
+   course commence ici » ne contient aucun des mots qu'un coureur tape ; il
+   reste la devise, en gros, sur la page et dans les partages. Ici, ce sont
+   les trois fédérations et le mot « courses cyclistes ». */
+export const metadata = {
+  title: "Courses cyclistes FFC, FSGT et UFOLEP",
+  alternates: { canonical: "/" },
+};
+
+/**
+ * Qui publie ce site, et comment on y cherche.
+ *
+ * `WebSite` avec son action de recherche, c'est ce qui permet à Google
+ * d'afficher un champ de recherche sous le nom du site dans ses résultats, et
+ * `Organization` de rattacher toutes les pages à un même éditeur plutôt qu'à
+ * un domaine anonyme.
+ */
+const SITE_JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${CANONICAL_SITE_URL}/#site`,
+      url: CANONICAL_SITE_URL,
+      name: "PelotonFR",
+      inLanguage: "fr-FR",
+      description:
+        "Le calendrier du cyclisme amateur français : courses FFC, FSGT et UFOLEP, parcours, engagés et météo au départ.",
+      publisher: { "@id": `${CANONICAL_SITE_URL}/#editeur` },
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: `${CANONICAL_SITE_URL}/calendrier?vue=liste&q={search_term_string}`,
+        },
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@type": "Organization",
+      "@id": `${CANONICAL_SITE_URL}/#editeur`,
+      name: "PelotonFR",
+      url: CANONICAL_SITE_URL,
+      logo: `${CANONICAL_SITE_URL}/apple-icon.png`,
+      areaServed: { "@type": "Country", name: "France" },
+    },
+  ],
+};
 
 export default async function HomePage() {
   let upcomingRaces: Race[] = [];
@@ -19,6 +67,7 @@ export default async function HomePage() {
   try { [upcomingRaces, stats] = await Promise.all([getUpcomingRaces(6), getRaceStats()]); }
   catch { unavailable = true; }
   return <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
+    <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(SITE_JSON_LD) }} />
     <section className="home-hero">
       <div>
         <p className="home-kicker mb-5 flex items-center gap-3"><span className="size-2 rounded-full bg-highlight" /> LE RENDEZ-VOUS DES COUREURS</p>
@@ -29,9 +78,9 @@ export default async function HomePage() {
           <Link href="#rendez-vous" className="text-sm underline underline-offset-4">Explorer sans compte</Link>
         </div>
         <div className="mt-8 flex flex-wrap gap-5 font-mono text-xs text-muted-foreground" role="group" aria-label="Fédérations référencées">
-          <Link href="/courses?fed=ffc" className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-ffc" />FFC</Link>
-          <Link href="/courses?fed=fsgt" className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-fsgt" />FSGT</Link>
-          <Link href="/courses?fed=ufolep" className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-ufolep" />UFOLEP</Link>
+          <Link href="/calendrier?vue=liste&fed=ffc" className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-ffc" />FFC</Link>
+          <Link href="/calendrier?vue=liste&fed=fsgt" className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-fsgt" />FSGT</Link>
+          <Link href="/calendrier?vue=liste&fed=ufolep" className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-ufolep" />UFOLEP</Link>
         </div>
       </div>
       <RouteIllustration />
@@ -54,7 +103,7 @@ export default async function HomePage() {
       <div><p className="home-kicker mb-3 text-muted-foreground">PLUS QU’UNE DATE DANS LE CALENDRIER</p><h2 className="font-heading text-5xl font-bold leading-none">LE DIMANCHE<br />SE PRÉPARE ICI.</h2><p className="mt-5 max-w-md leading-relaxed text-muted-foreground">Une course, c’est un lieu à rejoindre, une inscription à ne pas manquer et un parcours à comprendre. Retrouve l’essentiel, puis construis ta saison à ton rythme.</p><Link href="/ma-saison" className="mt-6 inline-flex items-center gap-3 rounded-full border px-5 py-3 text-sm font-bold">Préparer ma saison <ArrowUpRight className="size-4" /></Link></div>
       <div className="space-y-1">{[
         { icon: MapPin, title: "Trouve les courses qui te vont.", description: "Lieu, catégorie, fédération : pars de tes envies et de tes contraintes.", href: "/calendrier" },
-        { icon: CalendarDays, title: "Arrive avec les bonnes infos.", description: "Départ, engagements, circuit : consulte la fiche et sa source officielle.", href: "/courses" },
+        { icon: CalendarDays, title: "Arrive avec les bonnes infos.", description: "Départ, engagements, circuit : consulte la fiche et sa source officielle.", href: "/calendrier?vue=liste" },
         { icon: Users, title: "Construis ta saison avec ton club.", description: "Envisagées ou programmées : les courses de l’équipe au même endroit.", href: "/club" },
       ].map((feature,index)=><Link key={feature.title} href={feature.href} className="flex gap-5 rounded-xl p-5 hover:bg-surface-2"><span className="font-mono text-sm text-accent">0{index+1}</span><div><h3 className="flex items-center gap-2 font-bold"><feature.icon className="size-4 shrink-0" />{feature.title}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{feature.description}</p></div></Link>)}</div>
     </section>
