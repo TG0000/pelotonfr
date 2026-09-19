@@ -288,7 +288,15 @@ export async function upsertRaces(
            discipline       = EXCLUDED.discipline,
            race_type        = EXCLUDED.race_type,
            level            = EXCLUDED.level,
-           categories       = EXCLUDED.categories,
+           -- Le calendrier n'écrit les catégories que lorsqu'il en a : la
+           -- FFC les met dans le titre, les deux autres fédérations non, et
+           -- écraser avec un tableau vide effaçait chaque nuit ce que la
+           -- fiche et les listings de presse avaient rempli.
+           categories       = CASE
+                                WHEN cardinality(EXCLUDED.categories) > 0
+                                THEN EXCLUDED.categories
+                                ELSE races.categories
+                              END,
            gender           = EXCLUDED.gender,
            distance_km      = EXCLUDED.distance_km,
            is_cancelled     = EXCLUDED.is_cancelled,
@@ -314,6 +322,12 @@ export async function upsertRaces(
            is_active        = true,
            scraped_at       = now()
          WHERE races.content_hash IS DISTINCT FROM EXCLUDED.content_hash
+            -- L'empreinte compare la source à elle-même : quand une autre
+            -- source a changé la ligne, la source d'origine ne peut plus la
+            -- corriger, et l'erreur devient définitive. Les catégories que le
+            -- titre énonce sont donc comparées à la ligne, pas à l'empreinte.
+            OR (cardinality(EXCLUDED.categories) > 0
+                AND races.categories IS DISTINCT FROM EXCLUDED.categories)
          RETURNING xmax`,
         [
           race.externalId,

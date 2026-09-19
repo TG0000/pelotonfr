@@ -15,6 +15,7 @@
 import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "../scrapers/utils/db";
 import { trackRun } from "../lib/track-run";
+import { normalizeCategories } from "../../lib/categories";
 
 loadEnv();
 const sql = createSql(requireEnv("DATABASE_URL"));
@@ -142,6 +143,43 @@ async function main() {
     )) as Row[];
     await record("collecteur muet deux nuits", bad.length, 0, bad, "à regarder");
     tally(bad.length, 0);
+  }
+
+  /* 11. Catégories en désaccord avec le titre.
+
+     La fédération écrit la catégorie dans le titre — « BEAUTHEIL - ACCESS 1 »,
+     « CASTELJALOUX Cyclo-Cross U15 » — et c'est le seul énoncé qui ne parle que
+     de cette course-là. La fiche, elle, décrit toutes les listes de départ du
+     jour : la liste féminine est ouverte à tous les niveaux, faute d'effectif,
+     et la réunir avec la masculine rendait une course d'Access 1 ouverte aux
+     Élites. Le titre fait foi, et on le réapplique. */
+  {
+    const rows = (await sql(
+      `SELECT id, name, categories FROM races
+        WHERE federation_id = 1 AND is_active
+          AND COALESCE(race_date_end, race_date) >= CURRENT_DATE`
+    )) as Row[];
+    const bad: Row[] = [];
+    for (const row of rows) {
+      const titre = normalizeCategories(row.name as string, "ffc");
+      if (titre.length === 0) continue;
+      const stored = (row.categories as string[]) ?? [];
+      const same =
+        stored.length === titre.length && titre.every((c) => stored.includes(c));
+      if (!same) bad.push({ id: row.id, name: row.name, base: stored.join(","), titre: titre.join(",") });
+    }
+    let fixed = 0;
+    if (!dry) {
+      for (const b of bad) {
+        await sql(`UPDATE races SET categories = $2::text[] WHERE id = $1::uuid`, [
+          b.id,
+          String(b.titre).split(",").filter(Boolean),
+        ]);
+        fixed++;
+      }
+    }
+    await record("catégories contraires au titre", bad.length, fixed, bad, "le titre fait foi");
+    tally(bad.length, fixed);
   }
 
   console.log(`\n${totalFound} anomalie(s) trouvée(s), ${totalFixed} corrigée(s) ; aucune suppression automatique.`);

@@ -164,6 +164,26 @@ export function CategorySummary({
   const onLadder = LADDER.filter((c) => categories.includes(c));
   const others = categories.filter((c) => !LADDER.includes(c));
 
+  /* Une épreuve ouverte du haut de l'échelle aux plus jeunes — une montée
+     chronométrée, une manche de BMX — énumérait « Élite → Access 4 · U19
+     (Junior) · U17 (Cadet) · U15 (Minime) · +1 », soit une ligne entière pour
+     dire « tout le monde ». Le coureur ne cherche qu'une chose : est-ce que je
+     peux m'aligner. */
+  const youth = others.filter((c) => /^u\d+$/.test(c));
+  if (onLadder.length === LADDER.length && youth.length >= 3) {
+    return (
+      <span
+        className={cn(
+          "text-xs truncate",
+          highlight && highlight.length > 0 ? "text-primary font-medium" : "text-muted-foreground",
+          className
+        )}
+      >
+        Toutes catégories
+      </span>
+    );
+  }
+
   const parts: string[] = [];
   if (onLadder.length > 0) {
     const first = onLadder[0];

@@ -24,6 +24,7 @@ import { loadEnv, requireEnv } from "../lib/load-env";
 import { createSql } from "./utils/db";
 import { fetchHtml, politeDelay } from "./utils/http";
 import { parseBriefing, parseStages } from "../../lib/race-briefing";
+import { normalizeCategories } from "../../lib/categories";
 import { startRun } from "../lib/track-run";
 
 loadEnv();
@@ -104,8 +105,12 @@ async function main() {
   const placesOnly = process.argv.includes("--places");
   /* --categories : les fiches des courses sans catégorie, déjà lues ou non.
      La fiche les écrit dans ses critères d'admissibilité, que le lecteur ne
-     regardait pas ; 266 courses route à venir n'en avaient aucune. */
+     regardait pas ; 266 courses route à venir n'en avaient aucune.
+     --recategories relit en plus celles dont la fiche avait déjà répondu, pour
+     réparer ce que l'ancienne lecture — toutes listes de départ confondues —
+     avait écrit de travers. */
   const categoriesOnly = process.argv.includes("--categories");
+  const reCategories = process.argv.includes("--recategories");
 
   const races = (await sql(
     `SELECT id, name, city, department_code, source_url,
@@ -115,9 +120,10 @@ async function main() {
         AND source_url LIKE '%/calendrier/competition/%'
         AND is_cancelled = false
         AND COALESCE(race_date_end, race_date) >= CURRENT_DATE
-        AND ($2::boolean OR $4::boolean OR $5::boolean OR briefing_fetched_at IS NULL)
+        AND ($2::boolean OR $4::boolean OR $5::boolean OR $6::boolean OR briefing_fetched_at IS NULL)
         AND (NOT $4::boolean OR race_date <= CURRENT_DATE + 10)
         AND (NOT $5::boolean OR $2::boolean OR briefing_fetched_at IS NULL OR briefing_fetched_at < now() - interval '7 days')
+        AND (NOT $6::boolean OR briefing_fetched_at IS NOT NULL)
         AND (NOT $3::boolean
              OR (race_date_end > race_date
                  AND NOT EXISTS (SELECT 1 FROM race_stages s
@@ -125,7 +131,7 @@ async function main() {
       ORDER BY EXISTS (SELECT 1 FROM user_favorites f WHERE f.race_id = races.id) DESC,
                race_date ASC
       LIMIT $1::int`,
-    [limit, force, stagesOnly, placesOnly, categoriesOnly]
+    [limit, force, stagesOnly, placesOnly, categoriesOnly, reCategories]
   )) as Array<Record<string, unknown>>;
 
   console.log(`${races.length} fiches à lire.\n`);
@@ -139,6 +145,11 @@ async function main() {
 
   for (const race of races) {
     try {
+      /* En relecture des catégories, une course dont le titre les écrit n'a
+         rien à apprendre de sa fiche : on s'épargne la page. */
+      if (reCategories && normalizeCategories(race.name as string, "ffc").length > 0) {
+        continue;
+      }
       const html = await fetchHtml(race.source_url as string);
       const text = cheerio.load(html)("body").text();
       const brief = parseBriefing(text);
@@ -182,8 +193,14 @@ async function main() {
 
       /* Ce que la fiche dit et que le nom ne disait pas : les catégories,
          le département en toutes lettres, l'organisateur. Jamais en
-         écrasant ce qu'on savait déjà. */
-      if (brief.categories.length > 0) {
+         écrasant ce qu'on savait déjà.
+
+         La fédération écrit la catégorie dans le titre — « BEAUTHEIL -
+         ACCESS 1 » — et c'est elle qui fait foi : la fiche, elle, décrit
+         toutes les listes de départ de la journée, dont la féminine, ouverte
+         à tous les niveaux. Quand le titre parle, on ne touche à rien. */
+      const fromTitle = normalizeCategories(race.name as string, "ffc");
+      if (brief.categories.length > 0 && fromTitle.length === 0) {
         const r = await sql(
           `UPDATE races SET categories = $2::text[] WHERE id = $1::uuid AND categories IS DISTINCT FROM $2::text[] RETURNING id`,
           [race.id, brief.categories]
