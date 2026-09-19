@@ -32,6 +32,20 @@ const KIND_LABEL: Record<string, { text: string; className: string; icon: typeof
   regular: { text: "", className: "", icon: Users },
 };
 
+/**
+ * Sur quoi les victoires et les podiums sont comptés.
+ *
+ * Dire « 3 V · 5 P » sans dire sur quelle période, c'est laisser le lecteur
+ * croire à une carrière. En novembre et en décembre la fenêtre déborde sur la
+ * fin de la saison précédente, parce que la saison neuve est encore vide : ça
+ * se dit aussi.
+ */
+function windowLabel(w: { from: string; season: number; withPreviousTail: boolean }): string {
+  if (!w.withPreviousTail) return `Victoires et podiums de la saison ${w.season}.`;
+  const mois = new Date(`${w.from}T12:00:00Z`).toLocaleDateString("fr-FR", { month: "long", timeZone: "UTC" });
+  return `Victoires et podiums depuis ${mois} : la saison ${w.season} vient de commencer, la fin de la précédente compte encore.`;
+}
+
 function formatPoints(value: number | null): string {
   if (value == null) return "—";
   return Math.round(value).toLocaleString("fr-FR");
@@ -96,13 +110,22 @@ function CompetitorRow({ competitor }: { competitor: RaceCompetitor }) {
         </div>
       </div>
 
+      {/* Le palmarès de la saison, pas celui de la carrière : ce qui compte
+          dimanche, c'est ce que ce coureur fait en ce moment. Un coureur qui
+          n'a pas encore couru le dit plutôt que d'afficher trois zéros. */}
       {competitor.resultCount != null && (
-        <div className="shrink-0 hidden sm:block text-right text-xs text-muted-foreground tabular-nums w-20">
-          <div>
-            <span className="font-medium text-foreground">{competitor.winCount ?? 0}</span> V ·{" "}
-            <span className="font-medium text-foreground">{competitor.podiumCount ?? 0}</span> P
-          </div>
-          <div>{competitor.resultCount} courses</div>
+        <div className="shrink-0 hidden sm:block text-right text-xs text-muted-foreground tabular-nums w-24">
+          {competitor.resultCount > 0 ? (
+            <>
+              <div>
+                <span className="font-medium text-foreground">{competitor.winCount ?? 0}</span> V ·{" "}
+                <span className="font-medium text-foreground">{competitor.podiumCount ?? 0}</span> P
+              </div>
+              <div>{competitor.resultCount} course{competitor.resultCount > 1 ? "s" : ""}</div>
+            </>
+          ) : (
+            <div className="italic">pas encore couru</div>
+          )}
         </div>
       )}
     </div>
@@ -148,11 +171,14 @@ export async function RaceCompetitors({ raceId }: { raceId: string }) {
 
       <p className="text-xs text-muted-foreground flex items-start gap-1.5">
         <Info className="size-3.5 shrink-0 mt-0.5" />
+        <span>
+        {windowLabel(data.window)}{" "}
         {confirmed
           ? "Liste des engagés publiée par la presse régionale, enrichie du classement national."
           : regional
             ? "Aucune édition précédente au fichier : voici les coureurs actifs sur ces catégories dans le département cette saison. Ils indiquent le niveau du peloton, pas une liste de partants."
             : "Estimé à partir des coureurs ayant disputé les éditions précédentes — la liste des engagés n’est pas encore publiée."}
+        </span>
       </p>
 
       <div className="flex flex-col gap-1.5">

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 48" width="52" height="48">
+  <!-- La marque du site, vectorielle : nette à toutes les tailles, du seize
+       pixels de l'onglet à la tuile d'un écran d'accueil. Les couleurs sont
+       écrites en dur parce qu'un fichier d'icône ne voit pas les jetons de
+       app/globals.css : encre de marque #18263f, papier #fbfaf8, et le
+       secteur décisif en jaune de flèche #f68659. -->
+  <rect width="52" height="48" rx="10" fill="#18263f"/>
+  <g transform="translate(4 3) scale(.86)">
+    <path d="M8 34 20 10h16c13 0 13 19 0 19H19" fill="none" stroke="#fbfaf8" stroke-width="7" stroke-linecap="square"/>
+    <path d="m22 37 7-14" stroke="#f68659" stroke-width="7"/>
+  </g>
+</svg>
