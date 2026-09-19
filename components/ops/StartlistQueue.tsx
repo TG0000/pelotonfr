@@ -6,6 +6,7 @@ import { CheckCircle2, ExternalLink, Inbox, X } from "lucide-react";
 import {
   MISS_REASONS,
   type QueuedMiss,
+  type QueueSummary,
 } from "@/lib/db/queries/startlist-queue";
 import { attachStartlist, setAsideStartlist } from "@/app/(main)/etat/actions";
 import { displayRaceName } from "@/lib/race-name";
@@ -24,7 +25,7 @@ export function StartlistQueue({
   canArbitrate,
 }: {
   misses: QueuedMiss[];
-  summary: { open: number; arbitrable: number; resolved: number };
+  summary: QueueSummary;
   canArbitrate: boolean;
 }) {
   const [done, setDone] = useState<Record<string, string>>({});
@@ -41,24 +42,32 @@ export function StartlistQueue({
 
   return (
     <div>
-      <p className="mb-3 text-sm text-muted-foreground">
-        <span className="font-mono tabular-nums text-foreground">
-          {summary.open}
-        </span>{" "}
-        liste{summary.open > 1 ? "s" : ""} publiée
-        {summary.open > 1 ? "s" : ""} sans course, dont{" "}
-        <span className="font-mono tabular-nums text-foreground">
-          {summary.arbitrable}
-        </span>{" "}
-        avec une course candidate ce jour-là.
-        {summary.resolved > 0 && (
-          <>
-            {" "}
-            <span className="font-mono tabular-nums">{summary.resolved}</span>{" "}
-            déjà tranchée{summary.resolved > 1 ? "s" : ""}.
-          </>
-        )}
-      </p>
+      {/* Un seul grand nombre ne dit pas quoi faire. Réparti, il le dit :
+          une seule de ces quatre lignes demande une décision, les trois
+          autres décrivent ce que la source ou la couverture ne donne pas. */}
+      <div className="mb-3 text-sm text-muted-foreground">
+        <p>
+          <span className="font-mono tabular-nums text-foreground">{summary.arbitrable}</span>{" "}
+          liste{summary.arbitrable > 1 ? "s" : ""} attend{summary.arbitrable > 1 ? "ent" : ""} un
+          arbitrage — une course candidate, le même jour, à portée de voiture.
+        </p>
+        <p className="mt-1 text-xs">
+          Et {summary.open} en attente au total :{" "}
+          <span className="font-mono tabular-nums">{summary.aucuneCourse}</span> sans aucune course
+          ce jour-là,{" "}
+          <span className="font-mono tabular-nums">{summary.sansCommune}</span> dont l&apos;adresse
+          ne nomme que l&apos;épreuve,{" "}
+          <span className="font-mono tabular-nums">{summary.sansEngages}</span> sans liste
+          exploitable.
+          {summary.resolved > 0 && (
+            <>
+              {" "}
+              <span className="font-mono tabular-nums">{summary.resolved}</span> se sont rattachées
+              depuis, sans arbitrage.
+            </>
+          )}
+        </p>
+      </div>
 
       <div className="divide-y divide-border rounded-xl border border-border bg-surface-1">
         {misses.map((m) => {

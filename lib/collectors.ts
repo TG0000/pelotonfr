@@ -79,6 +79,7 @@ const SPECS = [
   // Lancés à la main quand une réparation le demande : suivis, jamais surveillés.
   { key: "relink-venues",       label: "Lieux reliés",          kind: "maintenance", command: null, maxAgeHours: 0, criticalAgeHours: 0 },
   { key: "reattach-startlists", label: "Listes rerattachées",   kind: "maintenance", command: null, maxAgeHours: 0, criticalAgeHours: 0 },
+  { key: "requeue-startlists",  label: "File des listes relue",  kind: "maintenance", command: null, maxAgeHours: 0, criticalAgeHours: 0 },
 ] as const satisfies readonly CollectorSpec[];
 
 export const COLLECTORS: readonly CollectorSpec[] = SPECS;

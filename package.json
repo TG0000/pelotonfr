@@ -39,6 +39,7 @@
     "scrape:segments:index": "tsx scripts/scrapers/segment-circuits.ts",
     "scrape:efforts": "tsx scripts/scrapers/strava-efforts.ts",
     "db:link-editions": "tsx scripts/db/link-editions.ts",
+    "db:requeue-startlists": "tsx scripts/db/requeue-startlists.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "test:integration": "tsx --test tests/integration/*.test.ts"

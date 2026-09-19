@@ -5,6 +5,7 @@ import {
   getQueueSummary,
   getStartlistQueue,
   type QueuedMiss,
+  type QueueSummary,
 } from "@/lib/db/queries/startlist-queue";
 import { StartlistQueue } from "@/components/ops/StartlistQueue";
 import { isOperator } from "@/lib/admin";
@@ -96,7 +97,9 @@ function Ligne({ h }: { h: CollectorHealth }) {
 export default async function EtatPage() {
   let health: CollectorHealth[] = [];
   let misses: QueuedMiss[] = [];
-  let summary = { open: 0, arbitrable: 0, resolved: 0 };
+  let summary: QueueSummary = {
+    open: 0, arbitrable: 0, aucuneCourse: 0, sansCommune: 0, sansEngages: 0, resolved: 0,
+  };
   try {
     [health, misses, summary] = await Promise.all([
       getCollectorHealth(),
@@ -176,9 +179,11 @@ export default async function EtatPage() {
         <h2 className="mb-1 text-lg font-bold">Listes d&apos;engagés en attente</h2>
         <p className="mb-4 text-sm text-muted-foreground">
           La presse régionale publie une liste par course. La rattacher est un
-          jugement : même jour, même commune, catégories compatibles. Au-dessus
-          du seuil on l&apos;applique ; en dessous, la liste attend ici plutôt
-          que d&apos;être rattachée au hasard.
+          jugement : même jour, même commune, catégories compatibles. Le nom
+          seul ne suffit pas — il proposait le Tour de la Boëme, en Charente,
+          pour la liste du Tour de l&apos;Orne. Une commune nommée par
+          l&apos;adresse doit aussi se trouver à portée de voiture de la
+          course, sans quoi rien n&apos;est proposé.
         </p>
         <StartlistQueue
           misses={misses}
