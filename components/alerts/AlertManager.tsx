@@ -32,6 +32,8 @@ interface Rule {
   radiusKm: number;
   leadTimeDays: number;
   matches: RuleMatch[];
+  /** Combien de courses la règle retient en tout ; `matches` n'en montre que cinq. */
+  matchCount?: number;
 }
 
 export type AlertRuleView = Rule;
@@ -234,9 +236,10 @@ export function AlertManager({ initialRules }: { initialRules: Rule[] }) {
 
           {rule.matches.length > 0 ? (
             <div className="text-xs text-muted-foreground">
+              {/* Le vrai compte, pas le nombre d'exemples remontés. */}
               <span className="font-medium text-foreground">
-                {rule.matches.length} course{rule.matches.length > 1 ? "s" : ""} correspond
-                {rule.matches.length > 1 ? "ent" : ""} actuellement
+                {(rule.matchCount ?? rule.matches.length)} course{(rule.matchCount ?? rule.matches.length) > 1 ? "s" : ""} correspond
+                {(rule.matchCount ?? rule.matches.length) > 1 ? "ent" : ""} actuellement
               </span>
               <ul className="mt-1.5 flex flex-col gap-0.5">
                 {rule.matches.slice(0, 3).map((m) => (

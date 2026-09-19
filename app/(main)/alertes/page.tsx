@@ -5,7 +5,7 @@ import { Bell } from "lucide-react";
 import { AlertManager } from "@/components/alerts/AlertManager";
 import type { AlertRuleView } from "@/components/alerts/AlertManager";
 import { currentUser } from "@/lib/session";
-import { resolveUser, getUserAlertRules, getRuleMatches } from "@/lib/db/queries/alerts";
+import { resolveUser, getUserAlertRules, getRuleMatches, countRuleMatches } from "@/lib/db/queries/alerts";
 
 /**
  * The rider's rules, with what each one currently matches.
@@ -25,6 +25,7 @@ async function loadRules(clerkId: string): Promise<AlertRuleView[]> {
     rules.map(async (rule) => ({
       ...rule,
       matches: await getRuleMatches(rule.id, { limit: 5 }),
+      matchCount: await countRuleMatches(rule.id),
     }))
   );
 }

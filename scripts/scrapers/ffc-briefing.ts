@@ -167,7 +167,10 @@ async function main() {
         `UPDATE races
             SET bib_pickup_time = $2, bib_pickup_place = $3,
                 circuit_m = $4, lap_count = $5,
-                entries_close_at = COALESCE($8::timestamp, entries_close_at),
+                -- L'heure lue sur la fiche est une heure de Paris : elle
+                -- porte son fuseau jusqu'en base, sinon le serveur, qui tourne
+                -- en UTC, la relit avec deux heures de retard.
+                entries_close_at = COALESCE($8::timestamp AT TIME ZONE 'Europe/Paris', entries_close_at),
                 entries_close_source = CASE WHEN $8::timestamp IS NULL
                                             THEN entries_close_source ELSE 'fiche' END,
                 start_location = CASE WHEN $6::float8 IS NULL THEN start_location

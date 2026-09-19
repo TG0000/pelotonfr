@@ -37,7 +37,10 @@ export async function pendingEntries(
     `SELECT m.club_id, c.name AS club_name, u.id AS officer_id, u.email,
             r.id AS race_id, r.name AS race_name, r.city, r.race_date,
             EXTRACT(EPOCH FROM (r.entries_close_at - now())) / 3600 AS hours_left,
-            array_agg(DISTINCT COALESCE(ru.display_name, ri.last_name, ru.email)) AS riders
+            -- Jamais l'adresse d'un coéquipier : le site s'arrête à « un
+            -- coéquipier » quand il ne connaît pas le nom, et un rappel
+            -- envoyé au dirigeant ne doit pas divulguer ce que la page cache.
+            array_agg(DISTINCT COALESCE(NULLIF(ri.last_name, ''), NULLIF(ru.display_name, ''), 'un coéquipier')) AS riders
        FROM club_members m
        JOIN clubs c ON c.id = m.club_id
        JOIN users u ON u.id = m.user_id AND u.email IS NOT NULL

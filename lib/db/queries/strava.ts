@@ -52,6 +52,15 @@ export async function saveConnection(params: {
   athleteName?: string | null;
   homeCity?: string | null;
 }): Promise<void> {
+  /* Le même athlète Strava relié à un autre compte : l'insertion butait sur
+     la contrainte d'unicité d'athlete_id, que le ON CONFLICT ci-dessous ne
+     couvre pas, l'erreur était avalée plus haut, et le profil répétait « relie
+     ton compte Strava » sans que la liaison puisse aboutir une seule fois.
+     Le passage par Strava prouve qui se connecte : la liaison le suit. */
+  await sql(`UPDATE users SET strava_athlete_id = NULL WHERE strava_athlete_id = $2::bigint AND id <> $1::uuid`, [params.userId, params.athleteId]);
+  const moved = await sql(`DELETE FROM strava_connections WHERE athlete_id = $2::bigint AND user_id <> $1::uuid RETURNING user_id`, [params.userId, params.athleteId]);
+  if (moved.length > 0) console.warn(`STRAVA_ATHLETE_MOVED: athlète ${params.athleteId} repris par le compte qui vient de s'authentifier`);
+
   await sql(
     `INSERT INTO strava_connections
        (user_id, athlete_id, access_token, refresh_token, expires_at, scope,

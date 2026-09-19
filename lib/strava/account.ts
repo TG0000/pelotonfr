@@ -62,7 +62,13 @@ export async function mirrorStravaAccount(account: OAuthAccountRow): Promise<voi
 
     const summary = await getAthleteSummary(accessToken);
     await saveFitness(id, summary.ftp, summary.weightKg);
-  } catch {
-    console.error("STRAVA_MIRROR_FAILED: reconnect the Strava account");
+  } catch (err) {
+    /* Sans la cause, « reconnect the Strava account » est le seul conseil
+       possible — et c'est précisément celui qui ne marche pas quand la liaison
+       échoue à chaque tentative pour la même raison. */
+    console.error(
+      "STRAVA_MIRROR_FAILED:",
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    );
   }
 }
