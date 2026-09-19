@@ -16,8 +16,22 @@ import { cn } from "@/lib/utils";
  */
 export async function getRoadReport(trace: RaceTrace): Promise<RoadReport | null> {
   try {
-    const features = await fetchRoadFeatures(trace.bounds);
-    return readRoad(trace.points, features);
+    /* Un tour, pas l'enregistrement entier. Le tableau s'intitule « sur le
+       tour » et chacun de ses kilomètres était multiplié par le nombre de
+       tours : à Giberville, quarante-deux tours de deux kilomètres donnaient
+       « Rue Pasteur 41,6 km » pour un kilomètre de rue, et la même rue
+       apparaissait plusieurs fois. Les pourcentages, eux, tenaient. */
+    const lap = detectLaps(trace.points).lap ?? trace.points;
+    const lngs = lap.map((p) => p[0]);
+    const lats = lap.map((p) => p[1]);
+    const bounds = {
+      west: Math.min(...lngs),
+      south: Math.min(...lats),
+      east: Math.max(...lngs),
+      north: Math.max(...lats),
+    };
+    const features = await fetchRoadFeatures(bounds);
+    return readRoad(lap, features);
   } catch {
     return null;
   }

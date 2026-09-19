@@ -100,14 +100,14 @@ function isUnpaved(nature: string): boolean {
   return /empierr|chemin|sentier|piste/i.test(nature);
 }
 
-export async function fetchRoadFeatures(bounds: {
+async function fetchCell(b: {
   west: number; south: number; east: number; north: number;
 }): Promise<Feature[]> {
   const pad = 0.001;
   const params = new URLSearchParams({
     SERVICE: "WFS", VERSION: "2.0.0", REQUEST: "GetFeature",
     TYPENAME: "BDTOPO_V3:troncon_de_route",
-    BBOX: `${bounds.south - pad},${bounds.west - pad},${bounds.north + pad},${bounds.east + pad},urn:ogc:def:crs:EPSG::4326`,
+    BBOX: `${b.south - pad},${b.west - pad},${b.north + pad},${b.east + pad},urn:ogc:def:crs:EPSG::4326`,
     OUTPUTFORMAT: "application/json",
     COUNT: "3000",
   });
@@ -115,6 +115,54 @@ export async function fetchRoadFeatures(bounds: {
   if (!res.ok) throw new Error(`IGN a répondu ${res.status}`);
   const data = (await res.json()) as { features?: Feature[] };
   return data.features ?? [];
+}
+
+/**
+ * Les tronçons sous une emprise, découpée quand elle est large.
+ *
+ * L'IGN rend au plus trois mille tronçons par requête. Sur une boucle de
+ * village c'est large ; sur un tour de cent kilomètres, la réponse est
+ * tronquée, et tronquée au hasard : la route sous la moitié du parcours n'y
+ * est pas, et le rapport se taisait faute de couverture. On découpe en cases
+ * d'environ huit kilomètres, jamais plus de douze, six à la fois.
+ */
+const CELL_DEG = 0.08;
+const MAX_CELLS = 12;
+
+export async function fetchRoadFeatures(bounds: {
+  west: number; south: number; east: number; north: number;
+}): Promise<Feature[]> {
+  const cols = Math.min(MAX_CELLS, Math.max(1, Math.ceil((bounds.east - bounds.west) / CELL_DEG)));
+  const rows = Math.min(MAX_CELLS, Math.max(1, Math.ceil((bounds.north - bounds.south) / CELL_DEG)));
+  if (cols * rows <= 1) return fetchCell(bounds);
+
+  const cells: Array<{ west: number; south: number; east: number; north: number }> = [];
+  const dx = (bounds.east - bounds.west) / cols;
+  const dy = (bounds.north - bounds.south) / rows;
+  for (let i = 0; i < cols && cells.length < MAX_CELLS; i++) {
+    for (let j = 0; j < rows && cells.length < MAX_CELLS; j++) {
+      cells.push({
+        west: bounds.west + i * dx,
+        east: bounds.west + (i + 1) * dx,
+        south: bounds.south + j * dy,
+        north: bounds.south + (j + 1) * dy,
+      });
+    }
+  }
+
+  const byId = new Map<string, Feature>();
+  for (let i = 0; i < cells.length; i += 6) {
+    const batch = await Promise.all(
+      cells.slice(i, i + 6).map((c) => fetchCell(c).catch(() => [] as Feature[]))
+    );
+    for (const list of batch) {
+      for (const f of list) {
+        const key = String((f as { id?: string }).id ?? JSON.stringify(f.geometry).slice(0, 80));
+        if (!byId.has(key)) byId.set(key, f);
+      }
+    }
+  }
+  return [...byId.values()];
 }
 
 /**
@@ -130,12 +178,31 @@ export function readRoad(
   let covered = 0, narrowM = 0, unpavedM = 0, urbanM = 0;
   let minWidth: number | null = null;
 
+  /* Le report sur le tronçon précédent existe pour franchir un trou : un pont,
+     un rond-point absent de l'extrait. Sans limite, il comblait tout — sur la
+     montée de Saint-Dié, 11 % du tour touchait vraiment un tronçon et le
+     rapport en annonçait 90 %, ce qui rendait impossible le garde-fou d'en
+     dessous et créditait 2,9 km de sentier là où il y en a 55 mètres. Cent
+     mètres de report, pas davantage. */
+  const MAX_CARRY_M = 100;
   let previous: Feature | null = null;
+  let carriedM = 0;
   for (let i = 1; i < points.length; i++) {
     const step = points[i][3] - points[i - 1][3];
     if (step <= 0) continue;
-    const f: Feature | null = nearest([points[i][0], points[i][1]], features) ?? previous;
-    previous = f;
+    const match = nearest([points[i][0], points[i][1]], features);
+    let f: Feature | null = match;
+    if (match) {
+      previous = match;
+      carriedM = 0;
+    } else if (previous && carriedM < MAX_CARRY_M) {
+      f = previous;
+      carriedM += step;
+    } else {
+      previous = null;
+      carriedM = 0;
+      continue;
+    }
     if (!f) continue;
     const p = f.properties;
     covered += step;
